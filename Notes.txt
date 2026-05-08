@@ -1,1 +1,29 @@
-
+═══════════════════════════════════════════════════════
+EXTREME AI VOICE TYPER v2.6
+Developer: Anurag Anant
+═══════════════════════════════════════════════════════
+​✨ WHAT'S NEW IN v2.6
+───────────────────────────────────────────────────────
+​🌍 MULTILINGUAL U.I.
+• Switch to your favorite User Interface (U.I.) language
+• Currently available in Urdu, Hindi, and English
+​⚡ PERFORMANCE ENHANCEMENTS
+• Significant improvements in Typing speed and accuracy
+• Enhanced A.I. Writer Mode for better text refinement
+​📚 WORD DICTIONARY
+• Word Dictionary feature has been significantly improved
+• Enhanced performance and smoother management of saved words
+​🐛 BUG FIXES
+• All minor bugs have been fixed
+• Typing time issues have been resolved
+• Overall performance improved
+​═══════════════════════════════════════════════════════
+​📋 LEGACY FEATURES
+───────────────────────────────────────────────────────
+• 148+ Languages Voice Recognition
+• Multiple AI Providers (OpenRouter, Gemini, Groq)
+• Offline Mode • Translation Mode • Emoji Support
+• Sound & Vibration • Auto Detect Script
+​═══════════════════════════════════════════════════════
+📱 Word Dictionary: More Options → Word Dictionary
+═══════════════════════════════════════════════════════
