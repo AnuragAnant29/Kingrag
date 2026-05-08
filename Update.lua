@@ -16,7 +16,16 @@ import "java.util.*"
 import "com.androlua.Http"
 import "cjson"
 
+local currentFilePath = debug.getinfo(1, "S").source:match("^@?(.*)$")
+local settingsDlg = nil
+local moreOptionsDlg = nil
+
 if activity then context = activity elseif service then context = service end
+
+local currentAppVersion = "2.6"
+local versionUrl = "https://raw.githubusercontent.com/AnuragAnant29/Kingrag/refs/heads/main/Version.txt"
+local notesUrl = "https://raw.githubusercontent.com/AnuragAnant29/Kingrag/refs/heads/main/Notes.txt"
+local updateScriptUrl = "https://raw.githubusercontent.com/AnuragAnant29/Kingrag/refs/heads/main/Update.lua"
 
 local prefs = context.getSharedPreferences("ai_voice_typer_permanent_settings", Context.MODE_PRIVATE)
 local editor = prefs.edit()
@@ -45,13 +54,10 @@ local soundType = prefs.getString("sound_type", "Default Beep")
 
 local typingMode = prefs.getString("typing_mode", "Auto Detect Script")
 
--- NEW: UI Language Setting
 local uiLanguage = prefs.getString("ui_language", "English")
 
--- Complete Translation Table for ALL Settings Text
 local uiTexts = {
   ["English"] = {
-    -- Main Settings
     select_typing_mode = "Select Typing Mode",
     ai_settings = "AI Settings",
     source_language = "Source Language (Click to Change)",
@@ -62,17 +68,14 @@ local uiTexts = {
     more_options = "More Options",
     save_close = "Save & Close",
     
-    -- AI Settings Dialog
     ai_settings_title = "AI Settings",
     select_ai_provider = "Select AI Provider",
     manage_api_keys = "Manage API Keys",
     
-    -- Emoji Settings Dialog
     emoji_settings_title = "Emoji Settings",
     enable_smart_emojis = "Enable Smart Emojis",
     emoji_quantity = "Emoji Quantity",
     
-    -- More Options Dialog
     more_options_title = "More Options",
     other_settings = "Other Settings",
     sound_vibration_settings = "Sound & Vibration Settings",
@@ -81,7 +84,6 @@ local uiTexts = {
     contact_us = "Contact Us",
     close = "Close",
     
-    -- Other Settings Dialog
     other_settings_title = "Other Settings",
     select_ui_lang = "Select UI Language",
     offline_mode = "Offline Mode (No Internet)",
@@ -92,7 +94,6 @@ local uiTexts = {
     space = "Space",
     space_newline = "Space + New Line",
     
-    -- Sound & Vibration Dialog
     sound_vibration_title = "Sound & Vibration Settings",
     enable_vibration = "Enable Vibration Feedback",
     enable_typing_sound = "Enable Typing Sound",
@@ -101,30 +102,25 @@ local uiTexts = {
     soft_click = "Soft Click",
     sharp_pop = "Sharp Pop",
     
-    -- Word Dictionary Dialog
     word_dictionary_title = "Word Dictionary",
     add_new_words = "Add New Words To Dictionary",
     view_dictionary_words = "View Dictionary Words",
     clear_dictionary = "Clear Dictionary",
     
-    -- Add Word Dialog
     add_word_title = "Add New Word to Dictionary",
     word_to_replace = "Word (to be replaced):",
     replacement_word = "Replacement Word:",
     save = "Save",
     cancel = "Cancel",
     
-    -- View Dictionary Dialog
     delete_word = "Delete Word?",
     delete_confirmation = "Delete '{}' from dictionary?",
     delete = "Delete",
     
-    -- Clear Dictionary Dialog
     clear_dict_title = "Clear Dictionary",
     clear_dict_message = "Are you sure you want to clear ALL words from the dictionary? This cannot be undone.",
     clear_all = "Clear All",
     
-    -- Manage API Keys Dialog
     manage_api_title = "Manage API Keys",
     openrouter_key = "OpenRouter Key",
     get_openrouter_key = "Get OpenRouter Key",
@@ -136,29 +132,24 @@ local uiTexts = {
     get_deepgram_key = "Get Deepgram Key",
     save_keys = "Save Keys",
     
-    -- About Dialog
     about_title = "About Plugin",
     about_info = "How to use:\n1. Select AI Provider and add API Keys.\n2. Use Pure Language Mode for pure formal native typing.\n3. Long press on any language to add/remove from favorites.\n4. Emojis and auto-punctuation are added automatically.",
     
-    -- Contact Dialog
     contact_title = "Contact Us",
     join_telegram = "Join our Telegram Channel",
     give_feedback = "Give Feedback on Telegram",
     
-    -- Language Select Dialog
     target_lang_title = "Target Language (Long Press to Add/Remove Fav)",
     typing_lang_title = "Typing Language (Long Press to Add/Remove Fav)",
     removed_from_fav = "removed from favorites",
     added_to_fav = "added to favorites",
     
-    -- Dictionary Messages
     word_added = "Word added: {} → {}",
     dictionary_empty = "Dictionary is empty. Add some words first.",
     dictionary_words = "Dictionary Words ({} words)",
     deleted_word = "Deleted: {}",
     dictionary_cleared = "Dictionary cleared successfully",
     
-    -- Common
     processing = "Processing...",
     key_missing = "Key Missing",
     connection_failed = "Connection Failed. Please check API Key or Internet.",
@@ -575,7 +566,6 @@ local function getUIText(key, ...)
   else
     text = uiTexts["English"][key] or key
   end
-  -- Replace placeholders like {} with arguments
   local args = {...}
   for i, arg in ipairs(args) do
     text = text:gsub("{}", tostring(arg), 1)
@@ -583,13 +573,11 @@ local function getUIText(key, ...)
   return text
 end
 
--- NEW: Dictionary Storage
 local dictionaryData = prefs.getString("word_dictionary", "{}")
 local changeTable = {}
 pcall(function() changeTable = cjson.decode(dictionaryData) end)
 if type(changeTable) ~= "table" then changeTable = {} end
 
--- 148+ LANGUAGES LIST
 local langList = {
   "Afrikaans", "Albanian", "Amharic", "Arabic", "Armenian", "Assamese", "Azerbaijani",
   "Basque", "Belarusian", "Bengali", "Bosnian", "Bulgarian", "Burmese", "Catalan",
@@ -675,7 +663,6 @@ function finalGuard(text)
   return t
 end
 
--- NEW: Apply Dictionary Replacement to text
 function applyDictionaryReplacement(text)
   if not text or text == "" then return text end
   local result = text
@@ -801,7 +788,6 @@ SCRIPT MAPPING (STRICT DICTIONARY-BACKED ENGINE):
     userForceScriptCmd = "Enforce the FIRST WORD RULE. Convert ALL English dictionary words to A-Z Roman script."
   
   elseif isAIWriterMode then
-    -- PROFESSIONAL A.I. WRITER MODE (as per your provided code)
     scriptRule = [[
 A.I. WRITER MODE (PROFESSIONAL ENHANCEMENT - ADVANCED):
 - MISSION: Transform the spoken text into exceptionally well-written, polished, and professional content while preserving 100% of the original meaning.
@@ -984,7 +970,6 @@ You are a direct dictation formatting AI. Your ONLY purpose is to return the cle
   executeAIRequest(1)
 end
 
--- NEW: Dictionary Management Functions
 function showWordDictionaryDialog()
   local dlg = LuaDialog(context)
   local layout = {
@@ -1081,7 +1066,6 @@ function showViewDictionaryDialog()
   local list = ListView(context)
   list.setAdapter(ArrayAdapter(context, android.R.layout.simple_list_item_1, dictList))
   list.onItemClick = function(parent, view, position, id)
-    -- Optional: Show options to delete individual word
   end
   list.onItemLongClick = function(parent, view, position, id)
     local selectedItem = dictList[position + 1]
@@ -1216,7 +1200,6 @@ function showOtherSettingsDialog()
   }
   dlg.setView(loadlayout(layout)).show()
   
-  -- Set UI Language Spinner
   ui_lang_sp.setAdapter(ArrayAdapter(context, android.R.layout.simple_spinner_item, uiLanguagesList))
   for i,v in ipairs(uiLanguagesList) do if v == uiLanguage then ui_lang_sp.setSelection(i-1) end end
   
@@ -1270,7 +1253,6 @@ end
 
 function showAboutDialog()
   local dlg = LuaDialog(context)
-  -- Heading and Developer Name remain in English as requested
   local info = "Extreme AI Voice Typer v2.6\n\n" ..
   "Developer: Anurag Anant\n\n" ..
   getUIText("about_info")
@@ -1296,21 +1278,91 @@ function showContactDialog()
   dlg.setView(loadlayout(layout)).show()
 end
 
-function showMoreOptionsDialog()
+function showUpdateDialog(newVer, notes)
   local dlg = LuaDialog(context)
+  dlg.setTitle("New Version Available (v" .. newVer .. ")")
+  dlg.setMessage(notes)
+  
+  dlg.setButton("Update", function()
+    announce("Starting Update...")
+    local Http = luajava.bindClass("com.androlua.Http")
+    if not Http then Http = import("com.androlua.Http") end
+    Http.get(updateScriptUrl, function(code, scriptData)
+      if code == 200 and scriptData then
+        if currentFilePath and currentFilePath ~= "" then
+          local f = io.open(currentFilePath, "w")
+          if f then
+            f:write(scriptData)
+            f:close()
+            announce("Update Successful. Code Replaced.")
+            dlg.dismiss()
+            if moreOptionsDlg then pcall(function() moreOptionsDlg.dismiss() end) end
+            if settingsDlg then pcall(function() settingsDlg.dismiss() end) end
+            
+            local func, err = load(scriptData)
+            if func then
+              pcall(func)
+            end
+          else
+            announce("Update failed: Cannot write to file.")
+          end
+        else
+          announce("Update failed: File path not found.")
+        end
+      else
+        announce("Failed to download update script.")
+      end
+    end)
+  end)
+  
+  dlg.setButton2("Maybe Later", function()
+    dlg.dismiss()
+  end)
+  
+  dlg.show()
+end
+
+function checkForUpdates(manualCheck)
+  local Http = luajava.bindClass("com.androlua.Http")
+  if not Http then Http = import("com.androlua.Http") end
+  if manualCheck then announce("Checking for updates...") end
+  
+  Http.get(versionUrl, function(code, versionData)
+    if code == 200 and versionData then
+      local onlineVersion = versionData:match("^%s*(.-)%s*$")
+      if onlineVersion and onlineVersion ~= "" and onlineVersion ~= currentAppVersion then
+        Http.get(notesUrl, function(nCode, notesData)
+          local releaseNotes = "A new update is available for Extreme AI Voice Typer."
+          if nCode == 200 and notesData then
+            releaseNotes = notesData
+          end
+          showUpdateDialog(onlineVersion, releaseNotes)
+        end)
+      else
+        if manualCheck then announce("You are on the latest version.") end
+      end
+    else
+      if manualCheck then announce("Failed to check for updates.") end
+    end
+  end)
+end
+
+function showMoreOptionsDialog()
+  moreOptionsDlg = LuaDialog(context)
   local layout = {
     ScrollView, layout_width="fill",
     {LinearLayout, orientation="vertical", padding="20dp",
       {TextView, text=getUIText("more_options_title"), textSize="22sp", textColor="#2196F3", layout_marginBottom="20dp", gravity="center"},
+      {Button, text="Check For Updates", onClick=function() checkForUpdates(true); moreOptionsDlg.dismiss() end, backgroundColor="#FF5722", textColor="#FFFFFF", layout_marginBottom="10dp"},
       {Button, text=getUIText("other_settings"), onClick=function() showOtherSettingsDialog() end, backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginBottom="10dp"},
       {Button, text=getUIText("sound_vibration_settings"), onClick=function() showSoundVibSettingsDialog() end, backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginBottom="10dp"},
       {Button, text=getUIText("word_dictionary"), onClick=function() showWordDictionaryDialog() end, backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginBottom="10dp"},
       {Button, text=getUIText("about"), onClick=function() showAboutDialog() end, backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginBottom="10dp"},
       {Button, text=getUIText("contact_us"), onClick=function() showContactDialog() end, backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginBottom="20dp"},
-      {Button, text=getUIText("close"), backgroundColor="#F44336", textColor="#FFFFFF", onClick=function() dlg.dismiss() end}
+      {Button, text=getUIText("close"), backgroundColor="#F44336", textColor="#FFFFFF", onClick=function() moreOptionsDlg.dismiss() end}
     }
   }
-  dlg.setView(loadlayout(layout)).show()
+  moreOptionsDlg.setView(loadlayout(layout)).show()
 end
 
 function showApiDialog()
@@ -1430,7 +1482,10 @@ function showSettings()
   
   triggerVibration("settings")
   local view = loadlayout(layout)
-  local dlg = LuaDialog(context).setView(view).show()
+  settingsDlg = LuaDialog(context).setView(view)
+  settingsDlg.show()
+  
+  checkForUpdates(false)
   
   typing_mode_sp.setAdapter(ArrayAdapter(context, android.R.layout.simple_spinner_item, typingModes))
   for i,v in ipairs(typingModes) do if v == typingMode then typing_mode_sp.setSelection(i-1) end end
@@ -1457,7 +1512,7 @@ function showSettings()
     enableTranslation = trans_chk.isChecked()
     
     editor.putString("typing_mode", typingMode).putBoolean("auto_detect", autoDetect).putBoolean("pure_mode", pureMode).putString("lang", selectedLanguage).putString("target_lang", targetLanguage).putBoolean("emoji_enabled", emojiEnabled).putBoolean("vibration_enabled", vibrationEnabled).putBoolean("sound_enabled", soundEnabled).putString("sound_type", soundType).putBoolean("copy_clipboard", copyToClipboard).putString("emoji_qty", emojiQty).putString("end_action", endAction).putBoolean("enable_trans", enableTranslation).putBoolean("offline_mode", offlineMode).commit()
-    dlg.dismiss() 
+    settingsDlg.dismiss() 
   end
 end
 
