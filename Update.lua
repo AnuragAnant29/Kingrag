@@ -8,22 +8,15 @@ import "android.view.*"
 import "android.net.Uri"
 import "android.graphics.Typeface" 
 import "android.os.Vibrator"
-import "android.os.Handler"
-import "android.os.Looper"
 import "android.media.AudioManager"
 import "android.media.ToneGenerator"
 import "java.io.*"
-import "java.lang.Thread"
-import "java.lang.Runnable"
 import "java.net.URL"
 import "java.util.*"
 import "com.androlua.Http"
-import "com.androlua.LuaDialog"
 import "cjson"
 
 local currentFilePath = debug.getinfo(1, "S").source:match("^@?(.*)$")
-local mainHandler = Handler(Looper.getMainLooper())
-local updateInProgress = false
 local settingsDlg = nil
 local moreOptionsDlg = nil
 
@@ -977,161 +970,6 @@ You are a direct dictation formatting AI. Your ONLY purpose is to return the cle
   executeAIRequest(1)
 end
 
-function trim(s)
-    if s == nil then return "" end
-    return tostring(s):gsub("^%s*(.-)%s*$", "%1")
-end
-
-function showUpdateErrorDialog(title, message)
-    mainHandler.post(Runnable({
-        run = function()
-            local errorDialog = LuaDialog(context)
-            errorDialog.setTitle(title)
-            errorDialog.setMessage(message)
-            errorDialog.setButton("OK", function()
-                errorDialog.dismiss()
-            end)
-            errorDialog.show()
-        end
-    }))
-end
-
-function performUpdate(mainCode, onlineVersion)
-    if not mainCode or trim(mainCode) == "" then
-        showUpdateErrorDialog("Update Failed", "Update script is empty.")
-        return
-    end
-    
-    updateInProgress = true
-    
-    local function updateProcess()
-        local success = false
-        local tempPath = currentFilePath .. ".temp_update"
-        local f = io.open(tempPath, "w")
-        if f then
-            f:write(mainCode)
-            f:close()
-            
-            local fileExists = io.open(currentFilePath, "r")
-            if fileExists then
-                fileExists:close()
-                local delSuccess = pcall(function()
-                    os.remove(currentFilePath)
-                end)
-                if delSuccess then
-                    local renameSuccess = pcall(function()
-                        os.rename(tempPath, currentFilePath)
-                    end)
-                    if renameSuccess then
-                        success = true
-                    end
-                end
-            else
-                local renameSuccess = pcall(function()
-                    os.rename(tempPath, currentFilePath)
-                end)
-                if renameSuccess then
-                    success = true
-                end
-            end
-            
-            if not success then
-                pcall(function() os.remove(tempPath) end)
-            end
-        end
-        
-        if success then
-            updateInProgress = false
-            mainHandler.post(Runnable({
-                run = function()
-                    local successDialog = LuaDialog(context)
-                    successDialog.setTitle("Update Successful")
-                    successDialog.setMessage("Plugin successfully updated to version " .. onlineVersion .. ".\n\nPlugin will restart automatically.")
-                    successDialog.setButton("OK", function()
-                        successDialog.dismiss()
-                        if moreOptionsDlg then pcall(function() moreOptionsDlg.dismiss() end) end
-                        if settingsDlg then pcall(function() settingsDlg.dismiss() end) end
-                        mainHandler.postDelayed(Runnable({
-                            run = function()
-                                local func, err = loadfile(currentFilePath)
-                                if func then
-                                    pcall(func)
-                                else
-                                    announce("Error reloading plugin")
-                                end
-                            end
-                        }), 2000)
-                    end)
-                    successDialog.show()
-                end
-            }))
-        else
-            updateInProgress = false
-            showUpdateErrorDialog("Update Failed", "Update failed. Please try again.")
-        end
-    end
-    
-    local updateThread = Thread(luajava.bindClass("java.lang.Runnable"){
-        run = updateProcess
-    })
-    updateThread.start()
-end
-
-function checkForUpdates(manualCheck)
-    if updateInProgress then
-        if manualCheck then
-            showUpdateErrorDialog("Update In Progress", "An update is already in progress. Please wait.")
-        end
-        return
-    end
-    
-    if manualCheck then announce("Checking for updates...") end
-    
-    local timestamp = tostring(os.time())
-    local Http = luajava.bindClass("com.androlua.Http")
-    if not Http then Http = import("com.androlua.Http") end
-    
-    Http.get(versionUrl .. "?t=" .. timestamp, function(code, response)
-        if code == 200 and response then
-            local onlineVersion = trim(response)
-            if onlineVersion ~= "" and onlineVersion ~= currentAppVersion then
-                Http.get(updateScriptUrl .. "?t=" .. timestamp, function(code2, mainCode)
-                    if code2 == 200 and mainCode and trim(mainCode) ~= "" then
-                        Http.get(notesUrl .. "?t=" .. timestamp, function(nCode, notesData)
-                            local releaseNotes = "A new version (" .. onlineVersion .. ") is available.\nCurrent version: " .. currentAppVersion .. "\n\nWould you like to update now?"
-                            if nCode == 200 and notesData then
-                                releaseNotes = "A new version (" .. onlineVersion .. ") is available.\n\nRelease Notes:\n" .. notesData .. "\n\nWould you like to update now?"
-                            end
-                            
-                            mainHandler.post(Runnable({
-                                run = function()
-                                    local updateAlertDlg = LuaDialog(context)
-                                    updateAlertDlg.setTitle("Update Available!")
-                                    updateAlertDlg.setMessage(releaseNotes)
-                                    updateAlertDlg.setButton("Update Now", function()
-                                        updateAlertDlg.dismiss()
-                                        performUpdate(mainCode, onlineVersion)
-                                    end)
-                                    updateAlertDlg.setButton2("Later", function()
-                                        updateAlertDlg.dismiss()
-                                    end)
-                                    updateAlertDlg.show()
-                                end
-                            }))
-                        end)
-                    elseif manualCheck then
-                        showUpdateErrorDialog("Update Failed", "Failed to fetch update script.")
-                    end
-                end)
-            else
-                if manualCheck then announce("You are on the latest version.") end
-            end
-        else
-            if manualCheck then announce("Failed to check for updates.") end
-        end
-    end)
-end
-
 function showWordDictionaryDialog()
   local dlg = LuaDialog(context)
   local layout = {
@@ -1228,7 +1066,6 @@ function showViewDictionaryDialog()
   local list = ListView(context)
   list.setAdapter(ArrayAdapter(context, android.R.layout.simple_list_item_1, dictList))
   list.onItemClick = function(parent, view, position, id)
-    -- Optional: Show options to delete individual word
   end
   list.onItemLongClick = function(parent, view, position, id)
     local selectedItem = dictList[position + 1]
@@ -1441,6 +1278,75 @@ function showContactDialog()
   dlg.setView(loadlayout(layout)).show()
 end
 
+function showUpdateDialog(newVer, notes)
+  local dlg = LuaDialog(context)
+  dlg.setTitle("New Version Available (v" .. newVer .. ")")
+  dlg.setMessage(notes)
+  
+  dlg.setButton("Update", function()
+    announce("Starting Update...")
+    local Http = luajava.bindClass("com.androlua.Http")
+    if not Http then Http = import("com.androlua.Http") end
+    Http.get(updateScriptUrl, function(code, scriptData)
+      if code == 200 and scriptData then
+        if currentFilePath and currentFilePath ~= "" then
+          local f = io.open(currentFilePath, "w")
+          if f then
+            f:write(scriptData)
+            f:close()
+            announce("Update Successful. Code Replaced.")
+            dlg.dismiss()
+            if moreOptionsDlg then pcall(function() moreOptionsDlg.dismiss() end) end
+            if settingsDlg then pcall(function() settingsDlg.dismiss() end) end
+            
+            local func, err = load(scriptData)
+            if func then
+              pcall(func)
+            end
+          else
+            announce("Update failed: Cannot write to file.")
+          end
+        else
+          announce("Update failed: File path not found.")
+        end
+      else
+        announce("Failed to download update script.")
+      end
+    end)
+  end)
+  
+  dlg.setButton2("Maybe Later", function()
+    dlg.dismiss()
+  end)
+  
+  dlg.show()
+end
+
+function checkForUpdates(manualCheck)
+  local Http = luajava.bindClass("com.androlua.Http")
+  if not Http then Http = import("com.androlua.Http") end
+  if manualCheck then announce("Checking for updates...") end
+  
+  Http.get(versionUrl, function(code, versionData)
+    if code == 200 and versionData then
+      local onlineVersion = versionData:match("^%s*(.-)%s*$")
+      if onlineVersion and onlineVersion ~= "" and onlineVersion ~= currentAppVersion then
+        Http.get(notesUrl, function(nCode, notesData)
+          local releaseNotes = "A new update is available for Extreme AI Voice Typer."
+          if nCode == 200 and notesData then
+            releaseNotes = notesData
+          end
+          showUpdateDialog(onlineVersion, releaseNotes)
+        end)
+      else
+        if manualCheck then announce("You are on the latest version.") end
+      end
+    else
+      if manualCheck then announce("Failed to check for updates.") end
+    end
+  end)
+end
+
 function showMoreOptionsDialog()
   moreOptionsDlg = LuaDialog(context)
   local layout = {
@@ -1579,12 +1485,7 @@ function showSettings()
   settingsDlg = LuaDialog(context).setView(view)
   settingsDlg.show()
   
-  Thread(luajava.bindClass("java.lang.Runnable"){
-      run = function()
-          Thread.sleep(3000)
-          checkForUpdates(false)
-      end
-  }).start()
+  checkForUpdates(false)
   
   typing_mode_sp.setAdapter(ArrayAdapter(context, android.R.layout.simple_spinner_item, typingModes))
   for i,v in ipairs(typingModes) do if v == typingMode then typing_mode_sp.setSelection(i-1) end end
