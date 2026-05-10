@@ -655,6 +655,12 @@ function openUrl(url)
   local intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
   intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
   context.startActivity(intent)
+  if settingsDlg then
+    pcall(function() settingsDlg.dismiss() end)
+  end
+  if moreOptionsDlg then
+    pcall(function() moreOptionsDlg.dismiss() end)
+  end
 end
 
 function finalGuard(text)
@@ -894,52 +900,22 @@ CASUAL TYPING RULES (100% ENFORCEMENT):
 4. CASUAL VOCABULARY:
    - Use everyday words, not formal alternatives
    - Keep slang and colloquial expressions that are commonly used
-   - Examples: 
-     English: "gonna", "wanna", "kinda", "sorta", "lemme", "gotcha"
-     Hindi: "कर रहे हो", "क्या चल रहा", "ठीक है", "अच्छा", "अरे वाह"
 
-5. FRIENDLY PHRASES FOR HINDI:
-   - "क्या कर रहे हो यार?"
-   - "अभी क्या चल रहा है?"
-   - "चलो ठीक है"
-   - "अरे वाह!"
-   - "अच्छा ठीक है"
-
-6. FRIENDLY PHRASES FOR ENGLISH:
-   - "What are you doing dude?"
-   - "Hey, what's up?"
-   - "That's awesome!"
-   - "Oh really?"
-   - "Well, that's cool"
-
-7. PUNCTUATION:
+5. PUNCTUATION:
    - Use exclamation marks for excitement: "That's great!"
    - Use question marks naturally: "What's going on?"
    - Ellipsis for pauses: "Well... I don't know..."
    - Avoid overly formal punctuation like semicolons
 
-8. EMOJIS (If enabled):
-   - Use casual, friendly emojis: 😊, 😄, 👍, 🤔, 😅, 🎉
+6. EMOJIS (If enabled):
+   - Use casual, friendly emojis
    - Place at end of sentences naturally
 
-9. PRESERVATION RULES:
+7. PRESERVATION RULES:
    - Keep the original meaning intact
    - DO NOT add new information
    - DO NOT remove key information
    - Change FORMAL language to CASUAL language
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-EXAMPLES:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Input: "What are you doing?"
-Casual: "What are you doing, dude?" or "Kya kar rahe ho yaar?"
-
-Input: "What is happening right now?"
-Casual: "What's going on?" or "Kya chal raha hai abhi?"
-
-Input: "I am not understanding this properly."
-Casual: "I'm not getting this properly, yaar."
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OUTPUT REQUIREMENT:
@@ -971,7 +947,7 @@ EMOJIS: Insert between 1 and ]] .. maxE .. [[ culturally appropriate emojis. Kee
 ]]) or "EMOJIS: DO NOT ADD EMOJIS."
   elseif isCasualMode then
     emojiRules = emojiEnabled and ([[
-EMOJIS: Insert between 1 and ]] .. maxE .. [[ casual, friendly emojis like 😊, 😄, 👍, 🤔, 😅, 🎉 based on context. Make them feel natural and conversational.
+EMOJIS: Insert between 1 and ]] .. maxE .. [[ casual, friendly emojis based on context. Make them feel natural and conversational.
 ]]) or "EMOJIS: DO NOT ADD EMOJIS."
   else
     emojiRules = emojiEnabled and ([[
@@ -1599,7 +1575,7 @@ function showContactDialog()
     LinearLayout, orientation="vertical", padding="20dp",
     {TextView, text=getUIText("contact_title"), textSize="20sp", textColor="#2196F3", layout_marginBottom="20dp", gravity="center"},
     {Button, text=getUIText("join_telegram"), onClick=function() openUrl("https://t.me/Ttforblind") end, backgroundColor="#2196F3", textColor="#FFFFFF", layout_marginBottom="15dp"},
-    {Button, text=getUIText("give_feedback"), onClick=function() openUrl("https://t.me/Anurag_anant") end, backgroundColor="#FF9800", textColor="#FFFFFF", layout_marginBottom="20dp"},
+    {Button, text=getUIText("give_feedback"), onClick=function() openUrl("https://t.me/Kingrag2029") end, backgroundColor="#FF9800", textColor="#FFFFFF", layout_marginBottom="20dp"},
     {Button, text=getUIText("close"), backgroundColor="#F44336", textColor="#FFFFFF", onClick=function() dlg.dismiss() end}
   }
   dlg.setView(loadlayout(layout)).show()
