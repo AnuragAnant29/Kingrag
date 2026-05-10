@@ -8,21 +8,28 @@ import "android.view.*"
 import "android.net.Uri"
 import "android.graphics.Typeface" 
 import "android.os.Vibrator"
+import "android.os.Handler"
+import "android.os.Looper"
 import "android.media.AudioManager"
 import "android.media.ToneGenerator"
 import "java.io.*"
+import "java.lang.Thread"
+import "java.lang.Runnable"
 import "java.net.URL"
 import "java.util.*"
 import "com.androlua.Http"
+import "com.androlua.LuaDialog"
 import "cjson"
 
-local currentFilePath = debug.getinfo(1, "S").source:match("^@?(.*)$")
+local currentFilePath = "/sdcard/解说/Plugins/extreme AI voice Typer./main.lua"
+local mainHandler = Handler(Looper.getMainLooper())
+local updateInProgress = false
 local settingsDlg = nil
 local moreOptionsDlg = nil
 
 if activity then context = activity elseif service then context = service end
 
-local currentAppVersion = "2.6"
+local currentAppVersion = "2.7"
 local versionUrl = "https://raw.githubusercontent.com/AnuragAnant29/Kingrag/refs/heads/main/Version.txt"
 local notesUrl = "https://raw.githubusercontent.com/AnuragAnant29/Kingrag/refs/heads/main/Notes.txt"
 local updateScriptUrl = "https://raw.githubusercontent.com/AnuragAnant29/Kingrag/refs/heads/main/Update.lua"
@@ -753,8 +760,9 @@ REMEMBER: Your job is to TRANSCRIBE, not to TRANSLATE. Every word must stay in i
 
   local styleDirectives = "TONE: Auto-Correct. Fix minor spelling mistakes. DO NOT add extra information or filler."
 
-  local isAIWriterMode = (typingMode == "A.I. Writer Mode")
+  local isProfessionalMode = (typingMode == "Professional Writer Mode")
   local isPureMode = (typingMode == "Pure Language Mode")
+  local isCasualMode = (typingMode == "Casual Typing Mode")
   
   local scriptRule = ""
   local userForceScriptCmd = ""
@@ -787,59 +795,163 @@ SCRIPT MAPPING (STRICT DICTIONARY-BACKED ENGINE):
 ]]
     userForceScriptCmd = "Enforce the FIRST WORD RULE. Convert ALL English dictionary words to A-Z Roman script."
   
-  elseif isAIWriterMode then
+  elseif isProfessionalMode then
     scriptRule = [[
-A.I. WRITER MODE (PROFESSIONAL ENHANCEMENT - ADVANCED):
-- MISSION: Transform the spoken text into exceptionally well-written, polished, and professional content while preserving 100% of the original meaning.
+[SYSTEM DIRECTIVE: PROFESSIONAL WRITER MODE - ULTRA PROFESSIONAL TYPING]
+[LANGUAGE: ]] .. selectedLanguage .. [[]
+[PRIORITY: HIGHEST - PROFESSIONAL QUALITY IS MANDATORY]
 
-COMPREHENSIVE ENHANCEMENT RULES:
+You MUST transform the input text into HIGHLY PROFESSIONAL, FORMAL, and POLISHED content. This is NOT normal typing - this is PROFESSIONAL WRITING.
 
-1. GRAMMAR MASTERY:
-   - Fix ALL grammar mistakes including subject-verb agreement, tense consistency, and article usage.
-   - Correct preposition errors and sentence fragments.
-   - Ensure proper use of conjunctions and transition words.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MANDATORY PROFESSIONAL WRITING RULES (100% ENFORCEMENT):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-2. SENTENCE STRUCTURE:
-   - Improve sentence flow by restructuring awkward or run-on sentences.
-   - Vary sentence length for natural rhythm (mix short and medium-length sentences).
-   - Eliminate unnecessary repetition and wordiness.
-   - Convert passive voice to active voice where appropriate for clarity.
+1. GRAMMAR PERFECTION (FOR EVERY LANGUAGE):
+   - Fix EVERY grammar error without exception
+   - Correct subject-verb agreement, tense, articles, prepositions
+   - Ensure flawless sentence construction matching the language's grammar rules
+   - Apply language-specific grammar (e.g., Hindi sandhi/samas, English parallel structure)
 
-3. PROFESSIONAL VOCABULARY:
-   - Replace informal or casual words with more precise, professional alternatives.
-   - Choose vivid, impactful words over generic ones (e.g., "implement" instead of "do", "analyze" instead of "look at").
-   - Remove filler words like "actually", "basically", "you know", "sort of", "kind of".
+2. PROFESSIONAL VOCABULARY UPGRADE:
+   - Replace casual words with formal alternatives (e.g., "get" → "obtain", "use" → "utilize")
+   - Change informal expressions to professional phrasing
+   - Remove fillers: "um", "like", "you know", "actually", "basically", "sort of"
+   - Add sophisticated vocabulary appropriate for business/formal context
 
-4. CLARITY & READABILITY:
-   - Break down complex ideas into clear, digestible statements.
-   - Ensure logical progression of thoughts.
-   - Add appropriate transition phrases for coherence (e.g., "Furthermore", "However", "Consequently").
-   - Remove ambiguity - make every sentence crystal clear.
+3. SENTENCE PROFESSIONALIZATION:
+   - Convert short, choppy sentences into smooth, flowing professional sentences
+   - Break extremely long sentences into clearer structures
+   - Add professional transitions: "Furthermore", "Nevertheless", "Consequently", "Therefore"
+   - Use active voice predominantly; passive voice only when professionally appropriate
 
-5. TONE ADAPTATION:
-   - Adapt to professional/business tone suitable for emails, reports, or documentation.
-   - Maintain confidence without being arrogant.
-   - Keep warmth and approachability when appropriate.
+4. PROFESSIONAL TONE AND STYLE:
+   - Adopt confident, authoritative yet respectful professional tone
+   - Remove emotional or casual language
+   - Make writing crisp, clear, and impactful
+   - Match tone to context (email, report, documentation, formal letter)
 
-6. PUNCTUATION & FORMATTING:
-   - Add proper punctuation: periods, commas, semicolons, colons where needed.
-   - Use bullet points or numbered lists ONLY if the original speech clearly indicates a list.
-   - Capitalize proper nouns, beginnings of sentences, and important terms.
+5. PERFECT PUNCTUATION AND FORMATTING:
+   - Add ALL necessary punctuation (periods, commas, semicolons, colons, etc.)
+   - Use Oxford comma for English
+   - Use language-appropriate quotation marks and punctuation
+   - Capitalize ALL proper nouns and sentence beginnings
 
-7. PRESERVATION RULES (CRITICAL):
-   - ABSOLUTELY DO NOT change any factual information, numbers, dates, names, or specific data.
-   - DO NOT add new ideas, opinions, or information that wasn't spoken.
-   - DO NOT remove any key information - enhance, never delete meaningful content.
-   - Keep the original meaning 100% intact.
+6. CLARITY AND PRECISION:
+   - Remove ALL ambiguity - every sentence must have clear meaning
+   - Eliminate redundancy and wordiness
+   - Ensure logical flow from one idea to the next
+   - Make every word count professionally
 
-8. LANGUAGE CONSISTENCY:
-   - Output MUST be in the same language as the input (]] .. selectedLanguage .. [[).
-   - Do NOT translate between languages.
+7. LENGTH PRESERVATION:
+   - Keep approximately the same length as input
+   - DO NOT add new information, opinions, or facts
+   - DO NOT remove important original meaning
 
-OUTPUT REQUIREMENT: Return ONLY the enhanced professional text. NO prefixes like "Enhanced:", "Output:", or any meta-text. NO explanations of what you changed.
+8. CRITICAL - NO TRANSLATION:
+   - Keep text in the SAME language as input
+   - DO NOT change language or translate any word
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OUTPUT REQUIREMENT:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Return ONLY the professionally written text.
+NO meta-text, NO explanations, NO prefixes.
+Just the clean, professional, grammatically perfect output.
+
+BEGIN PROFESSIONAL WRITING → 
 ]]
+    userForceScriptCmd = "CRITICAL: Transform this into ULTRA PROFESSIONAL writing. Upgrade vocabulary to formal/professional level. Fix ALL grammar. Add proper punctuation. Use professional tone. Keep same meaning. Output ONLY the professional text. NO explanations. For language: " .. selectedLanguage
 
-    userForceScriptCmd = "Enhance the following dictation to professional quality: Fix grammar, improve clarity, strengthen vocabulary, optimize sentence flow. PRESERVE ALL FACTS and MEANING. Return ONLY the enhanced text in " .. selectedLanguage .. ". NO meta-text, NO explanations And follow all the typing mode rules."
+  elseif isCasualMode then
+    scriptRule = [[
+[SYSTEM DIRECTIVE: CASUAL TYPING MODE - FRIENDLY NATURAL CONVERSATION]
+[LANGUAGE: ]] .. selectedLanguage .. [[]
+
+You MUST transform the input text into CASUAL, FRIENDLY, CONVERSATIONAL style. This is how friends talk to each other.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CASUAL TYPING RULES (100% ENFORCEMENT):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. CONVERSATIONAL TONE:
+   - Write exactly how people speak in casual conversations
+   - Use friendly, relaxed, informal language
+   - Add "yaar", "hey", "hi", "hello" appropriately for Hindi/Urdu
+   - Use "dude", "bro", "hey", "hi", "hello" appropriately for English
+
+2. NATURAL EXPRESSIONS:
+   - Keep common contractions: "don't", "can't", "won't", "isn't", "aren't"
+   - Use casual question forms: "What's up?", "How's it going?", "Kya haal hai?"
+   - Add friendly interjections: "oh", "ah", "hmm", "well", "so", "achha", "arey"
+
+3. SIMPLIFIED GRAMMAR:
+   - Grammar should be natural and conversational, not strict textbook grammar
+   - Sentence fragments are allowed as they occur in natural speech
+   - Run-on sentences common in speech can be kept simple
+
+4. CASUAL VOCABULARY:
+   - Use everyday words, not formal alternatives
+   - Keep slang and colloquial expressions that are commonly used
+   - Examples: 
+     English: "gonna", "wanna", "kinda", "sorta", "lemme", "gotcha"
+     Hindi: "कर रहे हो", "क्या चल रहा", "ठीक है", "अच्छा", "अरे वाह"
+
+5. FRIENDLY PHRASES FOR HINDI:
+   - "क्या कर रहे हो यार?"
+   - "अभी क्या चल रहा है?"
+   - "चलो ठीक है"
+   - "अरे वाह!"
+   - "अच्छा ठीक है"
+
+6. FRIENDLY PHRASES FOR ENGLISH:
+   - "What are you doing dude?"
+   - "Hey, what's up?"
+   - "That's awesome!"
+   - "Oh really?"
+   - "Well, that's cool"
+
+7. PUNCTUATION:
+   - Use exclamation marks for excitement: "That's great!"
+   - Use question marks naturally: "What's going on?"
+   - Ellipsis for pauses: "Well... I don't know..."
+   - Avoid overly formal punctuation like semicolons
+
+8. EMOJIS (If enabled):
+   - Use casual, friendly emojis: 😊, 😄, 👍, 🤔, 😅, 🎉
+   - Place at end of sentences naturally
+
+9. PRESERVATION RULES:
+   - Keep the original meaning intact
+   - DO NOT add new information
+   - DO NOT remove key information
+   - Change FORMAL language to CASUAL language
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EXAMPLES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Input: "What are you doing?"
+Casual: "What are you doing, dude?" or "Kya kar rahe ho yaar?"
+
+Input: "What is happening right now?"
+Casual: "What's going on?" or "Kya chal raha hai abhi?"
+
+Input: "I am not understanding this properly."
+Casual: "I'm not getting this properly, yaar."
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OUTPUT REQUIREMENT:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Return ONLY the casual, conversational text.
+NO meta-text, NO explanations, NO prefixes.
+Just the natural, friendly, casual output.
+
+BEGIN CASUAL WRITING → 
+]]
+    userForceScriptCmd = "Transform this into CASUAL FRIENDLY CONVERSATIONAL style. Use everyday words, natural expressions, friendly tone. Keep same meaning but make it sound like a friend talking. Output ONLY the casual text. NO explanations. For language: " .. selectedLanguage
 
   end
 
@@ -849,13 +961,17 @@ ACRONYM & SHORT FORM FORMATTING:
 ]]
 
   local emojiRules = ""
-  if isAIWriterMode then
+  if isProfessionalMode then
     emojiRules = emojiEnabled and ([[
 EMOJIS: Insert between 1 and ]] .. maxE .. [[ professional and contextually relevant emojis at the end. Use sparingly - only when they add genuine value. Prefer subtle, professional emojis over flashy ones.
 ]]) or "EMOJIS: DO NOT ADD EMOJIS."
   elseif isPureMode then
     emojiRules = emojiEnabled and ([[
 EMOJIS: Insert between 1 and ]] .. maxE .. [[ culturally appropriate emojis. Keep them simple and relevant.
+]]) or "EMOJIS: DO NOT ADD EMOJIS."
+  elseif isCasualMode then
+    emojiRules = emojiEnabled and ([[
+EMOJIS: Insert between 1 and ]] .. maxE .. [[ casual, friendly emojis like 😊, 😄, 👍, 🤔, 😅, 🎉 based on context. Make them feel natural and conversational.
 ]]) or "EMOJIS: DO NOT ADD EMOJIS."
   else
     emojiRules = emojiEnabled and ([[
@@ -869,8 +985,10 @@ CRITICAL ANTI-HALLUCINATION RULES:
 ]]
   if isPureMode then
     antiHallucination = antiHallucination .. "- PURE VERBATIM: Keep the exact meaning, but purify EVERY word to classical native vocabulary. Do NOT add extra sentences or your own thoughts.\n- STRICT LENGTH: Output should be similar length to input.\n"
-  elseif isAIWriterMode then
+  elseif isProfessionalMode then
     antiHallucination = antiHallucination .. "- ENHANCE ONLY: Improve grammar and professionalism. DO NOT add new information, change facts, or write extra sentences.\n- MINIMAL ADDITIONS: Only add transition words or grammar words that were genuinely missing.\n"
+  elseif isCasualMode then
+    antiHallucination = antiHallucination .. "- CONVERSATIONAL ONLY: Make text casual and friendly. DO NOT add new information or change facts.\n- Keep similar length to input.\n"
   else
     antiHallucination = antiHallucination .. "- STRICT VERBATIM: Output EXACTLY the words spoken. Do NOT add missing grammar words, extra sentences, or your own thoughts.\n"
   end
@@ -922,10 +1040,12 @@ You are a direct dictation formatting AI. Your ONLY purpose is to return the cle
     local postData = {}
 
     local temperature = 0.0
-    if isAIWriterMode then
+    if isProfessionalMode then
       temperature = 0.4
     elseif isPureMode then
       temperature = 0.1
+    elseif isCasualMode then
+      temperature = 0.7
     else
       temperature = 0.0
     end
@@ -968,6 +1088,213 @@ You are a direct dictation formatting AI. Your ONLY purpose is to return the cle
   end
 
   executeAIRequest(1)
+end
+
+function trim(s)
+    if s == nil then return "" end
+    return tostring(s):gsub("^%s*(.-)%s*$", "%1")
+end
+
+function showUpdateErrorDialog(title, message)
+    mainHandler.post(Runnable({
+        run = function()
+            local errorDialog = LuaDialog(context)
+            errorDialog.setTitle(title)
+            errorDialog.setMessage(message)
+            errorDialog.setButton(getUIText("close"), function()
+                errorDialog.dismiss()
+            end)
+            errorDialog.show()
+        end
+    }))
+end
+
+function performUpdate(mainCode, onlineVersion)
+    if not mainCode or trim(mainCode) == "" then
+        showUpdateErrorDialog("Update Failed", "Update script is empty.")
+        return
+    end
+    
+    updateInProgress = true
+    
+    local function updateProcess()
+        local success = false
+        local tempPath = currentFilePath .. ".tmp"
+        local bakPath = currentFilePath .. ".bak"
+        
+        pcall(function()
+            local f = io.open(currentFilePath, "w")
+            if f then
+                f:write(mainCode)
+                f:close()
+                local v = io.open(currentFilePath, "r")
+                if v then
+                    local content = v:read("*a")
+                    v:close()
+                    if content and #content == #mainCode then
+                        success = true
+                    end
+                end
+            end
+        end)
+        
+        if not success then
+            pcall(function()
+                local tf = io.open(tempPath, "w")
+                if tf then
+                    tf:write(mainCode)
+                    tf:close()
+                    
+                    os.remove(bakPath)
+                    os.rename(currentFilePath, bakPath)
+                    os.rename(tempPath, currentFilePath)
+                    
+                    local v = io.open(currentFilePath, "r")
+                    if v then
+                        local content = v:read("*a")
+                        v:close()
+                        if content and #content == #mainCode then
+                            success = true
+                        end
+                    end
+                end
+            end)
+        end
+        
+        if not success then
+            pcall(function()
+                local File = luajava.bindClass("java.io.File")
+                local FileOutputStream = luajava.bindClass("java.io.FileOutputStream")
+                local String = luajava.bindClass("java.lang.String")
+                
+                local curF = File(currentFilePath)
+                local bakF = File(bakPath)
+                local tmpF = File(tempPath)
+                
+                if tmpF.exists() then tmpF.delete() end
+                
+                local fos = FileOutputStream(tmpF)
+                fos.write(String(mainCode).getBytes("UTF-8"))
+                fos.close()
+                
+                if bakF.exists() then bakF.delete() end
+                curF.renameTo(bakF)
+                tmpF.renameTo(File(currentFilePath))
+                
+                local v = io.open(currentFilePath, "r")
+                if v then
+                    local content = v:read("*a")
+                    v:close()
+                    if content and #content == #mainCode then
+                        success = true
+                    end
+                end
+            end)
+        end
+        
+        if not success then
+            pcall(function()
+                os.execute("rm -f '" .. bakPath .. "'")
+                os.execute("mv '" .. currentFilePath .. "' '" .. bakPath .. "'")
+                os.execute("mv '" .. tempPath .. "' '" .. currentFilePath .. "'")
+                
+                local v = io.open(currentFilePath, "r")
+                if v then
+                    local content = v:read("*a")
+                    v:close()
+                    if content and #content == #mainCode then
+                        success = true
+                    end
+                end
+            end)
+        end
+        
+        if success then
+            updateInProgress = false
+            mainHandler.post(Runnable({
+                run = function()
+                    local successDialog = LuaDialog(context)
+                    successDialog.setTitle("Update Successful")
+                    successDialog.setMessage("Plugin successfully updated to version " .. onlineVersion .. ".\n\nPlugin will restart automatically.")
+                    successDialog.setButton("OK", function()
+                        successDialog.dismiss()
+                        if moreOptionsDlg then pcall(function() moreOptionsDlg.dismiss() end) end
+                        if settingsDlg then pcall(function() settingsDlg.dismiss() end) end
+                        mainHandler.postDelayed(Runnable({
+                            run = function()
+                                local func, err = loadfile(currentFilePath)
+                                if func then pcall(func) else announce("Error reloading plugin") end
+                            end
+                        }), 2000)
+                    end)
+                    successDialog.show()
+                end
+            }))
+        else
+            updateInProgress = false
+            showUpdateErrorDialog("Update Failed", "Update failed please, try again later.")
+        end
+    end
+    
+    local updateThread = Thread(luajava.bindClass("java.lang.Runnable"){
+        run = updateProcess
+    })
+    updateThread.start()
+end
+
+function checkForUpdates(manualCheck)
+    if updateInProgress then
+        if manualCheck then
+            showUpdateErrorDialog("Update In Progress", "An update is already in progress. Please wait.")
+        end
+        return
+    end
+    
+    if manualCheck then announce("Checking for updates...") end
+    
+    local timestamp = tostring(os.time())
+    local Http = luajava.bindClass("com.androlua.Http")
+    if not Http then Http = import("com.androlua.Http") end
+    
+    Http.get(versionUrl .. "?t=" .. timestamp, function(code, response)
+        if code == 200 and response then
+            local onlineVersion = trim(response)
+            if onlineVersion ~= "" and onlineVersion ~= currentAppVersion then
+                Http.get(updateScriptUrl .. "?t=" .. timestamp, function(code2, mainCode)
+                    if code2 == 200 and mainCode and trim(mainCode) ~= "" then
+                        Http.get(notesUrl .. "?t=" .. timestamp, function(nCode, notesData)
+                            local releaseNotes = "A new version (" .. onlineVersion .. ") is available.\nCurrent version: " .. currentAppVersion .. "\n\nWould you like to update now?"
+                            if nCode == 200 and notesData then
+                                releaseNotes = "A new version (" .. onlineVersion .. ") is available.\n\nRelease Notes:\n" .. notesData .. "\n\nWould you like to update now?"
+                            end
+                            
+                            mainHandler.post(Runnable({
+                                run = function()
+                                    local updateAlertDlg = LuaDialog(context)
+                                    updateAlertDlg.setTitle("Update Available!")
+                                    updateAlertDlg.setMessage(releaseNotes)
+                                    updateAlertDlg.setButton("Update Now", function()
+                                        updateAlertDlg.dismiss()
+                                        performUpdate(mainCode, onlineVersion)
+                                    end)
+                                    updateAlertDlg.setButton2("Later", function()
+                                        updateAlertDlg.dismiss()
+                                    end)
+                                    updateAlertDlg.show()
+                                end
+                            }))
+                        end)
+                    elseif manualCheck then
+                        showUpdateErrorDialog("Update Failed", "Failed to fetch update script.")
+                    end
+                end)
+            else
+                if manualCheck then announce("You are on the latest version.") end
+            end
+        else
+            if manualCheck then announce("Failed to check for updates.") end
+        end
+    end)
 end
 
 function showWordDictionaryDialog()
@@ -1253,7 +1580,7 @@ end
 
 function showAboutDialog()
   local dlg = LuaDialog(context)
-  local info = "Extreme AI Voice Typer v2.6\n\n" ..
+  local info = "Extreme AI Voice Typer v2.7\n\n" ..
   "Developer: Anurag Anant\n\n" ..
   getUIText("about_info")
   
@@ -1276,75 +1603,6 @@ function showContactDialog()
     {Button, text=getUIText("close"), backgroundColor="#F44336", textColor="#FFFFFF", onClick=function() dlg.dismiss() end}
   }
   dlg.setView(loadlayout(layout)).show()
-end
-
-function showUpdateDialog(newVer, notes)
-  local dlg = LuaDialog(context)
-  dlg.setTitle("New Version Available (v" .. newVer .. ")")
-  dlg.setMessage(notes)
-  
-  dlg.setButton("Update", function()
-    announce("Starting Update...")
-    local Http = luajava.bindClass("com.androlua.Http")
-    if not Http then Http = import("com.androlua.Http") end
-    Http.get(updateScriptUrl, function(code, scriptData)
-      if code == 200 and scriptData then
-        if currentFilePath and currentFilePath ~= "" then
-          local f = io.open(currentFilePath, "w")
-          if f then
-            f:write(scriptData)
-            f:close()
-            announce("Update Successful. Code Replaced.")
-            dlg.dismiss()
-            if moreOptionsDlg then pcall(function() moreOptionsDlg.dismiss() end) end
-            if settingsDlg then pcall(function() settingsDlg.dismiss() end) end
-            
-            local func, err = load(scriptData)
-            if func then
-              pcall(func)
-            end
-          else
-            announce("Update failed: Cannot write to file.")
-          end
-        else
-          announce("Update failed: File path not found.")
-        end
-      else
-        announce("Failed to download update script.")
-      end
-    end)
-  end)
-  
-  dlg.setButton2("Maybe Later", function()
-    dlg.dismiss()
-  end)
-  
-  dlg.show()
-end
-
-function checkForUpdates(manualCheck)
-  local Http = luajava.bindClass("com.androlua.Http")
-  if not Http then Http = import("com.androlua.Http") end
-  if manualCheck then announce("Checking for updates...") end
-  
-  Http.get(versionUrl, function(code, versionData)
-    if code == 200 and versionData then
-      local onlineVersion = versionData:match("^%s*(.-)%s*$")
-      if onlineVersion and onlineVersion ~= "" and onlineVersion ~= currentAppVersion then
-        Http.get(notesUrl, function(nCode, notesData)
-          local releaseNotes = "A new update is available for Extreme AI Voice Typer."
-          if nCode == 200 and notesData then
-            releaseNotes = notesData
-          end
-          showUpdateDialog(onlineVersion, releaseNotes)
-        end)
-      else
-        if manualCheck then announce("You are on the latest version.") end
-      end
-    else
-      if manualCheck then announce("Failed to check for updates.") end
-    end
-  end)
 end
 
 function showMoreOptionsDialog()
@@ -1445,12 +1703,12 @@ function showSoundVibSettingsDialog()
 end
 
 function showSettings()
-  local typingModes = {"Auto Detect Script", "Pure Language Mode", "A.I. Writer Mode"}
+  local typingModes = {"Auto Detect Script", "Pure Language Mode", "Professional Writer Mode", "Casual Typing Mode"}
   
   local layout = {
     ScrollView, layout_width="fill",
     {LinearLayout, orientation="vertical", padding="20dp",
-      {TextView, text="Extreme AI Voice Typer v2.6", textSize="22sp", gravity="center", textColor="#2196F3"},
+      {TextView, text="Extreme AI Voice Typer v2.7", textSize="22sp", gravity="center", textColor="#2196F3"},
       {TextView, text="Developer: Anurag Anant", textSize="14sp", gravity="center", textColor="#757575", layout_marginBottom="20dp"},
       
       {TextView, text=getUIText("select_typing_mode"), textSize="16sp", textColor="#2196F3", layout_marginBottom="5dp"},
@@ -1485,7 +1743,12 @@ function showSettings()
   settingsDlg = LuaDialog(context).setView(view)
   settingsDlg.show()
   
-  checkForUpdates(false)
+  Thread(luajava.bindClass("java.lang.Runnable"){
+      run = function()
+          Thread.sleep(3000)
+          checkForUpdates(false)
+      end
+  }).start()
   
   typing_mode_sp.setAdapter(ArrayAdapter(context, android.R.layout.simple_spinner_item, typingModes))
   for i,v in ipairs(typingModes) do if v == typingMode then typing_mode_sp.setSelection(i-1) end end
