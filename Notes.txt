@@ -1,29 +1,34 @@
 ═══════════════════════════════════════════════════════
-EXTREME AI VOICE TYPER v2.6
+EXTREME AI VOICE TYPER v2.7
 Developer: Anurag Anant
 ═══════════════════════════════════════════════════════
-​✨ WHAT'S NEW IN v2.6
+
+✨ WHAT'S NEW IN v2.7
 ───────────────────────────────────────────────────────
-​🌍 MULTILINGUAL U.I.
-• Switch to your favorite User Interface (U.I.) language
-• Currently available in Urdu, Hindi, and English
-​⚡ PERFORMANCE ENHANCEMENTS
-• Significant improvements in Typing speed and accuracy
-• Enhanced A.I. Writer Mode for better text refinement
-​📚 WORD DICTIONARY
-• Word Dictionary feature has been significantly improved
-• Enhanced performance and smoother management of saved words
-​🐛 BUG FIXES
-• All minor bugs have been fixed
-• Typing time issues have been resolved
-• Overall performance improved
-​═══════════════════════════════════════════════════════
-​📋 LEGACY FEATURES
-───────────────────────────────────────────────────────
-• 148+ Languages Voice Recognition
-• Multiple AI Providers (OpenRouter, Gemini, Groq)
-• Offline Mode • Translation Mode • Emoji Support
-• Sound & Vibration • Auto Detect Script
-​═══════════════════════════════════════════════════════
-📱 Word Dictionary: More Options → Word Dictionary
+
+🎯 NEW TYPING MODES
+• Professional Writer Mode added for ultra-professional formal typing
+• Casual Typing Mode added for friendly, conversational typing
+• Total 4 Typing Modes now available (Auto Detect, Pure Language, Professional, Casual)
+
+🤖 PROFESSIONAL WRITER MODE
+• Completely redesigned for 100% professional typing
+• Perfect grammar for all 148+ languages
+• Formal vocabulary upgrade with professional tone
+• Advanced sentence structuring for business/formal context
+
+💬 CASUAL TYPING MODE (NEW)
+• Natural friend-to-friend conversation style
+• Friendly and relaxed everyday vocabulary for all languages
+
+🌍 EXPANDED MULTILINGUAL U.I.
+• Marathi language added to User Interface
+• Gujarati language added to User Interface
+• Now available in: Urdu, Hindi, English, Marathi, Gujarati
+
+⚡ PERFORMANCE ENHANCEMENTS
+• Improved Professional Writer Mode accuracy
+• Enhanced Casual Typing Mode response quality
+• Better language-specific grammar handling
+
 ═══════════════════════════════════════════════════════
