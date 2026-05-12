@@ -1,34 +1,25 @@
 ═══════════════════════════════════════════════════════
-EXTREME AI VOICE TYPER v2.7
+EXTREME AI VOICE TYPER v2.7.1
 Developer: Anurag Anant
 ═══════════════════════════════════════════════════════
 
-✨ WHAT'S NEW IN v2.7
+✨ WHAT'S NEW IN v2.7.1
 ───────────────────────────────────────────────────────
 
-🎯 NEW TYPING MODES
-• Professional Writer Mode added for ultra-professional formal typing
-• Casual Typing Mode added for friendly, conversational typing
-• Total 4 Typing Modes now available (Auto Detect, Pure Language, Professional, Casual)
+🔧 AI PROVIDER BUG FIX
+• Fixed critical issue where selected AI Provider was not saving
+• Now your chosen provider stays permanently saved
 
-🤖 PROFESSIONAL WRITER MODE
-• Completely redesigned for 100% professional typing
-• Perfect grammar for all 148+ languages
-• Formal vocabulary upgrade with professional tone
-• Advanced sentence structuring for business/formal context
+💬 CASUAL TYPING MODE
+• Further improved for more natural conversation
 
-💬 CASUAL TYPING MODE (NEW)
-• Natural friend-to-friend conversation style
-• Friendly and relaxed everyday vocabulary for all languages
+🐛 MINOR BUG FIXES
+• Various small issues have been resolved
+• Overall stability and performance improved
 
-🌍 EXPANDED MULTILINGUAL U.I.
-• Marathi language added to User Interface
-• Gujarati language added to User Interface
-• Now available in: Urdu, Hindi, English, Marathi, Gujarati
-
-⚡ PERFORMANCE ENHANCEMENTS
-• Improved Professional Writer Mode accuracy
-• Enhanced Casual Typing Mode response quality
-• Better language-specific grammar handling
+⚡ PERFORMANCE IMPROVEMENTS
+• Provider selection now persists after restarting settings
+• Casual Mode response quality enhanced
+• Better handling of casual expressions
 
 ═══════════════════════════════════════════════════════
