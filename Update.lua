@@ -29,7 +29,7 @@ local moreOptionsDlg = nil
 
 if activity then context = activity elseif service then context = service end
 
-local currentAppVersion = "2.7"
+local currentAppVersion = "2.7.1"
 local versionUrl = "https://raw.githubusercontent.com/AnuragAnant29/Kingrag/refs/heads/main/Version.txt"
 local notesUrl = "https://raw.githubusercontent.com/AnuragAnant29/Kingrag/refs/heads/main/Notes.txt"
 local updateScriptUrl = "https://raw.githubusercontent.com/AnuragAnant29/Kingrag/refs/heads/main/Update.lua"
@@ -1564,7 +1564,7 @@ end
 
 function showAboutDialog()
   local dlg = LuaDialog(context)
-  local info = "Extreme AI Voice Typer v2.7\n\n" ..
+  local info = "Extreme AI Voice Typer v2.7.1\n\n" ..
   "Developer: Anurag Anant\n\n" ..
   getUIText("about_info")
   
@@ -1692,7 +1692,7 @@ function showSettings()
   local layout = {
     ScrollView, layout_width="fill",
     {LinearLayout, orientation="vertical", padding="20dp",
-      {TextView, text="Extreme AI Voice Typer v2.7", textSize="22sp", gravity="center", textColor="#2196F3"},
+      {TextView, text="Extreme AI Voice Typer v2.7.1", textSize="22sp", gravity="center", textColor="#2196F3"},
       {TextView, text="Developer: Anurag Anant", textSize="14sp", gravity="center", textColor="#757575", layout_marginBottom="20dp"},
       
       {TextView, text=getUIText("select_typing_mode"), textSize="16sp", textColor="#2196F3", layout_marginBottom="5dp"},
