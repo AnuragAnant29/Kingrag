@@ -884,38 +884,45 @@ CASUAL TYPING RULES (100% ENFORCEMENT):
 1. CONVERSATIONAL TONE:
    - Write exactly how people speak in casual conversations
    - Use friendly, relaxed, informal language
-   - Add "yaar", "hey", "hi", "hello" appropriately for Hindi/Urdu
-   - Use "dude", "bro", "hey", "hi", "hello" appropriately for English
+   - Add "yaar", "hey", "hi", "hello", "arey", "achha" appropriately for Hindi/Urdu
+   - Use "dude", "bro", "hey", "hi", "hello", "oh", "well" appropriately for English
 
 2. NATURAL EXPRESSIONS:
-   - Keep common contractions: "don't", "can't", "won't", "isn't", "aren't"
-   - Use casual question forms: "What's up?", "How's it going?", "Kya haal hai?"
-   - Add friendly interjections: "oh", "ah", "hmm", "well", "so", "achha", "arey"
+   - Keep common contractions: "don't", "can't", "won't", "isn't", "aren't", "I'm", "you're"
+   - Use casual question forms: "What's up?", "How's it going?", "Kya haal hai?", "Kya chal raha hai?"
+   - Add friendly interjections: "oh", "ah", "hmm", "well", "so", "achha", "arey", "wah"
 
 3. SIMPLIFIED GRAMMAR:
    - Grammar should be natural and conversational, not strict textbook grammar
    - Sentence fragments are allowed as they occur in natural speech
-   - Run-on sentences common in speech can be kept simple
+   - Run-on sentences common in speech can be kept as is
 
 4. CASUAL VOCABULARY:
    - Use everyday words, not formal alternatives
    - Keep slang and colloquial expressions that are commonly used
+   - English: "gonna", "wanna", "kinda", "sorta", "lemme", "gotcha", "yeah", "nope"
+   - Hindi: "कर रहे हो", "क्या चल रहा", "ठीक है", "अच्छा", "अरे वाह", "चलो", "हाँ", "नहीं"
 
 5. PUNCTUATION:
-   - Use exclamation marks for excitement: "That's great!"
-   - Use question marks naturally: "What's going on?"
-   - Ellipsis for pauses: "Well... I don't know..."
+   - Use exclamation marks for excitement: "That's great!", "Arey wah!"
+   - Use question marks naturally: "What's going on?", "Kya ho raha hai?"
+   - Ellipsis for pauses: "Well... I don't know...", "Hmm... pata nahi..."
    - Avoid overly formal punctuation like semicolons
 
-6. EMOJIS (If enabled):
-   - Use casual, friendly emojis
+6. ADD FRIENDLY WORDS:
+   - End sentences with "yaar", "dude", "bro" when appropriate
+   - Start conversations with "Hey", "Hello", "Arey", "Oye"
+   - Use "please" and "thanks" in casual way
+
+7. EMOJIS (If enabled):
+   - Use casual, friendly emojis like 😊, 😄, 👍, 🤔, 😅, 🎉, ✨, 💯
    - Place at end of sentences naturally
 
-7. PRESERVATION RULES:
+8. PRESERVATION RULES:
    - Keep the original meaning intact
    - DO NOT add new information
    - DO NOT remove key information
-   - Change FORMAL language to CASUAL language
+   - Change FORMAL language to CASUAL language naturally
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OUTPUT REQUIREMENT:
@@ -923,11 +930,11 @@ OUTPUT REQUIREMENT:
 
 Return ONLY the casual, conversational text.
 NO meta-text, NO explanations, NO prefixes.
-Just the natural, friendly, casual output.
+Just the natural, friendly, casual output that sounds like a real person talking.
 
 BEGIN CASUAL WRITING → 
 ]]
-    userForceScriptCmd = "Transform this into CASUAL FRIENDLY CONVERSATIONAL style. Use everyday words, natural expressions, friendly tone. Keep same meaning but make it sound like a friend talking. Output ONLY the casual text. NO explanations. For language: " .. selectedLanguage
+    userForceScriptCmd = "Transform this into CASUAL FRIENDLY CONVERSATIONAL style. Use everyday words, natural expressions, friendly tone. Add 'yaar', 'dude', 'hey', 'arey' where natural. Use contractions like 'gonna', 'wanna' for English. Keep same meaning but make it sound like a friend chatting casually. Output ONLY the casual text. NO explanations. For language: " .. selectedLanguage
 
   end
 
@@ -947,7 +954,7 @@ EMOJIS: Insert between 1 and ]] .. maxE .. [[ culturally appropriate emojis. Kee
 ]]) or "EMOJIS: DO NOT ADD EMOJIS."
   elseif isCasualMode then
     emojiRules = emojiEnabled and ([[
-EMOJIS: Insert between 1 and ]] .. maxE .. [[ casual, friendly emojis based on context. Make them feel natural and conversational.
+EMOJIS: Insert between 1 and ]] .. maxE .. [[ casual, friendly emojis like 😊, 😄, 👍, 🤔, 😅, 🎉 based on context. Make them feel natural and conversational.
 ]]) or "EMOJIS: DO NOT ADD EMOJIS."
   else
     emojiRules = emojiEnabled and ([[
@@ -1021,7 +1028,7 @@ You are a direct dictation formatting AI. Your ONLY purpose is to return the cle
     elseif isPureMode then
       temperature = 0.1
     elseif isCasualMode then
-      temperature = 0.7
+      temperature = 0.8
     else
       temperature = 0.0
     end
@@ -1550,6 +1557,7 @@ function showAISettingsDialog()
   
   sub_ai_save_btn.onClick = function()
     selectedProvider = providers[sub_provider_sp.getSelectedItemPosition() + 1]
+    editor.putString("provider", selectedProvider).commit()
     dlg.dismiss()
   end
 end
