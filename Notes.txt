@@ -1,25 +1,50 @@
 ═══════════════════════════════════════════════════════
-EXTREME AI VOICE TYPER v2.7.1
+EXTREME AI VOICE TYPER v2.8
 Developer: Anurag Anant
 ═══════════════════════════════════════════════════════
 
-✨ WHAT'S NEW IN v2.7.1
+✨ WHAT'S NEW IN v2.8
 ───────────────────────────────────────────────────────
 
-🔧 AI PROVIDER BUG FIX
-• Fixed critical issue where selected AI Provider was not saving
-• Now your chosen provider stays permanently saved
+🚀 EXTENSION STARTUP ACTION
+• Choose what happens when plugin starts
+• Options: Ask Every Time, AI Dictation, Voice Typing with Target Language, Process Text from Textbox
 
-💬 CASUAL TYPING MODE
-• Further improved for more natural conversation
+💬 CHAT WITH AI
+• Now available in More Options
+• Chat directly with Groq AI using your voice or text
+• Get instant AI responses while typing
 
-🐛 MINOR BUG FIXES
-• Various small issues have been resolved
-• Overall stability and performance improved
+📝 PROCESS TEXT FROM TEXTBOX
+• Transform any existing text into High-Level Professional content
+• Perfect for emails, documents, and formal writing
 
-⚡ PERFORMANCE IMPROVEMENTS
-• Provider selection now persists after restarting settings
-• Casual Mode response quality enhanced
-• Better handling of casual expressions
+⚙️ STARTUP BEHAVIOR CONTROL
+• Set your preferred default action
+• Save time with automatic mode selection
+
+🔧 AI TYPING ENHANCEMENTS
+• All typing modes working flawlessly
+• Auto Detect Script improved
+• Pure Language Mode refined
+• Professional & Casual Modes optimized
+
+═══════════════════════════════════════════════════════
+
+📢 FEEDBACK & SUPPORT
+───────────────────────────────────────────────────────
+• Facing any issue while using the plugin?
+• Have a suggestion for a new feature?
+• Simply go to More Options → Contact Us
+• Click on "Give Feedback on Telegram" button
+• Send your feedback directly to the developer
+
+Your feedback helps make this plugin better! 💙
+
+═══════════════════════════════════════════════════════
+
+📲 UPDATE NOW
+───────────────────────────────────────────────────────
+• Update Now to enjoy the latest features and improvements
 
 ═══════════════════════════════════════════════════════
