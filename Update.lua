@@ -26,10 +26,12 @@ local mainHandler = Handler(Looper.getMainLooper())
 local updateInProgress = false
 local settingsDlg = nil
 local moreOptionsDlg = nil
+local chatDlg = nil
+local isListening = false
 
 if activity then context = activity elseif service then context = service end
 
-local currentAppVersion = "2.7.1"
+local currentAppVersion = "2.8"
 local versionUrl = "https://raw.githubusercontent.com/AnuragAnant29/Kingrag/refs/heads/main/Version.txt"
 local notesUrl = "https://raw.githubusercontent.com/AnuragAnant29/Kingrag/refs/heads/main/Notes.txt"
 local updateScriptUrl = "https://raw.githubusercontent.com/AnuragAnant29/Kingrag/refs/heads/main/Update.lua"
@@ -60,6 +62,7 @@ local soundEnabled = prefs.getBoolean("sound_enabled", true)
 local soundType = prefs.getString("sound_type", "Default Beep")
 
 local typingMode = prefs.getString("typing_mode", "Auto Detect Script")
+local startupAction = prefs.getString("startup_action", "Ask Every Time")
 
 local uiLanguage = prefs.getString("ui_language", "English")
 
@@ -162,6 +165,13 @@ local uiTexts = {
     connection_failed = "Connection Failed. Please check API Key or Internet.",
     please_enter_word = "Please enter a word",
     please_enter_replacement = "Please enter a replacement word",
+    chat_with_ai = "Chat with AI",
+    send = "Send",
+    type_message = "Type your message...",
+    ai_is_thinking = "AI is thinking...",
+    chat_title = "Chat with AI",
+    close = "Close",
+    listen = "Listen",
   },
   
   ["Hindi"] = {
@@ -262,6 +272,13 @@ local uiTexts = {
     connection_failed = "कनेक्शन विफल। कृपया API कुंजी या इंटरनेट जांचें।",
     please_enter_word = "कृपया एक शब्द दर्ज करें",
     please_enter_replacement = "कृपया एक प्रतिस्थापन शब्द दर्ज करें",
+    chat_with_ai = "AI के साथ चैट करें",
+    send = "भेजें",
+    type_message = "अपना संदेश लिखें...",
+    ai_is_thinking = "AI सोच रहा है...",
+    chat_title = "AI के साथ चैट करें",
+    close = "बंद करें",
+    listen = "सुनें",
   },
   
   ["Urdu"] = {
@@ -362,6 +379,13 @@ local uiTexts = {
     connection_failed = "کنکشن ناکام۔ براہ کرم API کنجی یا انٹرنیٹ چیک کریں۔",
     please_enter_word = "براہ کرم ایک لفظ درج کریں",
     please_enter_replacement = "براہ کرم ایک متبادل لفظ درج کریں",
+    chat_with_ai = "AI کے ساتھ چیٹ کریں",
+    send = "بھیجیں",
+    type_message = "اپنا پیغام لکھیں...",
+    ai_is_thinking = "AI سوچ رہا ہے...",
+    chat_title = "AI کے ساتھ چیٹ کریں",
+    close = "بند کریں",
+    listen = "سنیں",
   },
   
   ["Marathi"] = {
@@ -462,6 +486,13 @@ local uiTexts = {
     connection_failed = "कनेक्शन अयशस्वी। कृपया API की किंवा इंटरनेट तपासा।",
     please_enter_word = "कृपया एक शब्द प्रविष्ट करा",
     please_enter_replacement = "कृपया एक प्रतिस्थापन शब्द प्रविष्ट करा",
+    chat_with_ai = "AI सोबत चॅट करा",
+    send = "पाठवा",
+    type_message = "तुमचा संदेश लिहा...",
+    ai_is_thinking = "AI विचार करत आहे...",
+    chat_title = "AI सोबत चॅट करा",
+    close = "बंद करा",
+    listen = "ऐका",
   },
   
   ["Gujarati"] = {
@@ -562,6 +593,13 @@ local uiTexts = {
     connection_failed = "કનેક્શન નિષ્ફળ. કૃપા કરીને API કી અથવા ઇન્ટરનેટ ચેક કરો.",
     please_enter_word = "કૃપા કરીને એક શબ્દ દાખલ કરો",
     please_enter_replacement = "કૃપા કરીને એક પ્રતિસ્થાપન શબ્દ દાખલ કરો",
+    chat_with_ai = "AI સાથે ચેટ કરો",
+    send = "મોકલો",
+    type_message = "તમારો સંદેશ લખો...",
+    ai_is_thinking = "AI વિચાર કરી રહ્યું છે...",
+    chat_title = "AI સાથે ચેટ કરો",
+    close = "બંધ કરો",
+    listen = "સાંભળો",
   },
 }
 
@@ -694,6 +732,277 @@ function processOffline(text, callback)
     t = t .. "."
   end
   callback(t)
+end
+
+function chatWithGroq(userMessage, callback)
+  if not userMessage or userMessage == "" then
+    if callback then callback("Please enter a message to chat.") end
+    return
+  end
+  
+  local apiKey = groqKey
+  if not apiKey or apiKey == "" then
+    if callback then callback("Error: Groq API Key Missing. Please add your Groq API Key in AI Settings.") end
+    return
+  end
+  
+  local apiUrl = "https://api.groq.com/openai/v1/chat/completions"
+  local model = "llama-3.3-70b-versatile"
+  
+  local systemPrompt = "You are a helpful, friendly AI assistant. You chat naturally and provide helpful answers. Keep responses conversational and engaging."
+  
+  local postData = {
+    model = model,
+    messages = {
+      {role = "system", content = systemPrompt},
+      {role = "user", content = userMessage}
+    },
+    temperature = 0.7,
+    max_tokens = 500
+  }
+  
+  local headers = {
+    ["Content-Type"] = "application/json",
+    ["Authorization"] = "Bearer " .. apiKey
+  }
+  
+  local jsonData = cjson.encode(postData)
+  
+  Http.post(apiUrl, jsonData, headers, function(status, data)
+    if status == 200 and data then
+      local ok, decoded = pcall(cjson.decode, data)
+      if ok and decoded then
+        if decoded.choices and decoded.choices[1] then
+          local reply = decoded.choices[1].message.content
+          if callback then callback(reply) end
+        elseif decoded.error and decoded.error.message then
+          if callback then callback("Error: " .. decoded.error.message) end
+        else
+          if callback then callback("Error: Invalid response from Groq API") end
+        end
+      else
+        if callback then callback("Error: Failed to parse API response") end
+      end
+    else
+      if callback then callback("Error: Connection failed. Please check your internet connection and Groq API Key.") end
+    end
+  end)
+end
+
+function startVoiceInput(callback)
+  if isListening then return end
+  isListening = true
+  
+  local intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+  intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+  intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-IN")
+  intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak your question...")
+  
+  local sr = SpeechRecognizer.createSpeechRecognizer(context)
+  sr.setRecognitionListener({
+    onResults = function(res)
+      local matches = res.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+      if matches and matches.size() > 0 then
+        local spokenText = matches.get(0)
+        if callback then callback(spokenText) end
+      end
+      sr.destroy()
+      isListening = false
+    end,
+    onError = function(error)
+      sr.destroy()
+      isListening = false
+      if callback then callback(nil) end
+    end,
+    onReadyForSpeech = function(params)
+      triggerSound()
+    end
+  })
+  sr.startListening(intent)
+end
+
+function showChatDialog()
+  local dlg = LuaDialog(context)
+  dlg.setTitle(getUIText("chat_title"))
+  
+  local layout = {
+    LinearLayout,
+    orientation="vertical",
+    layout_width="fill",
+    layout_height="fill",
+    padding="10dp",
+    {
+      ScrollView,
+      id="scroll",
+      layout_width="fill",
+      layout_height="0dp",
+      layout_weight=1,
+      {
+        LinearLayout,
+        id="messages_container",
+        orientation="vertical",
+        layout_width="fill",
+        padding="5dp"
+      }
+    },
+    {
+      LinearLayout,
+      orientation="horizontal",
+      layout_width="fill",
+      layout_marginTop="10dp",
+      {
+        EditText,
+        id="input_msg",
+        hint=getUIText("type_message"),
+        layout_width="0dp",
+        layout_weight=1,
+        backgroundColor="#F5F5F5",
+        padding="10dp"
+      },
+      {
+        Button,
+        id="mic_btn",
+        text="🎤",
+        textSize="20sp",
+        backgroundColor="#4CAF50",
+        textColor="#FFFFFF",
+        padding="10dp",
+        layout_marginLeft="5dp"
+      },
+      {
+        Button,
+        id="send_btn",
+        text=getUIText("send"),
+        backgroundColor="#2196F3",
+        textColor="#FFFFFF",
+        padding="10dp",
+        layout_marginLeft="5dp"
+      },
+      {
+        Button,
+        id="close_chat_btn",
+        text=getUIText("close"),
+        backgroundColor="#F44336",
+        textColor="#FFFFFF",
+        padding="10dp",
+        layout_marginLeft="5dp"
+      }
+    }
+  }
+  
+  local view = loadlayout(layout)
+  dlg.setView(view)
+  dlg.show()
+  
+  local scroll = scroll
+  local container = messages_container
+  local input = input_msg
+  local sendBtn = send_btn
+  local micBtn = mic_btn
+  local closeBtn = close_chat_btn
+  
+  local function addMessage(text, isUser)
+    local msgLayout = LinearLayout(container.getContext())
+    msgLayout.setOrientation(LinearLayout.VERTICAL)
+    msgLayout.setLayoutParams(LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+    
+    local marginLeft = isUser and 100 or 10
+    local marginRight = isUser and 10 or 100
+    
+    local params = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+    params.setMargins(marginLeft, 5, marginRight, 5)
+    msgLayout.setLayoutParams(params)
+    
+    local msgText = TextView(container.getContext())
+    msgText.setText(text)
+    msgText.setTextSize(14)
+    msgText.setPadding(15, 10, 15, 10)
+    
+    if isUser then
+      msgText.setBackgroundColor(0xFF2196F3)
+      msgText.setTextColor(0xFFFFFFFF)
+      msgText.setGravity(Gravity.RIGHT)
+    else
+      if text:match("^Error:") then
+        msgText.setBackgroundColor(0xFFFF5722)
+        msgText.setTextColor(0xFFFFFFFF)
+      else
+        msgText.setBackgroundColor(0xFFE0E0E0)
+        msgText.setTextColor(0xFF000000)
+      end
+      msgText.setGravity(Gravity.LEFT)
+    end
+    
+    msgLayout.addView(msgText)
+    container.addView(msgLayout)
+    
+    mainHandler.post(Runnable({
+      run = function()
+        scroll.fullScroll(ScrollView.FOCUS_DOWN)
+      end
+    }))
+  end
+  
+  local function sendMessage(msg)
+    if msg == "" then return end
+    
+    addMessage(msg, true)
+    input.setText("")
+    
+    addMessage(getUIText("ai_is_thinking"), false)
+    
+    chatWithGroq(msg, function(reply)
+      mainHandler.post(Runnable({
+        run = function()
+          if container.getChildCount() > 0 then
+            container.removeViewAt(container.getChildCount() - 1)
+          end
+          if reply and not reply:match("^Error:") then
+            addMessage(reply, false)
+            announce(reply)
+          else
+            addMessage(reply or "Sorry, I couldn't process that. Please check your API Key and internet connection.", false)
+            if reply then announce(reply) end
+          end
+        end
+      }))
+    end)
+  end
+  
+  sendBtn.setOnClickListener({
+    onClick = function(v)
+      local msg = input.getText().toString()
+      sendMessage(msg)
+    end
+  })
+  
+  micBtn.setOnClickListener({
+    onClick = function(v)
+      startVoiceInput(function(spokenText)
+        if spokenText and spokenText ~= "" then
+          input.setText(spokenText)
+          sendMessage(spokenText)
+        end
+      end)
+    end
+  })
+  
+  closeBtn.setOnClickListener({
+    onClick = function(v)
+      dlg.dismiss()
+    end
+  })
+  
+  input.setOnEditorActionListener({
+    onEditorAction = function(v, actionId, event)
+      if actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND then
+        local msg = input.getText().toString()
+        sendMessage(msg)
+        return true
+      end
+      return false
+    end
+  })
 end
 
 function processWithAI(text, isTranslatedAlready, callback)
@@ -1564,7 +1873,7 @@ end
 
 function showAboutDialog()
   local dlg = LuaDialog(context)
-  local info = "Extreme AI Voice Typer v2.7.1\n\n" ..
+  local info = "Extreme AI Voice Typer v2.8\n\n" ..
   "Developer: Anurag Anant\n\n" ..
   getUIText("about_info")
   
@@ -1589,6 +1898,39 @@ function showContactDialog()
   dlg.setView(loadlayout(layout)).show()
 end
 
+function showSoundVibSettingsDialog()
+  local sList = {getUIText("default_beep"), getUIText("soft_click"), getUIText("sharp_pop")}
+  local dlg = LuaDialog(context)
+  local layout = {
+    LinearLayout, orientation="vertical", padding="20dp",
+    {TextView, text=getUIText("sound_vibration_title"), textSize="20sp", textColor="#2196F3", layout_marginBottom="15dp", gravity="center"},
+    {CheckBox, id="sub_vib_chk", text=getUIText("enable_vibration"), checked=vibrationEnabled, layout_marginBottom="15dp"},
+    {CheckBox, id="sub_sound_chk", text=getUIText("enable_typing_sound"), checked=soundEnabled, layout_marginBottom="15dp"},
+    {TextView, text=getUIText("typing_sound_type"), layout_marginBottom="5dp"},
+    {Spinner, id="sub_sound_sp", layout_marginBottom="20dp"},
+    {Button, id="sub_sv_save_btn", text=getUIText("save_close"), backgroundColor="#4CAF50", textColor="#FFFFFF"}
+  }
+  dlg.setView(loadlayout(layout)).show()
+  sub_sound_sp.setAdapter(ArrayAdapter(context, android.R.layout.simple_spinner_item, sList))
+  local soundTypeText = getUIText(soundType:lower():gsub(" ", "_"))
+  for i,v in ipairs(sList) do 
+    if v == soundType or v == soundTypeText then 
+      sub_sound_sp.setSelection(i-1) 
+      break
+    end
+  end
+  sub_sv_save_btn.onClick = function()
+    vibrationEnabled = sub_vib_chk.isChecked()
+    soundEnabled = sub_sound_chk.isChecked()
+    local selectedSound = sList[sub_sound_sp.getSelectedItemPosition() + 1]
+    if selectedSound == getUIText("default_beep") then soundType = "Default Beep"
+    elseif selectedSound == getUIText("soft_click") then soundType = "Soft Click"
+    elseif selectedSound == getUIText("sharp_pop") then soundType = "Sharp Pop"
+    end
+    dlg.dismiss()
+  end
+end
+
 function showMoreOptionsDialog()
   moreOptionsDlg = LuaDialog(context)
   local layout = {
@@ -1596,6 +1938,14 @@ function showMoreOptionsDialog()
     {LinearLayout, orientation="vertical", padding="20dp",
       {TextView, text=getUIText("more_options_title"), textSize="22sp", textColor="#2196F3", layout_marginBottom="20dp", gravity="center"},
       {Button, text="Check For Updates", onClick=function() checkForUpdates(true); moreOptionsDlg.dismiss() end, backgroundColor="#FF5722", textColor="#FFFFFF", layout_marginBottom="10dp"},
+      {Button, text=getUIText("chat_with_ai"), onClick=function() 
+        if not groqKey or groqKey == "" then
+          announce("Please add your Groq API Key in AI Settings first.")
+          return
+        end
+        moreOptionsDlg.dismiss()
+        showChatDialog()
+      end, backgroundColor="#FF9800", textColor="#FFFFFF", layout_marginBottom="10dp"},
       {Button, text=getUIText("other_settings"), onClick=function() showOtherSettingsDialog() end, backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginBottom="10dp"},
       {Button, text=getUIText("sound_vibration_settings"), onClick=function() showSoundVibSettingsDialog() end, backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginBottom="10dp"},
       {Button, text=getUIText("word_dictionary"), onClick=function() showWordDictionaryDialog() end, backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginBottom="10dp"},
@@ -1653,50 +2003,21 @@ function showEmojiSettingsDialog()
   end
 end
 
-function showSoundVibSettingsDialog()
-  local sList = {getUIText("default_beep"), getUIText("soft_click"), getUIText("sharp_pop")}
-  local dlg = LuaDialog(context)
-  local layout = {
-    LinearLayout, orientation="vertical", padding="20dp",
-    {TextView, text=getUIText("sound_vibration_title"), textSize="20sp", textColor="#2196F3", layout_marginBottom="15dp", gravity="center"},
-    {CheckBox, id="sub_vib_chk", text=getUIText("enable_vibration"), checked=vibrationEnabled, layout_marginBottom="15dp"},
-    {CheckBox, id="sub_sound_chk", text=getUIText("enable_typing_sound"), checked=soundEnabled, layout_marginBottom="15dp"},
-    {TextView, text=getUIText("typing_sound_type"), layout_marginBottom="5dp"},
-    {Spinner, id="sub_sound_sp", layout_marginBottom="20dp"},
-    {Button, id="sub_sv_save_btn", text=getUIText("save_close"), backgroundColor="#4CAF50", textColor="#FFFFFF"}
-  }
-  dlg.setView(loadlayout(layout)).show()
-  sub_sound_sp.setAdapter(ArrayAdapter(context, android.R.layout.simple_spinner_item, sList))
-  local soundTypeText = getUIText(soundType:lower():gsub(" ", "_"))
-  for i,v in ipairs(sList) do 
-    if v == soundType or v == soundTypeText then 
-      sub_sound_sp.setSelection(i-1) 
-      break
-    end
-  end
-  sub_sv_save_btn.onClick = function()
-    vibrationEnabled = sub_vib_chk.isChecked()
-    soundEnabled = sub_sound_chk.isChecked()
-    local selectedSound = sList[sub_sound_sp.getSelectedItemPosition() + 1]
-    if selectedSound == getUIText("default_beep") then soundType = "Default Beep"
-    elseif selectedSound == getUIText("soft_click") then soundType = "Soft Click"
-    elseif selectedSound == getUIText("sharp_pop") then soundType = "Sharp Pop"
-    end
-    dlg.dismiss()
-  end
-end
-
 function showSettings()
   local typingModes = {"Auto Detect Script", "Pure Language Mode", "Professional Writer Mode", "Casual Typing Mode"}
+  local startupActionsList = {"Ask Every Time", "AI Dictation", "Start Voice Typing with Target Language", "Process the Text From Textbox"}
   
   local layout = {
     ScrollView, layout_width="fill",
     {LinearLayout, orientation="vertical", padding="20dp",
-      {TextView, text="Extreme AI Voice Typer v2.7.1", textSize="22sp", gravity="center", textColor="#2196F3"},
+      {TextView, text="Extreme AI Voice Typer v2.8", textSize="22sp", gravity="center", textColor="#2196F3"},
       {TextView, text="Developer: Anurag Anant", textSize="14sp", gravity="center", textColor="#757575", layout_marginBottom="20dp"},
       
       {TextView, text=getUIText("select_typing_mode"), textSize="16sp", textColor="#2196F3", layout_marginBottom="5dp"},
       {Spinner, id="typing_mode_sp", layout_marginBottom="20dp"},
+      
+      {TextView, text="Extension Startup Action", textSize="16sp", textColor="#2196F3", layout_marginBottom="5dp"},
+      {Spinner, id="startup_action_sp", layout_marginBottom="15dp"},
       
       {Button, id="ai_settings_btn", text=getUIText("ai_settings"), backgroundColor="#2196F3", textColor="#FFFFFF", layout_marginBottom="15dp"},
       
@@ -1734,6 +2055,9 @@ function showSettings()
       end
   }).start()
   
+  startup_action_sp.setAdapter(ArrayAdapter(context, android.R.layout.simple_spinner_item, startupActionsList))
+  for i,v in ipairs(startupActionsList) do if v == startupAction then startup_action_sp.setSelection(i-1) end end
+  
   typing_mode_sp.setAdapter(ArrayAdapter(context, android.R.layout.simple_spinner_item, typingModes))
   for i,v in ipairs(typingModes) do if v == typingMode then typing_mode_sp.setSelection(i-1) end end
   
@@ -1754,11 +2078,12 @@ function showSettings()
 
   save_main_btn.onClick = function()
     typingMode = typingModes[typing_mode_sp.getSelectedItemPosition() + 1]
+    startupAction = startupActionsList[startup_action_sp.getSelectedItemPosition() + 1]
     pureMode = (typingMode == "Pure Language Mode")
     autoDetect = (typingMode == "Auto Detect Script")
     enableTranslation = trans_chk.isChecked()
     
-    editor.putString("typing_mode", typingMode).putBoolean("auto_detect", autoDetect).putBoolean("pure_mode", pureMode).putString("lang", selectedLanguage).putString("target_lang", targetLanguage).putBoolean("emoji_enabled", emojiEnabled).putBoolean("vibration_enabled", vibrationEnabled).putBoolean("sound_enabled", soundEnabled).putString("sound_type", soundType).putBoolean("copy_clipboard", copyToClipboard).putString("emoji_qty", emojiQty).putString("end_action", endAction).putBoolean("enable_trans", enableTranslation).putBoolean("offline_mode", offlineMode).commit()
+    editor.putString("typing_mode", typingMode).putString("startup_action", startupAction).putBoolean("auto_detect", autoDetect).putBoolean("pure_mode", pureMode).putString("lang", selectedLanguage).putString("target_lang", targetLanguage).putBoolean("emoji_enabled", emojiEnabled).putBoolean("vibration_enabled", vibrationEnabled).putBoolean("sound_enabled", soundEnabled).putString("sound_type", soundType).putBoolean("copy_clipboard", copyToClipboard).putString("emoji_qty", emojiQty).putString("end_action", endAction).putBoolean("enable_trans", enableTranslation).putBoolean("offline_mode", offlineMode).commit()
     settingsDlg.dismiss() 
   end
 end
@@ -1833,11 +2158,11 @@ function insertText(spoken)
   end
 end
 
-function startListening()
+function startListening(overrideLang)
   local intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
   intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
   
-  local langCode = getLangCode(selectedLanguage)
+  local langCode = getLangCode(overrideLang or selectedLanguage)
   intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, langCode)
   
   local sr = SpeechRecognizer.createSpeechRecognizer(context)
@@ -1850,5 +2175,186 @@ function startListening()
   sr.startListening(intent)
 end
 
-function main() if service and service.getEditText() then startListening() else showSettings() end end
+function processTextboxText(node, text)
+  if not text or text == "" or text == "nil" then
+    if node then
+      pcall(function() text = tostring(node.getText() or "") end)
+    end
+  end
+  if not text or text == "" or text == "nil" then
+    return
+  end
+  
+  announce("Processing text with AI for professional conversion.")
+  
+  local savedTypingMode = typingMode
+  typingMode = "Professional Writer Mode"
+  
+  local professionalUserCommand = "Transform the following text into professional quality content. Fix grammar, improve vocabulary, add proper punctuation, use professional tone. Keep the text in its original language. Do NOT translate to English or any other language. Return ONLY the enhanced text in the original language.\n\nText: " .. text
+  
+  local function callProfessionalAI()
+    local apiKey, apiUrl, modelList, payloadFormat
+    
+    if selectedProvider == "OpenRouter" then
+      apiKey = orKey
+      apiUrl = "https://openrouter.ai/api/v1/chat/completions"
+      modelList = {"openai/gpt-4o", "openai/gpt-4o-mini"}
+      payloadFormat = "openai"
+    elseif selectedProvider == "Groq" then
+      apiKey = groqKey
+      apiUrl = "https://api.groq.com/openai/v1/chat/completions"
+      modelList = {"llama-3.3-70b-versatile", "llama-3.1-8b-instant"}
+      payloadFormat = "openai"
+    elseif selectedProvider == "Gemini" then
+      apiKey = geminiKey
+      apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/"
+      modelList = {"gemini-2.0-flash-exp", "gemini-1.5-flash"}
+      payloadFormat = "google"
+    end
+
+    if (not apiKey or apiKey == "") then 
+      typingMode = savedTypingMode
+      announce(selectedProvider .. " Key Missing")
+      return 
+    end
+    
+    apiKey = apiKey:gsub("^%s*(.-)%s*$", "%1")
+    
+    local function executeProfessionalRequest(modelIndex)
+      if modelIndex > #modelList then
+        typingMode = savedTypingMode
+        announce("Professional conversion failed")
+        return
+      end
+
+      local currentModel = modelList[modelIndex]
+      local finalUrl = apiUrl
+      local postData = {}
+
+      if payloadFormat == "openai" then
+        postData = { model = currentModel, messages = {{role="user", content=professionalUserCommand}}, temperature = 0.3 }
+      elseif payloadFormat == "google" then
+        finalUrl = apiUrl .. currentModel .. ":generateContent?key=" .. apiKey
+        postData = { contents = {{parts = {{text = professionalUserCommand}}}}, generationConfig = {temperature = 0.3} }
+      end
+
+      local headers = {
+        ["Content-Type"] = "application/json",
+        ["Accept"] = "application/json"
+      }
+      
+      if payloadFormat == "openai" then
+        headers["Authorization"] = "Bearer " .. apiKey
+      end
+
+      Http.post(finalUrl, cjson.encode(postData), headers, function(status, data)
+        if status == 200 and data then
+          local ok, decoded = pcall(cjson.decode, data)
+          if ok and decoded then
+            local outputText = nil
+            if payloadFormat == "openai" and decoded.choices and decoded.choices[1] then
+              outputText = decoded.choices[1].message.content
+            elseif payloadFormat == "google" and decoded.candidates and decoded.candidates[1] then
+              outputText = decoded.candidates[1].content.parts[1].text
+            end
+
+            if outputText then
+              typingMode = savedTypingMode
+              local finalText = finalGuard(outputText)
+              finalText = applyDictionaryReplacement(finalText)
+              
+              mainHandler.post(Runnable({
+                run = function()
+                  pcall(function()
+                    local freshNode = service.getEditText()
+                    if not freshNode then freshNode = node end
+                    
+                    local suffix = (endAction == "New Line" and "\n" or (endAction == "Space" and " " or (endAction == "Space + New Line" and " \n" or "")))
+                    local fullText = finalText .. suffix
+                    
+                    local Bundle = luajava.bindClass("android.os.Bundle")
+                    local bundle = Bundle()
+                    bundle.putCharSequence("ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE", fullText)
+                    local success = freshNode.performAction(2097152, bundle)
+                    
+                    if not success then
+                       bundle.putCharSequence("ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE", "")
+                       freshNode.performAction(2097152, bundle)
+                       service.insert(freshNode, fullText)
+                    end
+                    
+                    if copyToClipboard then 
+                      local clip = ClipData.newPlainText("AI Voice Typer", fullText)
+                      context.getSystemService(Context.CLIPBOARD_SERVICE).setPrimaryClip(clip) 
+                    end
+                    triggerVibration("typing")
+                    triggerSound()
+                    announce("Professional conversion complete")
+                  end)
+                end
+              }))
+              return
+            end
+          end
+        end
+        executeProfessionalRequest(modelIndex + 1)
+      end)
+    end
+    
+    executeProfessionalRequest(1)
+  end
+  
+  callProfessionalAI()
+end
+
+function showStartupDialog(node, initialText)
+  local dlg = LuaDialog(context)
+  dlg.setTitle("What do you want to do?")
+  local layout = {
+    LinearLayout, orientation="vertical", padding="20dp",
+    {Button, text="AI Voice Dictation", backgroundColor="#4CAF50", textColor="#FFFFFF", layout_marginBottom="10dp", onClick=function() dlg.dismiss() startListening() end},
+    {Button, text="Start Voice Typing with Target Language", backgroundColor="#FF9800", textColor="#FFFFFF", layout_marginBottom="10dp", onClick=function() dlg.dismiss() startListening(targetLanguage) end},
+    {Button, text="Process the Text From Textbox", backgroundColor="#2196F3", textColor="#FFFFFF", layout_marginBottom="10dp", onClick=function() 
+      dlg.dismiss() 
+      mainHandler.postDelayed(Runnable({
+        run = function()
+          processTextboxText(node, initialText)
+        end
+      }), 200)
+    end},
+    {Button, text="Open Settings", backgroundColor="#9E9E9E", textColor="#FFFFFF", onClick=function() dlg.dismiss() showSettings() end}
+  }
+  dlg.setView(loadlayout(layout))
+  dlg.show()
+end
+
+function main()
+  if not service then
+    showSettings()
+    return
+  end
+  
+  local node = service.getEditText()
+  if not node then
+    showSettings()
+    return
+  end
+
+  local initialText = ""
+  pcall(function() initialText = tostring(node.getText() or "") end)
+  if initialText == "nil" then initialText = "" end
+
+  if startupAction == "Ask Every Time" then
+    showStartupDialog(node, initialText)
+  elseif startupAction == "AI Dictation" then
+    startListening()
+  elseif startupAction == "Start Voice Typing with Target Language" then
+    startListening(targetLanguage)
+  elseif startupAction == "Process the Text From Textbox" then
+    processTextboxText(node, initialText)
+  else
+    showSettings()
+  end
+end
+
 task(300, main)
