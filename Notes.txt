@@ -1,50 +1,35 @@
 ═══════════════════════════════════════════════════════
-EXTREME AI VOICE TYPER v2.8
+EXTREME AI VOICE TYPER v2.9
 Developer: Anurag Anant
 ═══════════════════════════════════════════════════════
-
-✨ WHAT'S NEW IN v2.8
+​✨ WHAT'S NEW IN v2.9
 ───────────────────────────────────────────────────────
-
-🚀 EXTENSION STARTUP ACTION
-• Choose what happens when plugin starts
-• Options: Ask Every Time, AI Dictation, Voice Typing with Target Language, Process Text from Textbox
-
-💬 CHAT WITH AI
-• Now available in More Options
-• Chat directly with Groq AI using your voice or text
-• Get instant AI responses while typing
-
-📝 PROCESS TEXT FROM TEXTBOX
-• Transform any existing text into High-Level Professional content
-• Perfect for emails, documents, and formal writing
-
-⚙️ STARTUP BEHAVIOR CONTROL
-• Set your preferred default action
-• Save time with automatic mode selection
-
-🔧 AI TYPING ENHANCEMENTS
-• All typing modes working flawlessly
-• Auto Detect Script improved
-• Pure Language Mode refined
-• Professional & Casual Modes optimized
-
-═══════════════════════════════════════════════════════
-
-📢 FEEDBACK & SUPPORT
+​🌍 TRANSLATE TEXT FROM TEXTBOX
+• Translate existing textbox text directly into your preferred language
+• Choose from a quick pop-up dialog supporting 30 Indian and International languages
+• Automatically clears the old text and inserts the translated content
+​🤖 AI TRANSLATION MODE
+• New "Use AI Translation" toggle added in Other Settings
+• Enable to translate using advanced AI (Groq/Gemini/OpenRouter) instead of Google API
+• Keep disabled to continue using the default Google Translation engine
+​🚀 STARTUP ACTION UPDATED
+• "Translate Text From Textbox" added to Startup Actions
+• Easily access the new translation feature right when the plugin launches
+​🔧 AI TYPING & PERFORMANCE ENHANCEMENTS
+• All typing modes improved for a flawless and highly natural typing experience
+• Better handling and automatic correction of voice typing glitches
+• Removed obsolete Pure Language Mode and Deepgram provider for a cleaner, faster plugin
+​═══════════════════════════════════════════════════════
+​📢 FEEDBACK & SUPPORT
 ───────────────────────────────────────────────────────
 • Facing any issue while using the plugin?
 • Have a suggestion for a new feature?
 • Simply go to More Options → Contact Us
 • Click on "Give Feedback on Telegram" button
 • Send your feedback directly to the developer
-
-Your feedback helps make this plugin better! 💙
-
-═══════════════════════════════════════════════════════
-
-📲 UPDATE NOW
+​Your feedback helps make this plugin better! 💙
+​═══════════════════════════════════════════════════════
+​📲 UPDATE NOW
 ───────────────────────────────────────────────────────
 • Update Now to enjoy the latest features and improvements
-
-═══════════════════════════════════════════════════════
+​═══════════════════════════════════════════════════════
