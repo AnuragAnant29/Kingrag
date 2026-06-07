@@ -31,7 +31,7 @@ local isListening = false
 
 if activity then context = activity elseif service then context = service end
 
-local currentAppVersion = "2.8"
+local currentAppVersion = "2.9"
 local versionUrl = "https://raw.githubusercontent.com/AnuragAnant29/Kingrag/refs/heads/main/Version.txt"
 local notesUrl = "https://raw.githubusercontent.com/AnuragAnant29/Kingrag/refs/heads/main/Notes.txt"
 local updateScriptUrl = "https://raw.githubusercontent.com/AnuragAnant29/Kingrag/refs/heads/main/Update.lua"
@@ -42,11 +42,9 @@ local editor = prefs.edit()
 local orKey = prefs.getString("or_key", "")
 local geminiKey = prefs.getString("gemini_key", "")
 local groqKey = prefs.getString("groq_key", "")
-local deepgramKey = prefs.getString("dg_key", "")
 local selectedProvider = prefs.getString("provider", "OpenRouter")
 
 local autoDetect = prefs.getBoolean("auto_detect", true)
-local pureMode = prefs.getBoolean("pure_mode", false)
 local selectedLanguage = prefs.getString("lang", "Hindi")
 local emojiEnabled = prefs.getBoolean("emoji_enabled", true)
 local emojiQty = prefs.getString("emoji_qty", "Low")
@@ -54,6 +52,7 @@ local endAction = prefs.getString("end_action", "Space")
 
 local targetLanguage = prefs.getString("target_lang", "English")
 local enableTranslation = prefs.getBoolean("enable_trans", false)
+local useAITranslation = prefs.getBoolean("use_ai_trans", false)
 local offlineMode = prefs.getBoolean("offline_mode", false)
 
 local vibrationEnabled = prefs.getBoolean("vibration_enabled", true)
@@ -96,6 +95,7 @@ local uiTexts = {
     
     other_settings_title = "Other Settings",
     select_ui_lang = "Select UI Language",
+    use_ai_translation = "Use AI Translation",
     offline_mode = "Offline Mode (No Internet)",
     copy_clipboard = "Copy Dictated Text To Clipboard",
     end_action = "End Action (Text End Behavior)",
@@ -138,12 +138,10 @@ local uiTexts = {
     get_gemini_key = "Get Gemini Key",
     groq_key = "Groq Key",
     get_groq_key = "Get Groq Key",
-    deepgram_key = "Deepgram Key",
-    get_deepgram_key = "Get Deepgram Key",
     save_keys = "Save Keys",
     
     about_title = "About Plugin",
-    about_info = "How to use:\n1. Select AI Provider and add API Keys.\n2. Use Pure Language Mode for pure formal native typing.\n3. Long press on any language to add/remove from favorites.\n4. Emojis and auto-punctuation are added automatically.",
+    about_info = "How to use:\n1. Select AI Provider and add API Keys.\n2. Long press on any language to add/remove from favorites.\n3. Emojis and auto-punctuation are added automatically.",
     
     contact_title = "Contact Us",
     join_telegram = "Join our Telegram Channel",
@@ -203,6 +201,7 @@ local uiTexts = {
     
     other_settings_title = "अन्य सेटिंग्स",
     select_ui_lang = "UI भाषा चुनें",
+    use_ai_translation = "AI अनुवाद का उपयोग करें",
     offline_mode = "ऑफलाइन मोड (इंटरनेट के बिना)",
     copy_clipboard = "टेक्स्ट को क्लिपबोर्ड पर कॉपी करें",
     end_action = "एंड एक्शन (टेक्स्ट एंड व्यवहार)",
@@ -245,12 +244,10 @@ local uiTexts = {
     get_gemini_key = "Gemini कुंजी प्राप्त करें",
     groq_key = "Groq कुंजी",
     get_groq_key = "Groq कुंजी प्राप्त करें",
-    deepgram_key = "Deepgram कुंजी",
-    get_deepgram_key = "Deepgram कुंजी प्राप्त करें",
     save_keys = "कुंजियाँ सेव करें",
     
     about_title = "प्लगइन के बारे में",
-    about_info = "उपयोग कैसे करें:\n1. AI प्रदाता चुनें और API कुंजियाँ जोड़ें।\n2. शुद्ध औपचारिक देशी टाइपिंग के लिए प्यर लैंग्वेज मोड का उपयोग करें।\n3. किसी भाषा को लंबे समय तक दबाकर फेवरेट में जोड़ें/हटाएं।\n4. इमोजी और ऑटो-पंक्चुएशन स्वचालित रूप से जोड़े जाते हैं।",
+    about_info = "उपयोग कैसे करें:\n1. AI प्रदाता चुनें और API कुंजियाँ जोड़ें।\n2. किसी भाषा को लंबे समय तक दबाकर फेवरेट में जोड़ें/हटाएं।\n3. इमोजी और ऑटो-पंक्चुएशन स्वचालित रूप से जोड़े जाते हैं।",
     
     contact_title = "संपर्क करें",
     join_telegram = "हमारे टेलीग्राम चैनल से जुड़ें",
@@ -310,6 +307,7 @@ local uiTexts = {
     
     other_settings_title = "دیگر ترتیبات",
     select_ui_lang = "UI زبان منتخب کریں",
+    use_ai_translation = "AI ترجمہ استعمال کریں",
     offline_mode = "آف لائن موڈ (بغیر انٹرنیٹ)",
     copy_clipboard = "متن کو کلپ بورڈ پر کاپی کریں",
     end_action = "اینڈ ایکشن (متن کے آخر میں رویہ)",
@@ -352,12 +350,10 @@ local uiTexts = {
     get_gemini_key = "Gemini کنجی حاصل کریں",
     groq_key = "Groq کنجی",
     get_groq_key = "Groq کنجی حاصل کریں",
-    deepgram_key = "Deepgram کنجی",
-    get_deepgram_key = "Deepgram کنجی حاصل کریں",
     save_keys = "کنجیاں محفوظ کریں",
     
     about_title = "پلگ ان کے بارے میں",
-    about_info = "استعمال کیسے کریں:\n1. AI فراہم کنندہ منتخب کریں اور API کنجیاں شامل کریں۔\n2. خالص رسمی مقامی ٹائپنگ کے لیے پیور لینگویج موڈ استعمال کریں۔\n3. کسی بھی زبان کو لمبے وقت تک دباکر فیورٹ میں شامل/ہٹائیں۔\n4. ایموجی اور آٹو پنکچویشن خود بخود شامل ہوتے ہیں۔",
+    about_info = "استعمال کیسے کریں:\n1. AI فراہم کنندہ منتخب کریں اور API کنجیاں شامل کریں۔\n2. کسی بھی زبان کو لمبے وقت تک دباکر فیورٹ میں شامل/ہٹائیں۔\n3. ایموجی اور آٹو پنکچویشن خود بخود شامل ہوتے ہیں۔",
     
     contact_title = "رابطہ کریں",
     join_telegram = "ہمارے ٹیلیگرام چینل میں شامل ہوں",
@@ -417,6 +413,7 @@ local uiTexts = {
     
     other_settings_title = "इतर सेटिंग्ज",
     select_ui_lang = "UI भाषा निवडा",
+    use_ai_translation = "AI भाषांतर वापरा",
     offline_mode = "ऑफलाइन मोड (इंटरनेटशिवाय)",
     copy_clipboard = "मजकूर क्लिपबोर्डवर कॉपी करा",
     end_action = "एंड ॲक्शन (मजकूर शेवटचे वर्तन)",
@@ -459,12 +456,10 @@ local uiTexts = {
     get_gemini_key = "Gemini की मिळवा",
     groq_key = "Groq की",
     get_groq_key = "Groq की मिळवा",
-    deepgram_key = "Deepgram की",
-    get_deepgram_key = "Deepgram की मिळवा",
     save_keys = "की जतन करा",
     
     about_title = "प्लगइन बद्दल माहिती",
-    about_info = "कसे वापरावे:\n1. AI प्रदाता निवडा आणि API की जोडा।\n2. शुद्ध औपचारिक मूळ टाइपिंगसाठी प्योर लँग्वेज मोड वापरा।\n3. कोणतीही भाषा दीर्घकाळ दाबून फेवरेटमध्ये जोडा/हटवा।\n4. इमोजी आणि ऑटो-पंक्चुएशन स्वयंचलितपणे जोडले जातात।",
+    about_info = "कसे वापरावे:\n1. AI प्रदाता निवडा आणि API की जोडा।\n2. कोणतीही भाषा दीर्घकाळ दाबून फेवरेटमध्ये जोडा/हटवा।\n3. इमोजी आणि ऑटो-पंक्चुएशन स्वयंचलितपणे जोडले जातात।",
     
     contact_title = "संपर्क करा",
     join_telegram = "आमच्या टेलिग्राम चॅनलमध्ये सामील व्हा",
@@ -524,6 +519,7 @@ local uiTexts = {
     
     other_settings_title = "અન્ય સેટિંગ્સ",
     select_ui_lang = "UI ભાષા પસંદ કરો",
+    use_ai_translation = "AI અનુવાદનો ઉપયોગ કરો",
     offline_mode = "ઑફલાઇન મોડ (ઇન્ટરનેટ વિના)",
     copy_clipboard = "ટેક્સ્ટ ક્લિપબોર્ડ પર કૉપિ કરો",
     end_action = "એન્ડ એક્શન (ટેક્સ્ટ એન્ડ વર્તન)",
@@ -566,12 +562,10 @@ local uiTexts = {
     get_gemini_key = "Gemini કી મેળવો",
     groq_key = "Groq કી",
     get_groq_key = "Groq કી મેળવો",
-    deepgram_key = "Deepgram કી",
-    get_deepgram_key = "Deepgram કી મેળવો",
     save_keys = "કીઓ સાચવો",
     
     about_title = "પ્લગઇન વિશે",
-    about_info = "ઉપયોગ કેવી રીતે કરવો:\n1. AI પ્રદાતા પસંદ કરો અને API કીઓ ઉમેરો.\n2. શુદ્ધ ઔપચારિક મૂળ ટાઇપિંગ માટે પ્યોર લેંગ્વેજ મોડનો ઉપયોગ કરો.\n3. કોઈપણ ભાષાને લાંબા સમય સુધી દબાવીને ફેવરિટમાં ઉમેરો/કાઢો.\n4. ઇમોજી અને ઓટો-પંક્ચ્યુએશન આપમેળે ઉમેરાય છે.",
+    about_info = "ઉપયોગ કેવી રીતે કરવો:\n1. AI પ્રદાતા પસંદ કરો અને API કીઓ ઉમેરો.\n2. કોઈપણ ભાષાને લાંબા સમય સુધી દબાવીને ફેવરિટમાં ઉમેરો/કાઢો.\n3. ઇમોજી અને ઓટો-પંક્ચ્યુએશન આપમેળે ઉમેરાય છે.",
     
     contact_title = "સંપર્ક કરો",
     join_telegram = "અમારા ટેલિગ્રામ ચેનલમાં જોડાઓ",
@@ -1015,7 +1009,7 @@ function processWithAI(text, isTranslatedAlready, callback)
     apiUrl = "https://openrouter.ai/api/v1/chat/completions"
     modelList = {"openai/gpt-4o", "openai/gpt-4o-mini"}
     payloadFormat = "openai"
-  elseif selectedProvider == "Groq" or selectedProvider == "Deepgram" then
+  elseif selectedProvider == "Groq" then
     apiKey = groqKey
     apiUrl = "https://api.groq.com/openai/v1/chat/completions"
     modelList = {"llama-3.3-70b-versatile", "llama-3.1-8b-instant"}
@@ -1034,72 +1028,37 @@ function processWithAI(text, isTranslatedAlready, callback)
 
   apiKey = apiKey:gsub("^%s*(.-)%s*$", "%1")
 
-local transRule = ""
-  if isTranslatedAlready then
+  local transRule = ""
+  local transForceCmd = "CRITICAL: NO TRANSLATION ALLOWED! YOU MUST KEEP EVERY SINGLE WORD IN ITS ORIGINAL LANGUAGE! "
+  
+  if enableTranslation and useAITranslation and not isTranslatedAlready then
+    transRule = "TRANSLATION MODE ON (AI TRANSLATION): You MUST fully translate the spoken text into " .. targetLanguage .. " accurately. Maintain the original tone and meaning. Do NOT output the original language. Provide flawless formatting, advanced punctuation, and emojis."
+    transForceCmd = "CRITICAL: TRANSLATE TO " .. targetLanguage .. " REQUIRED! "
+  elseif isTranslatedAlready then
     transRule = "TRANSLATION MODE ON: The text has already been accurately translated via Google Engine. Do NOT translate it again. Provide flawless formatting, advanced punctuation, and emojis."
   else
     transRule = [[
 TRANSLATION MODE OFF - ABSOLUTE PROHIBITION OF TRANSLATION:
 
 CRITICAL RULES (STRICT ENFORCEMENT):
-
-1. NEVER TRANSLATE ANY WORD - ABSOLUTE ZERO TOLERANCE:
-   - "नमस्ते" MUST remain "नमस्ते" - NEVER change to "hello"
-   - "समस्या" MUST remain "समस्या" - NEVER change to "problem"  
-   - "बदलाव" MUST remain "बदलाव" - NEVER change to "change"
-   - EVERY word MUST stay in its ORIGINAL language exactly as spoken
-
-2. NO WORD SUBSTITUTION OF ANY KIND:
-   - Do NOT replace Hindi/Urdu/Marathi/Gujarati words with English equivalents
-   - Do NOT replace any native language word with an English word
-   - Every single word from the input must appear in the output in the same language
-
-3. SCRIPT PRESERVATION:
-   - Hindi words → Keep in Devanagari script (नमस्ते, समस्या, बदलाव)
-   - Urdu words → Keep in Arabic script (سلام, مسئلہ, تبدیلی)
-   - English words → Keep in Roman script (hello, problem, change)
-
-4. OUTPUT LANGUAGE RULE:
-   - If input contains "नमस्ते" and "hello", output must contain "नमस्ते" and "hello"
-   - NEVER convert "नमस्ते" to "hello" or "hello" to "नमस्ते"
-   - NEVER convert any word from its original language to another language
-
-5. ZERO TRANSLATION POLICY:
-   - This is a TRANSCRIPTION system, NOT a translation system
-   - Transcribe exactly what was spoken in the original language
-   - If user spoke in Hindi, output Hindi. If in English, output English.
-
-REMEMBER: Your job is to TRANSCRIBE, not to TRANSLATE. Every word must stay in its original language exactly as spoken.
+1. THIS IS A FORMATTING TASK, NOT TRANSLATION.
+2. NEVER TRANSLATE ANY NATIVE WORD TO ENGLISH. ABSOLUTE ZERO TOLERANCE.
+3. If input has "नमस्ते", output "नमस्ते" (NEVER "hello").
+4. If input has "समस्या", output "समस्या" (NEVER "problem").
+5. Every single word MUST remain in its exact original spoken language and script.
+6. DO NOT replace Hindi/Urdu/Gujarati/Marathi words with English equivalents under any circumstances.
 ]]
   end
 
   local styleDirectives = "TONE: Auto-Correct. Fix minor spelling mistakes. DO NOT add extra information or filler."
 
   local isProfessionalMode = (typingMode == "Professional Writer Mode")
-  local isPureMode = (typingMode == "Pure Language Mode")
   local isCasualMode = (typingMode == "Casual Typing Mode")
   
   local scriptRule = ""
   local userForceScriptCmd = ""
 
-if isPureMode then
-    scriptRule = [[
-PURE LANGUAGE MODE (ULTRA PURE - CRITICAL & STRICT):
-- MISSION: Output the text using 100% PURE, CLASSICAL, and HIGHLY ACCURATE literary vocabulary of the target language.
-- STRICT SCRIPT LOCK: You MUST ABSOLUTELY use the native script exclusively. NEVER use A-Z Roman characters under any circumstances.
-- VOCABULARY PURIFICATION: Identify and translate ANY English word, slang, or mixed language word into the purest, most formal native word.
-  - Examples: 'problem' → 'समस्या' (Hindi), 'समस्या' (Marathi), 'সমস্যা' (Bengali)
-  - 'mobile' → 'मोबाइल' is NOT pure. Use 'दूरभाष' or 'हस्तचलित दूरभाष'
-  - 'setting' → 'विन्यास' or 'प्राचल'
-  - 'perfect' → 'परिपूर्ण' or 'उत्तम'
-- GRAMMAR PURITY: Use only native grammatical structures. Avoid any sentence structure influenced by English.
-- FORMALITY LEVEL: Use the highest standard literary form (Suddha/Shuddha) - as found in advanced textbooks and literary works.
-- NO COMPROMISES: Every single word must be in pure native language. If a word has no direct native equivalent, use the closest scholarly accepted native term.
-- OUTPUT: Return ONLY the pure language text. NO explanations, NO meta-text.
-]]
-    userForceScriptCmd = "Convert EVERY word to 100% PURE classical native vocabulary in native script. NO Roman script anywhere. Use highest literary standard."
-  
-  elseif typingMode == "Auto Detect Script" then
+  if typingMode == "Auto Detect Script" then
     scriptRule = [[
 SCRIPT MAPPING (STRICT DICTIONARY-BACKED ENGINE):
 - THE FIRST WORD RULE: Pay intense attention to the very first word of the dictation. If it is a greeting like 'hello', 'hi', or 'hey', it MUST be output in A-Z Roman script (e.g., 'Hello'), NEVER in a native script.
@@ -1163,9 +1122,9 @@ MANDATORY PROFESSIONAL WRITING RULES (100% ENFORCEMENT):
    - DO NOT add new information, opinions, or facts
    - DO NOT remove important original meaning
 
-8. CRITICAL - NO TRANSLATION:
-   - Keep text in the SAME language as input
-   - DO NOT change language or translate any word
+8. CRITICAL - NO TRANSLATION TO ENGLISH:
+   - The output MUST remain in the SAME EXACT language as the input.
+   - NEVER translate native language sentences into English.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OUTPUT REQUIREMENT:
@@ -1177,73 +1136,29 @@ Just the clean, professional, grammatically perfect output.
 
 BEGIN PROFESSIONAL WRITING → 
 ]]
-    userForceScriptCmd = "CRITICAL: Transform this into ULTRA PROFESSIONAL writing. Upgrade vocabulary to formal/professional level. Fix ALL grammar. Add proper punctuation. Use professional tone. Keep same meaning. Output ONLY the professional text. NO explanations. For language: " .. selectedLanguage
+    userForceScriptCmd = "CRITICAL: Transform this into ULTRA PROFESSIONAL writing. Upgrade vocabulary. Fix ALL grammar. Add proper punctuation. KEEP THE TEXT IN ITS ORIGINAL NATIVE LANGUAGE. DO NOT TRANSLATE NATIVE WORDS TO ENGLISH. Output ONLY the professional text. NO explanations. For language: " .. selectedLanguage
 
   elseif isCasualMode then
     scriptRule = [[
-[SYSTEM DIRECTIVE: CASUAL TYPING MODE - FRIENDLY NATURAL CONVERSATION]
+[SYSTEM DIRECTIVE: CASUAL CHAT MODE - NATURAL WHATSAPP STYLE]
 [LANGUAGE: ]] .. selectedLanguage .. [[]
 
-You MUST transform the input text into CASUAL, FRIENDLY, CONVERSATIONAL style. This is how friends talk to each other.
+Transform the input text into a completely NATURAL, SMOOTH, and MODERN casual chat style. 
+Make it look like a text message sent to a close friend on WhatsApp or Telegram.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CASUAL TYPING RULES (100% ENFORCEMENT):
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CRITICAL CASUAL RULES:
+1. FIX VOICE TYPING ERRORS: Intelligently fix broken sentences, wrong homophones, and weird voice-to-text glitches. Make it flow perfectly.
+2. NATURAL TONE: Keep it highly conversational. Do NOT make it overly formal or robotic.
+3. SUBTLE IMPROVEMENTS: If a sentence is awkward, rephrase it slightly so it sounds like a native speaker chatting casually. Keep the core meaning 100% intact.
+4. NO CRINGE: Do NOT forcefully insert unnatural slang (like excessive 'yaar', 'bro', 'dude') unless the user actually spoke them or it perfectly fits the context.
+5. MODERN PUNCTUATION: Use natural chat punctuation. A single question mark (?), exclamation (!), or commas (,) for pauses. Avoid stiff semicolons.
+6. NO TRANSLATION: Keep the text in the exact language it was spoken in. DO NOT translate native words to English. Keep Hindi in Devanagari, English in Roman, etc.
+7. FLUIDITY: The final output must read smoothly, effortlessly, and friendly.
 
-1. CONVERSATIONAL TONE:
-   - Write exactly how people speak in casual conversations
-   - Use friendly, relaxed, informal language
-   - Add "yaar", "hey", "hi", "hello", "arey", "achha" appropriately for Hindi/Urdu
-   - Use "dude", "bro", "hey", "hi", "hello", "oh", "well" appropriately for English
-
-2. NATURAL EXPRESSIONS:
-   - Keep common contractions: "don't", "can't", "won't", "isn't", "aren't", "I'm", "you're"
-   - Use casual question forms: "What's up?", "How's it going?", "Kya haal hai?", "Kya chal raha hai?"
-   - Add friendly interjections: "oh", "ah", "hmm", "well", "so", "achha", "arey", "wah"
-
-3. SIMPLIFIED GRAMMAR:
-   - Grammar should be natural and conversational, not strict textbook grammar
-   - Sentence fragments are allowed as they occur in natural speech
-   - Run-on sentences common in speech can be kept as is
-
-4. CASUAL VOCABULARY:
-   - Use everyday words, not formal alternatives
-   - Keep slang and colloquial expressions that are commonly used
-   - English: "gonna", "wanna", "kinda", "sorta", "lemme", "gotcha", "yeah", "nope"
-   - Hindi: "कर रहे हो", "क्या चल रहा", "ठीक है", "अच्छा", "अरे वाह", "चलो", "हाँ", "नहीं"
-
-5. PUNCTUATION:
-   - Use exclamation marks for excitement: "That's great!", "Arey wah!"
-   - Use question marks naturally: "What's going on?", "Kya ho raha hai?"
-   - Ellipsis for pauses: "Well... I don't know...", "Hmm... pata nahi..."
-   - Avoid overly formal punctuation like semicolons
-
-6. ADD FRIENDLY WORDS:
-   - End sentences with "yaar", "dude", "bro" when appropriate
-   - Start conversations with "Hey", "Hello", "Arey", "Oye"
-   - Use "please" and "thanks" in casual way
-
-7. EMOJIS (If enabled):
-   - Use casual, friendly emojis like 😊, 😄, 👍, 🤔, 😅, 🎉, ✨, 💯
-   - Place at end of sentences naturally
-
-8. PRESERVATION RULES:
-   - Keep the original meaning intact
-   - DO NOT add new information
-   - DO NOT remove key information
-   - Change FORMAL language to CASUAL language naturally
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OUTPUT REQUIREMENT:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Return ONLY the casual, conversational text.
-NO meta-text, NO explanations, NO prefixes.
-Just the natural, friendly, casual output that sounds like a real person talking.
-
-BEGIN CASUAL WRITING → 
+Return ONLY the final chat text. No meta-text, no explanations.
 ]]
-    userForceScriptCmd = "Transform this into CASUAL FRIENDLY CONVERSATIONAL style. Use everyday words, natural expressions, friendly tone. Add 'yaar', 'dude', 'hey', 'arey' where natural. Use contractions like 'gonna', 'wanna' for English. Keep same meaning but make it sound like a friend chatting casually. Output ONLY the casual text. NO explanations. For language: " .. selectedLanguage
+    userForceScriptCmd = "Convert this to a natural, smooth, WhatsApp-style casual chat message. Fix any voice typing glitches. Keep it friendly. DO NOT TRANSLATE. Output ONLY the chat text. For language: " .. selectedLanguage
 
   end
 
@@ -1256,10 +1171,6 @@ ACRONYM & SHORT FORM FORMATTING:
   if isProfessionalMode then
     emojiRules = emojiEnabled and ([[
 EMOJIS: Insert between 1 and ]] .. maxE .. [[ professional and contextually relevant emojis at the end. Use sparingly - only when they add genuine value. Prefer subtle, professional emojis over flashy ones.
-]]) or "EMOJIS: DO NOT ADD EMOJIS."
-  elseif isPureMode then
-    emojiRules = emojiEnabled and ([[
-EMOJIS: Insert between 1 and ]] .. maxE .. [[ culturally appropriate emojis. Keep them simple and relevant.
 ]]) or "EMOJIS: DO NOT ADD EMOJIS."
   elseif isCasualMode then
     emojiRules = emojiEnabled and ([[
@@ -1275,9 +1186,7 @@ EMOJIS: Insert between 1 and ]] .. maxE .. [[ highly relevant and diverse emojis
 CRITICAL ANTI-HALLUCINATION RULES:
 - DO NOT output more lines than the user provided. The output length MUST match the input approximately.
 ]]
-  if isPureMode then
-    antiHallucination = antiHallucination .. "- PURE VERBATIM: Keep the exact meaning, but purify EVERY word to classical native vocabulary. Do NOT add extra sentences or your own thoughts.\n- STRICT LENGTH: Output should be similar length to input.\n"
-  elseif isProfessionalMode then
+  if isProfessionalMode then
     antiHallucination = antiHallucination .. "- ENHANCE ONLY: Improve grammar and professionalism. DO NOT add new information, change facts, or write extra sentences.\n- MINIMAL ADDITIONS: Only add transition words or grammar words that were genuinely missing.\n"
   elseif isCasualMode then
     antiHallucination = antiHallucination .. "- CONVERSATIONAL ONLY: Make text casual and friendly. DO NOT add new information or change facts.\n- Keep similar length to input.\n"
@@ -1319,7 +1228,7 @@ You are a direct dictation formatting AI. Your ONLY purpose is to return the cle
 
 ]] .. emojiRules
 
-  local userForceCommand = "Format the dictation strictly applying the rules. Scan EVERY word. " .. userForceScriptCmd .. " Add acronym dots. CRITICAL: NO TRANSLATION ALLOWED! ALL PUNCTUATION (. । ?) MUST BE PLACED BEFORE EMOJIS! Output ONLY the exact raw final text. NO META-TEXT.\n<dictation>\n" .. text .. "\n</dictation>"
+  local userForceCommand = "Format the dictation strictly applying the rules. Scan EVERY word. " .. userForceScriptCmd .. " Add acronym dots. " .. transForceCmd .. "ALL PUNCTUATION (. । ?) MUST BE PLACED BEFORE EMOJIS! Output ONLY the exact raw final text. NO META-TEXT.\n<dictation>\n" .. text .. "\n</dictation>"
 
   local function executeAIRequest(modelIndex)
     if modelIndex > #modelList then
@@ -1334,8 +1243,6 @@ You are a direct dictation formatting AI. Your ONLY purpose is to return the cle
     local temperature = 0.0
     if isProfessionalMode then
       temperature = 0.4
-    elseif isPureMode then
-      temperature = 0.1
     elseif isCasualMode then
       temperature = 0.8
     else
@@ -1811,6 +1718,7 @@ function showOtherSettingsDialog()
     {TextView, text=getUIText("other_settings_title"), textSize="20sp", textColor="#2196F3", layout_marginBottom="20dp", gravity="center"},
     {TextView, text=getUIText("select_ui_lang"), layout_marginBottom="5dp"},
     {Spinner, id="ui_lang_sp", layout_marginBottom="15dp"},
+    {CheckBox, id="sub_ai_trans_chk", text=getUIText("use_ai_translation"), checked=useAITranslation, layout_marginBottom="15dp"},
     {CheckBox, id="sub_offline_chk", text=getUIText("offline_mode"), checked=offlineMode, layout_marginBottom="15dp"},
     {CheckBox, id="sub_copy_chk", text=getUIText("copy_clipboard"), checked=copyToClipboard, layout_marginBottom="15dp"},
     {TextView, text=getUIText("end_action"), layout_marginBottom="5dp"},
@@ -1834,6 +1742,7 @@ function showOtherSettingsDialog()
   sub_other_save_btn.onClick = function()
     uiLanguage = uiLanguagesList[ui_lang_sp.getSelectedItemPosition() + 1]
     offlineMode = sub_offline_chk.isChecked()
+    useAITranslation = sub_ai_trans_chk.isChecked()
     copyToClipboard = sub_copy_chk.isChecked()
     local selectedEndAction = endActionsList[sub_end_sp.getSelectedItemPosition() + 1]
     if selectedEndAction == getUIText("none") then endAction = "None"
@@ -1841,13 +1750,13 @@ function showOtherSettingsDialog()
     elseif selectedEndAction == getUIText("space") then endAction = "Space"
     elseif selectedEndAction == getUIText("space_newline") then endAction = "Space + New Line"
     end
-    editor.putString("ui_language", uiLanguage).commit()
+    editor.putString("ui_language", uiLanguage).putBoolean("use_ai_trans", useAITranslation).commit()
     dlg.dismiss()
   end
 end
 
 function showAISettingsDialog()
-  local providers = {"OpenRouter", "Gemini", "Groq", "Deepgram"}
+  local providers = {"OpenRouter", "Gemini", "Groq"}
   local dlg = LuaDialog(context)
   local layout = {
     LinearLayout, orientation="vertical", padding="20dp",
@@ -1873,14 +1782,29 @@ end
 
 function showAboutDialog()
   local dlg = LuaDialog(context)
-  local info = "Extreme AI Voice Typer v2.8\n\n" ..
-  "Developer: Anurag Anant\n\n" ..
-  getUIText("about_info")
+  local info = [[
+EXTREME AI VOICE TYPER v2.9
+Developer: Anurag Anant
+
+✨ WHAT'S NEW (v2.9):
+• Translate Textbox: Translate existing text into 30 languages directly.
+• AI Translation Mode: Enable "Use AI Translation" in Other Settings to use advanced AI instead of Google Translate.
+• Faster Performance: Removed Deepgram and Pure Mode for a cleaner experience.
+• Improved Typing: All modes now automatically and naturally fix voice typing errors.
+
+📌 HOW TO USE:
+1. AI Setup: Select AI Provider and add your API Keys in AI Settings.
+2. Quick Translation: Set "Translate Text From Textbox" in Extension Startup Action for quick access.
+3. Favorites: Long press any language to Add or Remove it from your Favorites list.
+4. Smart Formatting: Punctuation and emojis are added automatically based on your settings.
+]]
   
   local layout = {
     LinearLayout, orientation="vertical", padding="20dp",
     {TextView, text=getUIText("about_title"), textSize="20sp", textColor="#2196F3", layout_marginBottom="15dp", gravity="center"},
-    {TextView, text=info, textSize="15sp", textColor="#333333", layout_marginBottom="20dp"},
+    {ScrollView, layout_width="fill", layout_weight=1, layout_marginBottom="20dp",
+      {TextView, text=info, textSize="15sp", textColor="#333333"}
+    },
     {Button, text=getUIText("close"), backgroundColor="#F44336", textColor="#FFFFFF", onClick=function() dlg.dismiss() end}
   }
   dlg.setView(loadlayout(layout)).show()
@@ -1968,16 +1892,14 @@ function showApiDialog()
       {Button, text=getUIText("get_gemini_key"), onClick=function() openUrl("https://aistudio.google.com/app/apikey") end, backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginBottom="10dp"},
       {TextView, text=getUIText("groq_key")}, {EditText, id="groq_et", text=groqKey},
       {Button, text=getUIText("get_groq_key"), onClick=function() openUrl("https://console.groq.com/keys") end, backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginBottom="10dp"},
-      {TextView, text=getUIText("deepgram_key")}, {EditText, id="dg_et", text=deepgramKey},
-      {Button, text=getUIText("get_deepgram_key"), onClick=function() openUrl("https://console.deepgram.com/") end, backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginBottom="10dp"},
       {Button, id="save_api_btn", text=getUIText("save_keys"), backgroundColor="#2196F3", textColor="#FFFFFF"}
     }
   }
   local view = loadlayout(layout)
   local dlg = LuaDialog(context).setView(view).show()
   save_api_btn.onClick = function()
-    editor.putString("or_key", tostring(or_et.text)).putString("gemini_key", tostring(gem_et.text)).putString("groq_key", tostring(groq_et.text)).putString("dg_key", tostring(dg_et.text)).commit()
-    orKey = tostring(or_et.text); geminiKey = tostring(gem_et.text); groqKey = tostring(groq_et.text); deepgramKey = tostring(dg_et.text)
+    editor.putString("or_key", tostring(or_et.text)).putString("gemini_key", tostring(gem_et.text)).putString("groq_key", tostring(groq_et.text)).commit()
+    orKey = tostring(or_et.text); geminiKey = tostring(gem_et.text); groqKey = tostring(groq_et.text)
     dlg.dismiss()
   end
 end
@@ -2004,13 +1926,13 @@ function showEmojiSettingsDialog()
 end
 
 function showSettings()
-  local typingModes = {"Auto Detect Script", "Pure Language Mode", "Professional Writer Mode", "Casual Typing Mode"}
-  local startupActionsList = {"Ask Every Time", "AI Dictation", "Start Voice Typing with Target Language", "Process the Text From Textbox"}
+  local typingModes = {"Auto Detect Script", "Professional Writer Mode", "Casual Typing Mode"}
+  local startupActionsList = {"Ask Every Time", "AI Dictation", "Start Voice Typing with Target Language", "Process the Text From Textbox", "Translate Text From Textbox"}
   
   local layout = {
     ScrollView, layout_width="fill",
     {LinearLayout, orientation="vertical", padding="20dp",
-      {TextView, text="Extreme AI Voice Typer v2.8", textSize="22sp", gravity="center", textColor="#2196F3"},
+      {TextView, text="Extreme AI Voice Typer v2.9", textSize="22sp", gravity="center", textColor="#2196F3"},
       {TextView, text="Developer: Anurag Anant", textSize="14sp", gravity="center", textColor="#757575", layout_marginBottom="20dp"},
       
       {TextView, text=getUIText("select_typing_mode"), textSize="16sp", textColor="#2196F3", layout_marginBottom="5dp"},
@@ -2079,11 +2001,10 @@ function showSettings()
   save_main_btn.onClick = function()
     typingMode = typingModes[typing_mode_sp.getSelectedItemPosition() + 1]
     startupAction = startupActionsList[startup_action_sp.getSelectedItemPosition() + 1]
-    pureMode = (typingMode == "Pure Language Mode")
     autoDetect = (typingMode == "Auto Detect Script")
     enableTranslation = trans_chk.isChecked()
     
-    editor.putString("typing_mode", typingMode).putString("startup_action", startupAction).putBoolean("auto_detect", autoDetect).putBoolean("pure_mode", pureMode).putString("lang", selectedLanguage).putString("target_lang", targetLanguage).putBoolean("emoji_enabled", emojiEnabled).putBoolean("vibration_enabled", vibrationEnabled).putBoolean("sound_enabled", soundEnabled).putString("sound_type", soundType).putBoolean("copy_clipboard", copyToClipboard).putString("emoji_qty", emojiQty).putString("end_action", endAction).putBoolean("enable_trans", enableTranslation).putBoolean("offline_mode", offlineMode).commit()
+    editor.putString("typing_mode", typingMode).putString("startup_action", startupAction).putBoolean("auto_detect", autoDetect).putString("lang", selectedLanguage).putString("target_lang", targetLanguage).putBoolean("emoji_enabled", emojiEnabled).putBoolean("vibration_enabled", vibrationEnabled).putBoolean("sound_enabled", soundEnabled).putString("sound_type", soundType).putBoolean("copy_clipboard", copyToClipboard).putString("emoji_qty", emojiQty).putString("end_action", endAction).putBoolean("enable_trans", enableTranslation).putBoolean("use_ai_trans", useAITranslation).putBoolean("offline_mode", offlineMode).commit()
     settingsDlg.dismiss() 
   end
 end
@@ -2126,33 +2047,37 @@ function insertText(spoken)
   end
 
   if enableTranslation then
-    local targetCode = getLangCode(targetLanguage)
-    targetCode = string.sub(targetCode, 1, 2)
-    if targetLanguage == "Chinese (Mandarin)" then targetCode = "zh-CN" end
-    
-    local url = "https://translate.google.com/m?sl=auto&hl=" .. targetCode .. "&q=" .. Uri.encode(spoken)
-    
-    pcall(function()
-        local Http = luajava.bindClass("com.androlua.Http")
-        if not Http then Http = import("com.androlua.Http") end
-        if Http then
-            Http.get(url, function(status, result)
-                if status == 200 and result then
-                    local translatedText = result:match('<div class="result%-container">([^<]+)</div>')
-                    if translatedText then
-                        translatedText = translatedText:gsub("&#39;", "'"):gsub("&quot;", '"'):gsub("&amp;", "&")
-                        executeAIFinalFormat(translatedText, true)
-                    else
-                        executeAIFinalFormat(spoken, false)
-                    end
-                else
-                    executeAIFinalFormat(spoken, false)
-                end
-            end)
-        else
-            executeAIFinalFormat(spoken, false)
-        end
-    end)
+    if useAITranslation then
+      executeAIFinalFormat(spoken, false)
+    else
+      local targetCode = getLangCode(targetLanguage)
+      targetCode = string.sub(targetCode, 1, 2)
+      if targetLanguage == "Chinese (Mandarin)" then targetCode = "zh-CN" end
+      
+      local url = "https://translate.google.com/m?sl=auto&hl=" .. targetCode .. "&q=" .. Uri.encode(spoken)
+      
+      pcall(function()
+          local Http = luajava.bindClass("com.androlua.Http")
+          if not Http then Http = import("com.androlua.Http") end
+          if Http then
+              Http.get(url, function(status, result)
+                  if status == 200 and result then
+                      local translatedText = result:match('<div class="result%-container">([^<]+)</div>')
+                      if translatedText then
+                          translatedText = translatedText:gsub("&#39;", "'"):gsub("&quot;", '"'):gsub("&amp;", "&")
+                          executeAIFinalFormat(translatedText, true)
+                      else
+                          executeAIFinalFormat(spoken, false)
+                      end
+                  else
+                      executeAIFinalFormat(spoken, false)
+                  end
+              end)
+          else
+              executeAIFinalFormat(spoken, false)
+          end
+      end)
+    end
   else
     executeAIFinalFormat(spoken, false)
   end
@@ -2307,6 +2232,149 @@ function processTextboxText(node, text)
   callProfessionalAI()
 end
 
+function translateTextboxTextWithAI(node, text, targetLang)
+  announce("Translating text to " .. targetLang)
+  
+  local translationPrompt = "Translate the following text into " .. targetLang .. " accurately. Maintain the original tone and meaning. CRITICAL: You MUST preserve and keep all emojis exactly as they are in the original text. Output strictly the translated text and nothing else. No explanations, no markdown, no quotes.\n\nText: " .. text
+  
+  local apiKey, apiUrl, modelList, payloadFormat
+  
+  if selectedProvider == "OpenRouter" then
+    apiKey = orKey
+    apiUrl = "https://openrouter.ai/api/v1/chat/completions"
+    modelList = {"openai/gpt-4o", "openai/gpt-4o-mini"}
+    payloadFormat = "openai"
+  elseif selectedProvider == "Groq" then
+    apiKey = groqKey
+    apiUrl = "https://api.groq.com/openai/v1/chat/completions"
+    modelList = {"llama-3.3-70b-versatile", "llama-3.1-8b-instant"}
+    payloadFormat = "openai"
+  elseif selectedProvider == "Gemini" then
+    apiKey = geminiKey
+    apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/"
+    modelList = {"gemini-2.0-flash-exp", "gemini-1.5-flash"}
+    payloadFormat = "google"
+  end
+
+  if (not apiKey or apiKey == "") then 
+    announce(selectedProvider .. " Key Missing")
+    return 
+  end
+  
+  apiKey = apiKey:gsub("^%s*(.-)%s*$", "%1")
+  
+  local function executeTranslationRequest(modelIndex)
+    if modelIndex > #modelList then
+      announce("Translation failed")
+      return
+    end
+
+    local currentModel = modelList[modelIndex]
+    local finalUrl = apiUrl
+    local postData = {}
+
+    if payloadFormat == "openai" then
+      postData = { model = currentModel, messages = {{role="user", content=translationPrompt}}, temperature = 0.3 }
+    elseif payloadFormat == "google" then
+      finalUrl = apiUrl .. currentModel .. ":generateContent?key=" .. apiKey
+      postData = { contents = {{parts = {{text = translationPrompt}}}}, generationConfig = {temperature = 0.3} }
+    end
+
+    local headers = {
+      ["Content-Type"] = "application/json",
+      ["Accept"] = "application/json"
+    }
+    
+    if payloadFormat == "openai" then
+      headers["Authorization"] = "Bearer " .. apiKey
+    end
+
+    Http.post(finalUrl, cjson.encode(postData), headers, function(status, data)
+      if status == 200 and data then
+        local ok, decoded = pcall(cjson.decode, data)
+        if ok and decoded then
+          local outputText = nil
+          if payloadFormat == "openai" and decoded.choices and decoded.choices[1] then
+            outputText = decoded.choices[1].message.content
+          elseif payloadFormat == "google" and decoded.candidates and decoded.candidates[1] then
+            outputText = decoded.candidates[1].content.parts[1].text
+          end
+
+          if outputText then
+            local finalText = finalGuard(outputText)
+            finalText = applyDictionaryReplacement(finalText)
+            
+            mainHandler.post(Runnable({
+              run = function()
+                pcall(function()
+                  local freshNode = service.getEditText()
+                  if not freshNode then freshNode = node end
+                  
+                  local suffix = (endAction == "New Line" and "\n" or (endAction == "Space" and " " or (endAction == "Space + New Line" and " \n" or "")))
+                  local fullText = finalText .. suffix
+                  
+                  local Bundle = luajava.bindClass("android.os.Bundle")
+                  local bundle = Bundle()
+                  bundle.putCharSequence("ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE", fullText)
+                  local success = freshNode.performAction(2097152, bundle)
+                  
+                  if not success then
+                     bundle.putCharSequence("ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE", "")
+                     freshNode.performAction(2097152, bundle)
+                     service.insert(freshNode, fullText)
+                  end
+                  
+                  if copyToClipboard then 
+                    local clip = ClipData.newPlainText("AI Voice Typer", fullText)
+                    context.getSystemService(Context.CLIPBOARD_SERVICE).setPrimaryClip(clip) 
+                  end
+                  triggerVibration("typing")
+                  triggerSound()
+                  announce("Translation complete")
+                end)
+              end
+            }))
+            return
+          end
+        end
+      end
+      executeTranslationRequest(modelIndex + 1)
+    end)
+  end
+  
+  executeTranslationRequest(1)
+end
+
+function showTranslationLanguageDialog(node, text)
+  if not text or text == "" or text == "nil" then
+    if node then
+      pcall(function() text = tostring(node.getText() or "") end)
+    end
+  end
+  if not text or text == "" or text == "nil" then
+    announce("Textbox is empty")
+    return
+  end
+
+  local transLangs = {
+    "English", "Hindi", "Marathi", "Gujarati", "Bengali", "Tamil", "Telugu", "Kannada", "Malayalam", "Punjabi", "Urdu", "Odia", "Assamese", "Sindhi", "Nepali", "Sinhala", "Arabic", "Spanish", "French", "German", "Russian", "Japanese", "Korean", "Chinese (Mandarin)", "Italian", "Portuguese", "Dutch", "Turkish", "Persian", "Swahili"
+  }
+
+  local listDlg = LuaDialog(context)
+  listDlg.setTitle("Choose target language")
+  local list = ListView(context)
+  list.setAdapter(ArrayAdapter(context, android.R.layout.simple_list_item_1, transLangs))
+  
+  list.onItemClick = function(parent, view, position, id)
+    local selectedLang = transLangs[position + 1]
+    listDlg.dismiss()
+    translateTextboxTextWithAI(node, text, selectedLang)
+  end
+  
+  listDlg.setView(list)
+  listDlg.show()
+end
+
 function showStartupDialog(node, initialText)
   local dlg = LuaDialog(context)
   dlg.setTitle("What do you want to do?")
@@ -2319,6 +2387,14 @@ function showStartupDialog(node, initialText)
       mainHandler.postDelayed(Runnable({
         run = function()
           processTextboxText(node, initialText)
+        end
+      }), 200)
+    end},
+    {Button, text="Translate Text From Textbox", backgroundColor="#9C27B0", textColor="#FFFFFF", layout_marginBottom="10dp", onClick=function() 
+      dlg.dismiss() 
+      mainHandler.postDelayed(Runnable({
+        run = function()
+          showTranslationLanguageDialog(node, initialText)
         end
       }), 200)
     end},
@@ -2352,6 +2428,8 @@ function main()
     startListening(targetLanguage)
   elseif startupAction == "Process the Text From Textbox" then
     processTextboxText(node, initialText)
+  elseif startupAction == "Translate Text From Textbox" then
+    showTranslationLanguageDialog(node, initialText)
   else
     showSettings()
   end
