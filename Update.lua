@@ -1,2417 +1,831 @@
-require "import"
-local imports = {"android.speech.*","android.speech.RecognizerIntent","android.speech.SpeechRecognizer","android.content.*","android.widget.*","android.view.*","android.net.Uri","android.graphics.Typeface","android.os.Vibrator","android.os.Handler","android.os.Looper","android.media.AudioManager","android.media.ToneGenerator","android.media.MediaPlayer","java.io.*","java.lang.Thread","java.lang.Runnable","java.net.URL","java.util.*","com.androlua.Http","com.androlua.LuaDialog","cjson"}
-for _, v in ipairs(imports) do import(v) end
-local pluginCopyright = "Copyright (c) Anurag Anant. All rights reserved."
-
-local currentFilePath = "/sdcard/解说/Plugins/extreme AI voice Typer./main.lua"
-local mainHandler = Handler(Looper.getMainLooper())
-local updateInProgress = false
-local settingsDlg = nil
-local moreOptionsDlg = nil
-local chatDlg = nil
-local isListening = false
-local globalSR = nil
-local forceStopDictation = false
-local consecutiveSilences = 0
-local accumulatedPreviewText = ""
-local accumulatedPreviewNode = nil
-
-if activity then context = activity elseif service then context = service end
-
-local currentAppVersion = "3.0"
-local versionUrl = "https://raw.githubusercontent.com/AnuragAnant29/Kingrag/refs/heads/main/Version.txt"
-local notesUrl = "https://raw.githubusercontent.com/AnuragAnant29/Kingrag/refs/heads/main/Notes.txt"
-local updateScriptUrl = "https://raw.githubusercontent.com/AnuragAnant29/Kingrag/refs/heads/main/Update.lua"
-local feedbackBotToken = "8610464815:AAFVuDUysrXvjbbX76NjJq3A4FKPfO2ye2M"
-local feedbackChatId = "6749447631"
-
-local prefs = context.getSharedPreferences("ai_voice_typer_permanent_settings", Context.MODE_PRIVATE)
-local editor = prefs.edit()
-
-local orKey = prefs.getString("or_key", "")
-local geminiKey = prefs.getString("gemini_key", "")
-local groqKey = prefs.getString("groq_key", "")
-local mistralKey = prefs.getString("mistral_key", "")
-local selectedProvider = prefs.getString("provider", "OpenRouter")
-
-local autoDetect = prefs.getBoolean("auto_detect", true)
-local selectedLanguage = prefs.getString("lang", "Hindi")
-local emojiEnabled = prefs.getBoolean("emoji_enabled", true)
-local emojiQty = prefs.getString("emoji_qty", "Low")
-local emojiInline = prefs.getBoolean("emoji_inline", true)
-local endAction = prefs.getString("end_action", "Space")
-
-local targetLanguage = prefs.getString("target_lang", "English")
-local enableTranslation = prefs.getBoolean("enable_trans", false)
-local useAITranslation = prefs.getBoolean("use_ai_trans", false)
-local unlimitedDictation = prefs.getBoolean("unlimited_dictation", false)
-local showPreview = prefs.getBoolean("show_preview", false)
-local autoSwitchModels = prefs.getBoolean("auto_switch_models", true)
-
-local vibrationEnabled = prefs.getBoolean("vibration_enabled", true)
-local vibrationIntensity = prefs.getString("vibration_intensity", "Medium")
-local copyToClipboard = prefs.getBoolean("copy_clipboard", false)
-local soundEnabled = prefs.getBoolean("sound_enabled", true)
-local soundType = prefs.getString("sound_type", "Default Beep")
-local startupSoundEnabled = prefs.getBoolean("startup_sound_enabled", true)
-
-local typingMode = prefs.getString("typing_mode", "Auto Detect Script")
-local startupAction = prefs.getString("startup_action", "Ask Every Time")
-local uiLanguage = prefs.getString("ui_language", "English")
-local dictCaseSensitive = prefs.getBoolean("dict_case_sensitive", true)
-local typingHistoryEnabled = prefs.getBoolean("typing_history_enabled", false)
-local punctuationVoiceEnabled = prefs.getBoolean("punctuation_voice_enabled", false)
-
-local registeredUserName = prefs.getString("registered_user_name", "")
-local registeredUserEmail = prefs.getString("registered_user_email", "")
-local isUserRegistered = prefs.getBoolean("is_user_registered", false)
-local welcomeDontShowAgain = prefs.getBoolean("welcome_dont_show_again", false)
-local youtubeChannelUrl = "https://youtube.com/@techlearningforblind?si=NIhgvTy7w7yT4m2U"
-local telegramChannelUrl = "https://t.me/Ttforblind"
-
-local uiTexts = {
-  ["English"]={select_typing_mode="Select Typing Mode",ai_settings="AI Settings",source_language="Source Language (Click to Change)",target_language="Target Language (Click to Change)",enable_translation="Enable Translation",swap="SWAP",emoji_settings="Emoji Settings",more_options="General Settings",save_close="Save & Close",ai_settings_title="AI Settings",select_ai_provider="Select AI Provider",manage_api_keys="Manage API Keys",emoji_settings_title="Emoji Settings",enable_smart_emojis="Enable Smart Emojis",emoji_quantity="Emoji Quantity",more_options_title="General Settings",other_settings="Other Settings",show_preview_before_typing="Show preview before typing",sound_vibration_settings="Sound & Vibration Settings",word_dictionary="Word Dictionary",about="About",contact_us="Contact Us",close="Close",other_settings_title="Other Settings",select_ui_lang="Select UI Language",use_ai_translation="Use AI Translation",unlimited_dictation="Unlimited Voice Dictation - Auto Restart Mic (Experimental)",copy_clipboard="Copy Dictated Text To Clipboard",end_action="End Action (Text End Behavior)",none="None",new_line="New Line",space="Space",space_newline="Space + New Line",sound_vibration_title="Sound & Vibration Settings",enable_vibration="Enable Vibration Feedback",enable_typing_sound="Enable Typing Sound",typing_sound_type="Typing Sound Type",default_beep="Default Beep",soft_click="Soft Click",sharp_pop="Sharp Pop",enable_startup_sound="Enable Startup Sound",vibration_intensity="Vibration Intensity",low="Low",medium="Medium",high="High",word_dictionary_title="Word Dictionary",add_new_words="Add New Words To Dictionary",view_dictionary_words="View Dictionary Words",clear_dictionary="Clear Dictionary",add_word_title="Add New Word to Dictionary",word_to_replace="Word (to be replaced):",replacement_word="Replacement Word:",save="Save",cancel="Cancel",delete_word="Delete Word?",delete_confirmation="Delete '{}' from dictionary?",delete="Delete",clear_dict_title="Clear Dictionary",clear_dict_message="Are you sure you want to clear ALL words from the dictionary? This cannot be undone.",clear_all="Clear All",manage_api_title="Manage API Keys",openrouter_key="OpenRouter Key",get_openrouter_key="Get OpenRouter Key",gemini_key="Gemini Key",get_gemini_key="Get Gemini Key",groq_key="Groq Key",get_groq_key="Get Groq Key",mistral_key="Mistral Key",get_mistral_key="Get Mistral Key",save_keys="Save Keys",about_title="About Plugin",about_info="Version 3.1\nDeveloper: Anurag Anant\n\nFeatures:\n1. Unlimited Voice Dictation (Experimental) - Speak continuously without time limits\n2. AI Integration - OpenRouter, Gemini, Groq, Mistral support\n3. Multi-language Support - 100+ languages\n4. AI Translation & Processing\n5. Professional, Normal & Roman Typer Modes\n6. Word Dictionary - Custom word replacements\n7. Sound & Vibration Feedback\n8. Translation Mode - Speak in source language, type in target language\n\nNote: The translation checkbox has been removed from the main settings because the 'Translation Mode' feature is now directly available in the Extension Startup Action menu.",contact_title="Contact Us",join_telegram="Join our Telegram Channel",give_feedback="Give Feedback to Developer",feedback_form_title="Give Feedback to Developer",feedback_name_label="Name",feedback_name_hint="Enter your name",feedback_whatsapp_label="WhatsApp Number (Optional)",feedback_whatsapp_hint="Enter your WhatsApp number",feedback_telegram_label="Telegram User ID (Optional)",feedback_telegram_hint="Enter your Telegram User ID",feedback_message_label="Your Feedback",feedback_message_hint="Type your feedback here",please_enter_name="Please enter your name",please_enter_feedback="Please enter your feedback",sending_feedback="Sending...",feedback_sent_success="Thank you! Your feedback has been sent successfully.",feedback_send_failed="Failed to send feedback. Please check your internet connection and try again.",target_lang_title="Target Language (Long Press to Add/Remove Fav)",typing_lang_title="Typing Language (Long Press to Add/Remove Fav)",removed_from_fav="removed from favorites",added_to_fav="added to favorites",word_added="Word added: {} → {}",dictionary_empty="Dictionary is empty. Add some words first.",dictionary_words="Dictionary Words ({} words)",deleted_word="Deleted: {}",dictionary_cleared="Dictionary cleared successfully",processing="Processing...",key_missing="Key Missing",connection_failed="Connection Failed. Please check API Key or Internet.",please_enter_word="Please enter a word",please_enter_replacement="Please enter a replacement word",chat_with_ai="Chat with AI",send="Send",type_message="Type your message...",ai_is_thinking="AI is thinking...",chat_title="Chat with AI",listen="Listen",translate_and_type="Translation Mode",case_sensitive="Case Sensitive",emoji_inline_setting="Insert Emojis In Between Text (Not Just At The End)"},
-  ["Hindi"]={select_typing_mode="टाइपिंग मोड चुनें",ai_settings="AI सेटिंग्स",source_language="स्रोत भाषा (बदलने के लिए क्लिक करें)",target_language="लक्ष्य भाषा (बदलने के लिए क्लिक करें)",enable_translation="अनुवाद सक्षम करें",swap="बदलें",emoji_settings="इमोजी सेटिंग्स",more_options="सामान्य सेटिंग्स",save_close="सेव करें और बंद करें",ai_settings_title="AI सेटिंग्स",select_ai_provider="AI प्रदाता चुनें",manage_api_keys="API कुंजियाँ प्रबंधित करें",emoji_settings_title="इमोजी सेटिंग्स",enable_smart_emojis="स्मार्ट इमोजी सक्षम करें",emoji_quantity="इमोजी मात्रा",more_options_title="सामान्य सेटिंग्स",other_settings="अन्य सेटिंग्स",show_preview_before_typing="टाइपिंग से पहले प्रीव्यू दिखाएं",sound_vibration_settings="ध्वनि और कंपन सेटिंग्स",word_dictionary="शब्दकोश",about="जानकारी",contact_us="संपर्क करें",close="बंद करें",other_settings_title="अन्य सेटिंग्स",select_ui_lang="UI भाषा चुनें",use_ai_translation="AI अनुवाद का उपयोग करें",unlimited_dictation="असीमित वॉइस डिक्टेशन - माइक ऑटो रीस्टार्ट (Experimental)",copy_clipboard="टेक्स्ट को क्लिपबोर्ड पर कॉपी करें",end_action="एंड एक्शन (टेक्स्ट एंड व्यवहार)",none="कुछ नहीं",new_line="नई लाइन",space="स्पेस",space_newline="स्पेस + नई लाइन",sound_vibration_title="ध्वनि और कंपन सेटिंग्स",enable_vibration="कंपन फीडबैक सक्षम करें",enable_typing_sound="टाइपिंग ध्वनि सक्षम करें",typing_sound_type="टाइपिंग ध्वनि प्रकार",default_beep="डिफ़ॉल्ट बीप",soft_click="सॉफ्ट क्लिक",sharp_pop="शार्प पॉप",enable_startup_sound="स्टार्टअप ध्वनि सक्षम करें",vibration_intensity="कंपन तीव्रता",low="कम",medium="मध्यम",high="तेज",word_dictionary_title="शब्दकोश",add_new_words="शब्दकोश में नए शब्द जोड़ें",view_dictionary_words="शब्दकोश शब्द देखें",clear_dictionary="शब्दकोश साफ़ करें",add_word_title="शब्दकोश में नया शब्द जोड़ें",word_to_replace="शब्द (जिसे बदलना है):",replacement_word="प्रतिस्थापन शब्द:",save="सेव करें",cancel="रद्द करें",delete_word="शब्द हटाएं?",delete_confirmation="शब्दकोश से '{}' हटाएं?",delete="हटाएं",clear_dict_title="शब्दकोश साफ़ करें",clear_dict_message="क्या आप शब्दकोश से सभी शब्द हटाना चाहते हैं? यह वापस नहीं किया जा सकता।",clear_all="सभी हटाएं",manage_api_title="API कुंजियाँ प्रबंधित करें",openrouter_key="OpenRouter कुंजी",get_openrouter_key="OpenRouter कुंजी प्राप्त करें",gemini_key="Gemini कुंजी",get_gemini_key="Gemini कुंजी प्राप्त करें",groq_key="Groq कुंजी",get_groq_key="Groq कुंजी प्राप्त करें",mistral_key="Mistral कुंजी",get_mistral_key="Mistral कुंजी प्राप्त करें",save_keys="कुंजियाँ सेव करें",about_title="प्लगइन के बारे में",about_info="संस्करण 3.1\nडेवलपर: अनुराग अनंत\n\nविशेषताएँ:\n1. असीमित वॉइस डिक्टेशन (Experimental) - बिना समय सीमा के लगातार बोलें\n2. AI एकीकरण - OpenRouter, Gemini, Groq, Mistral समर्थन\n3. बहु-भाषा समर्थन - 100+ भाषाएँ\n4. AI अनुवाद और प्रसंस्करण\n5. प्रोफेशनल, नॉर्मल और रोमन टाइपर मोड\n6. शब्दकोश - कस्टम शब्द प्रतिस्थापन\n7. ध्वनि और कंपन फीडबैक\n8. Translation Mode - स्रोत भाषा में बोलें, लक्ष्य भाषा में टाइप करें\n\nनोट: मुख्य सेटिंग्स से अनुवाद (Translation) चेकबॉक्स को हटा दिया गया है क्योंकि 'Translation Mode' फीचर अब सीधे एक्सटेंशन स्टार्टअप एक्शन मेनू में उपलब्ध है।",contact_title="संपर्क करें",join_telegram="हमारे टेलीग्राम चैनल से जुड़ें",give_feedback="डेवलपर को फीडबैक दें",feedback_form_title="डेवलपर को फीडबैक दें",feedback_name_label="नाम",feedback_name_hint="अपना नाम दर्ज करें",feedback_whatsapp_label="WhatsApp नंबर (वैकल्पिक)",feedback_whatsapp_hint="अपना WhatsApp नंबर दर्ज करें",feedback_telegram_label="Telegram यूज़र ID (वैकल्पिक)",feedback_telegram_hint="अपना Telegram यूज़र ID दर्ज करें",feedback_message_label="आपका फीडबैक",feedback_message_hint="यहाँ अपना फीडबैक लिखें",please_enter_name="कृपया अपना नाम दर्ज करें",please_enter_feedback="कृपया अपना फीडबैक दर्ज करें",sending_feedback="भेजा जा रहा है...",feedback_sent_success="धन्यवाद! आपका फीडबैक सफलतापूर्वक भेज दिया गया है।",feedback_send_failed="फीडबैक भेजने में विफल। कृपया अपना इंटरनेट कनेक्शन जांचें और पुनः प्रयास करें।",target_lang_title="लक्ष्य भाषा (फेवरेट जोड़ने/हटाने के लिए लंबे समय तक दबाएं)",typing_lang_title="टाइपिंग भाषा (फेवरेट जोड़ने/हटाने के लिए लंबे समय तक दबाएं)",removed_from_fav="फेवरेट से हटा दिया गया",added_to_fav="फेवरेट में जोड़ दिया गया",word_added="शब्द जोड़ा गया: {} → {}",dictionary_empty="शब्दकोश खाली है। कुछ शब्द पहले जोड़ें।",dictionary_words="शब्दकोश शब्द ({} शब्द)",deleted_word="हटाया गया: {}",dictionary_cleared="शब्दकोश सफलतापूर्वक साफ़ कर दिया गया",processing="प्रोसेसिंग...",key_missing="कुंजी गायब है",connection_failed="कनेक्शन विफल। कृपया API कुंजी या इंटरनेट जांचें।",please_enter_word="कृपया एक शब्द दर्ज करें",please_enter_replacement="कृपया एक प्रतिस्थापन शब्द दर्ज करें",chat_with_ai="AI के साथ चैट करें",send="भेजें",type_message="अपना संदेश लिखें...",ai_is_thinking="AI सोच रहा है...",chat_title="AI के साथ चैट करें",listen="सुनें",translate_and_type="Translation Mode",case_sensitive="केस सेंसिटिव (Case Sensitive)",emoji_inline_setting="इमोजी को टेक्स्ट के बीच में भी डालें (सिर्फ अंत में नहीं)"},
-  ["Urdu"]={select_typing_mode="ٹائپنگ موڈ منتخب کریں",ai_settings="AI ترتیبات",source_language="ماخذ زبان (تبدیل کرنے کے لیے کلک کریں)",target_language="ہدف زبان (تبدیل کرنے کے لیے کلک کریں)",enable_translation="ترجمہ فعال کریں",swap="تبدیل کریں",emoji_settings="ایموجی ترتیبات",more_options="عمومی ترتیبات",save_close="محفوظ کریں اور بند کریں",ai_settings_title="AI ترتیبات",select_ai_provider="AI فراہم کنندہ منتخب کریں",manage_api_keys="API کنجیاں منظم کریں",emoji_settings_title="ایموجی ترتیبات",enable_smart_emojis="سمارٹ ایموجی فعال کریں",emoji_quantity="ایموجی مقدار",more_options_title="عمومی ترتیبات",other_settings="دیگر ترتیبات",show_preview_before_typing="ٹائپنگ سے پہلے پیش منظر دکھائیں",sound_vibration_settings="آواز اور وائبریشن ترتیبات",word_dictionary="لغت",about="تعارف",contact_us="رابطہ کریں",close="بند کریں",other_settings_title="دیگر ترتیبات",select_ui_lang="UI زبان منتخب کریں",use_ai_translation="AI ترجمہ استعمال کریں",unlimited_dictation="لامحدود وائس ڈکٹیشن - آٹو ری اسٹارٹ مائیک (Experimental)",copy_clipboard="متن کو کلپ بورڈ پر کاپی کریں",end_action="اینڈ ایکشن (متن کے آخر میں رویہ)",none="کچھ نہیں",new_line="نئی لائن",space="خالی جگہ",space_newline="خالی جگہ + نئی لائن",sound_vibration_title="آواز اور وائبریشن ترتیبات",enable_vibration="وائبریشن فیڈبیک فعال کریں",enable_typing_sound="ٹائپنگ آواز فعال کریں",typing_sound_type="ٹائپنگ آواز کی قسم",default_beep="پہلے سے طے شدہ بیپ",soft_click="نرم کلک",sharp_pop="تیز پاپ",enable_startup_sound="اسٹارٹ اپ آواز فعال کریں",vibration_intensity="وائبریشن کی شدت",low="کم",medium="درمیانہ",high="تیز",word_dictionary_title="لغت",add_new_words="لغت میں نئے الفاظ شامل کریں",view_dictionary_words="لغت کے الفاظ دیکھیں",clear_dictionary="لغت صاف کریں",add_word_title="لغت میں نیا لفظ شامل کریں",word_to_replace="لفظ (جسے تبدیل کرنا ہے):",replacement_word="متبادل لفظ:",save="محفوظ کریں",cancel="منسوخ کریں",delete_word="لفظ حذف کریں؟",delete_confirmation="لغت سے '{}' حذف کریں؟",delete="حذف کریں",clear_dict_title="لغت صاف کریں",clear_dict_message="کیا آپ لغت سے تمام الفاظ حذف کرنا چاہتے ہیں؟ یہ واپس نہیں کیا جا سکتا۔",clear_all="سب حذف کریں",manage_api_title="API کنجیاں منظم کریں",openrouter_key="OpenRouter کنجی",get_openrouter_key="OpenRouter کنجی حاصل کریں",gemini_key="Gemini کنجی",get_gemini_key="Gemini کنجی حاصل کریں",groq_key="Groq کنجی",get_groq_key="Groq کنجی حاصل کریں",mistral_key="Mistral کنجی",get_mistral_key="Mistral کنجی حاصل کریں",save_keys="کنجیاں محفوظ کریں",about_title="پلگ ان کے بارے میں",about_info="ورژن 3.1\nڈویلپر: انوراگ اننت\n\nخصوصیات:\n1. لامحدود وائس ڈکٹیشن (Experimental) - بغیر وقت کی حد کے مسلسل بولیں\n2. AI انضمام - OpenRouter, Gemini, Groq, Mistral سپورٹ\n3. کثیر لسانی سپورٹ - 100+ زبانیں\n4. AI ترجمہ اور پروسیسنگ\n5. پروفیشنل، نارمل اور رومن ٹائپر موڈز\n6. لغت - حسب ضرورت لفظ تبدیلی\n7. آواز اور وائبریشن فیڈبیک\n8. Translation Mode - ماخذ زبان میں بولیں، ہدف زبان میں ٹائپ کریں\n\nنوٹ: مین ترتیبات سے ترجمہ (Translation) چیک باکس کو ہٹا دیا گیا ہے کیونکہ 'Translation Mode' فیچر اب براہ راست ایکسٹینشن اسٹارٹ اپ ایکشن مینیو میں دستیاب ہے۔",contact_title="رابطہ کریں",join_telegram="ہمارے ٹیلیگرام چینل میں شامل ہوں",give_feedback="ٹیلیگرام پر فیڈبیک دیں",target_lang_title="ہدف زبان (فیورٹ شامل/ہٹانے کے لیے لمبے وقت تک دبائیں)",typing_lang_title="ٹائپنگ زبان (فیورٹ شامل/ہٹانے کے لیے لمبے وقت تک دبائیں)",removed_from_fav="فیورٹ سے ہٹا دیا گیا",added_to_fav="فیورٹ میں شامل کر دیا گیا",word_added="لفظ شامل کیا گیا: {} → {}",dictionary_empty="لغت خالی ہے۔ پہلے کچھ الفاظ شامل کریں۔",dictionary_words="لغت کے الفاظ ({} الفاظ)",deleted_word="حذف کردہ: {}",dictionary_cleared="لغت کامیابی سے صاف کر دی گئی",processing="پروسیسنگ...",key_missing="کنجی غائب ہے",connection_failed="کنکشن ناکام۔ براہ کرم API کنجی یا انٹرنیٹ چیک کریں۔",please_enter_word="براہ کرم ایک لفظ درج کریں",please_enter_replacement="براہ کرم ایک متبادل لفظ درج کریں",chat_with_ai="AI کے ساتھ چیٹ کریں",send="بھیجیں",type_message="اپنا پیغام لکھیں...",ai_is_thinking="AI سوچ رہا ہے...",chat_title="AI کے ساتھ چیٹ کریں",listen="سنیں",translate_and_type="Translation Mode",case_sensitive="کیس حساس (Case Sensitive)",emoji_inline_setting="ایموجی کو متن کے درمیان میں بھی شامل کریں (صرف آخر میں نہیں)"}
-}
-
-local function getUIText(key, ...)
-  local lang = uiLanguage
-  local text = nil
-  if uiTexts[lang] and uiTexts[lang][key] then
-    text = uiTexts[lang][key]
-  else
-    text = uiTexts["English"][key] or key
-  end
-  local args = {...}
-  for i, arg in ipairs(args) do
-    text = text:gsub("{}", tostring(arg), 1)
-  end
-  return text
-end
-
-local dictionaryData = prefs.getString("word_dictionary", "{}")
-local changeTable = {}
-pcall(function() changeTable = cjson.decode(dictionaryData) end)
-if type(changeTable) ~= "table" then changeTable = {} end
-
-local personasData = prefs.getString("custom_personas", "[]")
-local personaList = {}
-pcall(function() personaList = cjson.decode(personasData) end)
-if type(personaList) ~= "table" then personaList = {} end
-
-local function savePersonas()
-  editor.putString("custom_personas", cjson.encode(personaList)).commit()
-end
-
-local typingHistoryDataStr = prefs.getString("typing_history_list", "[]")
-local typingHistoryList = {}
-pcall(function() typingHistoryList = cjson.decode(typingHistoryDataStr) end)
-if type(typingHistoryList) ~= "table" then typingHistoryList = {} end
-
-local function saveTypingHistory()
-  editor.putString("typing_history_list", cjson.encode(typingHistoryList)).commit()
-end
-
-local function addToTypingHistory(text)
-  if not typingHistoryEnabled then return end
-  if not text or text == "" then return end
-  table.insert(typingHistoryList, 1, text)
-  while #typingHistoryList > 30 do table.remove(typingHistoryList, #typingHistoryList) end
-  saveTypingHistory()
-end
-
-local langList = {}
-for w in string.gmatch("Afrikaans,Albanian,Amharic,Arabic,Armenian,Assamese,Azerbaijani,Basque,Belarusian,Bengali,Bosnian,Bulgarian,Burmese,Catalan,Cebuano,Chichewa,Chinese (Mandarin),Corsican,Croatian,Czech,Danish,Dutch,English,Esperanto,Estonian,Filipino,Finnish,French,Galician,Georgian,German,Greek,Haitian Creole,Hausa,Hawaiian,Hebrew,Hindi,Hmong,Hungarian,Icelandic,Igbo,Indonesian,Irish,Italian,Japanese,Javanese,Kannada,Kazakh,Khmer,Kinyarwanda,Korean,Kurdish,Kyrgyz,Lao,Latin,Latvian,Lithuanian,Luxembourgish,Macedonian,Malagasy,Malay,Malayalam,Maltese,Maori,Marathi,Mongolian,Nepali,Norwegian,Odia,Pashto,Persian,Polish,Portuguese,Punjabi,Romanian,Russian,Samoan,Scots Gaelic,Serbian,Sesotho,Shona,Sindhi,Sinhala,Slovak,Slovenian,Somali,Spanish,Sundanese,Swahili,Swedish,Tajik,Tamil,Telugu,Thai,Turkish,Ukrainian,Urdu,Uzbek,Vietnamese,Welsh,Xhosa,Yiddish,Yoruba,Zulu", "[^,]+") do table.insert(langList, w) end
-
-local function getLangCode(langName)
-  local map = {
-    ["Hindi"]="hi-IN", ["English"]="en-IN", ["Spanish"]="es-ES", ["French"]="fr-FR", 
-    ["German"]="de-DE", ["Marathi"]="mr-IN", ["Bengali"]="bn-IN", 
-    ["Telugu"]="te-IN", ["Tamil"]="ta-IN", ["Urdu"]="ur-PK", ["Arabic"]="ar-SA", 
-    ["Russian"]="ru-RU", ["Japanese"]="ja-JP", ["Korean"]="ko-KR", ["Chinese (Mandarin)"]="zh-CN",
-    ["Italian"]="it-IT", ["Portuguese"]="pt-PT", ["Dutch"]="nl-NL", ["Turkish"]="tr-TR",
-    ["Punjabi"]="pa-IN", ["Malayalam"]="ml-IN", ["Kannada"]="kn-IN", ["Odia"]="or-IN",
-    ["Assamese"]="as-IN", ["Sindhi"]="sd-IN", ["Nepali"]="ne-NP", ["Sinhala"]="si-LK"
-  }
-  return map[langName] or (string.sub(string.lower(langName), 1, 2) .. "-" .. string.sub(string.upper(langName), 1, 2))
-end
-
-local toneGen = nil
-local welcomePlayer = nil
-local startupSoundPlayed = false
-
-function triggerSound()
-  if not soundEnabled then return end
-  pcall(function()
-    if not toneGen then toneGen = ToneGenerator(AudioManager.STREAM_SYSTEM, 100) end
-    if soundType == "Soft Click" then
-      toneGen.startTone(ToneGenerator.TONE_DTMF_0, 40)
-    elseif soundType == "Sharp Pop" then
-      toneGen.startTone(ToneGenerator.TONE_PROP_BEEP2, 40)
-    else
-      toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 50)
-    end
-  end)
-end
-
-function triggerVibration(vType)
-  if not vibrationEnabled then return end
-  pcall(function()
-    local vib = context.getSystemService(Context.VIBRATOR_SERVICE)
-    if vib then
-      local duration = 150
-      if vibrationIntensity == "Low" then duration = 80
-      elseif vibrationIntensity == "Medium" then duration = 150
-      elseif vibrationIntensity == "High" then duration = 250 end
-      if vType == "typing" then vib.vibrate(duration)
-      elseif vType == "settings" then vib.vibrate(duration + 50) end
-    end
-  end)
-end
-
-function playStartupSound()
-  if not startupSoundEnabled then return end
-  if startupSoundPlayed then return end
-  startupSoundPlayed = true
-  pcall(function()
-local soundPath = "/storage/emulated/0/解说/Plugins/extreme AI voice Typer./Welcome message .mp3"
-    local File = luajava.bindClass("java.io.File")
-    local soundFile = File(soundPath)
-    if not soundFile.exists() then return end
-    if welcomePlayer then
-      welcomePlayer.release()
-      welcomePlayer = nil
-    end
-    welcomePlayer = MediaPlayer()
-    welcomePlayer.setOnErrorListener({
-      onError = function(mp, what, extra)
-        pcall(function() mp.release() end)
-        welcomePlayer = nil
-        return true
-      end
-    })
-    welcomePlayer.setOnCompletionListener({
-      onCompletion = function(mp)
-        pcall(function() mp.release() end)
-        welcomePlayer = nil
-      end
-    })
-    welcomePlayer.setDataSource(soundPath)
-    welcomePlayer.prepare()
-    welcomePlayer.start()
-  end)
-end
-
-function announce(msg)
-  if not msg then return end
-  pcall(function() if service and service.speak then service.speak(msg) end end)
-end
-
-function openUrl(url)
-  local intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-  intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-  context.startActivity(intent)
-  if settingsDlg then pcall(function() settingsDlg.dismiss() end) end
-  if moreOptionsDlg then pcall(function() moreOptionsDlg.dismiss() end) end
-end
-
-function finalGuard(text)
-  if type(text) ~= "string" then return "" end
-  local t = text
-  local nums = {
-    ["one"]="1",["two"]="2",["three"]="3",["four"]="4",["five"]="5",
-    ["six"]="6",["seven"]="7",["eight"]="8",["nine"]="9",["ten"]="10",
-    ["One"]="1",["Two"]="2",["Three"]="3",["Four"]="4",["Five"]="5",
-    ["Six"]="6",["Seven"]="7",["Eight"]="8",["Nine"]="9",["Ten"]="10"
-  }
-  for k,v in pairs(nums) do t = t:gsub("%f[%a]"..k.."%f[%A]", v) end
-  return t
-end
-
-function applyDictionaryReplacement(text)
-  if type(text) ~= "string" then return "" end
-  if text == "" then return text end
-  local result = text
-  for originalWord, replacementWord in pairs(changeTable) do
-    local safeOriginal = originalWord:gsub("([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
-    if not dictCaseSensitive then
-      safeOriginal = safeOriginal:gsub("%a", function(c)
-        return string.format("[%s%s]", string.lower(c), string.upper(c))
-      end)
-    end
-    result = result:gsub("%f[%a]"..safeOriginal.."%f[%A]", replacementWord)
-  end
-  return result
-end
-
-function applyPunctuationVoiceCommands(text)
-  if not punctuationVoiceEnabled or not text or text == "" then return text end
-  local result = text
-  local punctMap = {
-    ["comma"]=",", ["कॉमा"]=",",
-    ["full stop"]=".", ["फुल स्टॉप"]=".", ["पूर्ण विराम"]=".",
-    ["question mark"]="?", ["प्रश्न चिन्ह"]="?",
-    ["exclamation mark"]="!", ["विस्मयादिबोधक चिन्ह"]="!",
-    ["colon"]=":", ["कोलन"]=":",
-    ["semicolon"]=";", ["सेमीकोलन"]=";",
-    ["new line"]="\n", ["नई लाइन"]="\n",
-    ["hyphen"]="-", ["हाइफ़न"]="-",
-    ["at the rate"]="@", ["एट द रेट"]="@"
-  }
-  for word, symbol in pairs(punctMap) do
-    local safeWord = word:gsub("([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
-    result = result:gsub("%f[%a]"..safeWord.."%f[%A]", symbol)
-  end
-  return result
-end
-
-function processOffline(text, callback)
-  local t = text
-  if selectedLanguage == "Hindi" or selectedLanguage == "Marathi" or selectedLanguage == "Bengali" then
-    t = t .. " " 
-  else
-    t = t:gsub("^%l", string.upper)
-    t = t .. "."
-  end
-  callback(t)
-end
-
-local function getActiveApiKey()
-  if selectedProvider == "OpenRouter" then return orKey
-  elseif selectedProvider == "Groq" then return groqKey
-  elseif selectedProvider == "Gemini" then return geminiKey
-  elseif selectedProvider == "Mistral" then return mistralKey
-  end
-  return ""
-end
-
-local providerModelCycles = {
-  ["Gemini"] = {"gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-lite", "gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3-flash-preview"},
-  ["Groq"] = {"llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it", "llama3-70b-8192"},
-  ["Mistral"] = {"mistral-small-latest", "open-mistral-nemo", "ministral-8b-latest", "ministral-3b-latest", "mistral-large-latest"},
-  ["OpenRouter"] = {"openai/gpt-4o", "openai/gpt-4o-mini", "google/gemini-2.5-flash", "google/gemini-2.0-flash-001"}
-}
-local providerStickyState = {}
-
-local function buildModelCycle(provider, currentModel)
-  local base = providerModelCycles[provider] or {currentModel}
-  local cycle = {currentModel}
-  local seen = {[currentModel] = true}
-  for _, m in ipairs(base) do
-    if not seen[m] then
-      table.insert(cycle, m)
-      seen[m] = true
-    end
-  end
-  return cycle
-end
-
-function executeMasterAIApiCall(provider, systemText, userText, temperature, callback)
-  local apiKey = getActiveApiKey()
-  if not apiKey or apiKey == "" then
-    announce(provider .. " " .. getUIText("key_missing"))
-    callback(nil)
-    return
-  end
-  apiKey = apiKey:gsub("^%s*(.-)%s*$", "%1")
-
-  local apiUrl, currentModel, payloadFormat
-  if provider == "OpenRouter" then
-    apiUrl = "https://openrouter.ai/api/v1/chat/completions"
-    currentModel = prefs.getString("or_model", "openai/gpt-4o")
-    payloadFormat = "openai"
-  elseif provider == "Groq" then
-    apiUrl = "https://api.groq.com/openai/v1/chat/completions"
-    currentModel = prefs.getString("groq_model", "llama-3.3-70b-versatile")
-    payloadFormat = "openai"
-  elseif provider == "Mistral" then
-    apiUrl = "https://api.mistral.ai/v1/chat/completions"
-    currentModel = prefs.getString("mistral_model", "mistral-small-latest")
-    payloadFormat = "openai"
-  elseif provider == "Gemini" then
-    apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/"
-    currentModel = prefs.getString("gemini_model", "gemini-2.5-flash")
-    payloadFormat = "google"
-  else
-    announce("Invalid AI Provider")
-    callback(nil)
-    return
-  end
-
-  local modelsToTry = {currentModel}
-  if autoSwitchModels then
-    local cycle = buildModelCycle(provider, currentModel)
-    local startIndex = 1
-    local state = providerStickyState[provider]
-    if state and state.model == currentModel and state.idx and state.idx <= #cycle then
-      startIndex = state.idx
-    end
-    modelsToTry = {}
-    for i = 1, #cycle do
-      local idx = ((startIndex - 1 + i - 1) % #cycle) + 1
-      table.insert(modelsToTry, cycle[idx])
-    end
-  end
-
-  local lastFailStatus = nil
-  local maxFullPasses = 3
-  local totalAttemptsAllowed = autoSwitchModels and (#modelsToTry * maxFullPasses) or #modelsToTry
-  local function attemptRequest(modelIndex, isSwitch)
-    if modelIndex > totalAttemptsAllowed then
-      if lastFailStatus == 429 then
-        announce(provider .. " rate limit reached. Please wait a few seconds and try again.")
-      else
-        announce(getUIText("connection_failed"))
-      end
-      callback(nil)
-      return
-    end
-    local cyclePos = ((modelIndex - 1) % #modelsToTry) + 1
-    local tryingModel = modelsToTry[cyclePos]
-    if isSwitch then
-      announce("Switching model, " .. tryingModel)
-    end
-    local finalUrl = apiUrl
-    local postData = {}
-
-    if payloadFormat == "openai" then
-      local messages = {}
-      if systemText and systemText ~= "" then table.insert(messages, {role="system", content=systemText}) end
-      table.insert(messages, {role="user", content=userText})
-      postData = { model = tryingModel, messages = messages, temperature = temperature, max_tokens = 6144 }
-      if provider == "OpenRouter" and tryingModel:lower():find("google/gemini") then
-        postData.reasoning = { max_tokens = 1024 }
-      end
-    elseif payloadFormat == "google" then
-      finalUrl = apiUrl .. tryingModel .. ":generateContent?key=" .. apiKey
-      postData = { contents = {{parts = {{text = userText}}}}, generationConfig = {temperature = temperature} }
-      if systemText and systemText ~= "" then postData.systemInstruction = {parts = {{text = systemText}}} end
-    end
-
-    local headers = { ["Content-Type"] = "application/json", ["Accept"] = "application/json" }
-    if payloadFormat == "openai" then headers["Authorization"] = "Bearer " .. apiKey end
-
-    local ok, callErr = pcall(function()
-      Http.post(finalUrl, cjson.encode(postData), headers, function(status, data)
-        local handled = false
-        local outputText = nil
-        pcall(function()
-          if status == 200 and data then
-            local ok2, decoded = pcall(cjson.decode, data)
-            if ok2 and decoded then
-              if payloadFormat == "openai" and decoded.choices and decoded.choices[1] and decoded.choices[1].message then
-                outputText = decoded.choices[1].message.content
-              elseif payloadFormat == "google" and decoded.candidates and decoded.candidates[1] and decoded.candidates[1].content and decoded.candidates[1].content.parts and decoded.candidates[1].content.parts[1] then
-                outputText = decoded.candidates[1].content.parts[1].text
-              end
-              if type(outputText) == "string" and outputText ~= "" then handled = true else outputText = nil end
-            end
-          end
-        end)
-        mainHandler.post(Runnable({run = function()
-          if handled then
-            if autoSwitchModels then
-              local successCycleIdx = 1
-              local cycle = buildModelCycle(provider, currentModel)
-              for i, m in ipairs(cycle) do
-                if m == tryingModel then successCycleIdx = i break end
-              end
-              providerStickyState[provider] = {model = currentModel, idx = successCycleIdx}
-              if isSwitch then announce("Typing with " .. tryingModel) end
-            end
-            callback(outputText)
-          else
-            lastFailStatus = status
-            attemptRequest(modelIndex + 1, autoSwitchModels)
-          end
-        end}))
-      end)
-    end)
-    if not ok then
-      mainHandler.post(Runnable({run = function() attemptRequest(modelIndex + 1, autoSwitchModels) end}))
-    end
-  end
-  attemptRequest(1, false)
-end
-
-function googleTranslateQuick(text, targetLangCode, callback)
-  local encodedText = luajava.bindClass("java.net.URLEncoder").encode(tostring(text), "UTF-8")
-  local url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=" .. targetLangCode .. "&dt=t&q=" .. encodedText
-  local ThreadCls = luajava.bindClass("java.lang.Thread")
-  local RunnableCls = luajava.bindClass("java.lang.Runnable")
-  ThreadCls(RunnableCls({run = function()
-    local translatedText = nil
-    pcall(function()
-      local URL = luajava.bindClass("java.net.URL")
-      local conn = URL(url).openConnection()
-      conn.setRequestMethod("GET")
-      conn.setConnectTimeout(3000)
-      conn.setReadTimeout(3000)
-      local responseCode = conn.getResponseCode()
-      if responseCode == 200 then
-        local is = conn.getInputStream()
-        local Scanner = luajava.bindClass("java.util.Scanner")
-        local scanner = Scanner(is).useDelimiter("\\A")
-        local result = scanner.hasNext() and scanner.next() or ""
-        scanner.close()
-        local ok, decoded = pcall(cjson.decode, result)
-        if ok and type(decoded) == "table" and decoded[1] then
-          translatedText = ""
-          for i = 1, #decoded[1] do
-            if type(decoded[1][i]) == "table" and decoded[1][i][1] then translatedText = translatedText .. decoded[1][i][1] end
-          end
-        end
-      end
-    end)
-    mainHandler.post(Runnable({run = function() callback(translatedText) end}))
-  end})).start()
-end
-
-function quickAITranslate(text, targetLang, callback)
-  local apiKey = getActiveApiKey()
-  if not apiKey or apiKey == "" then
-    callback(nil)
-    return
-  end
-  apiKey = apiKey:gsub("^%s*(.-)%s*$", "%1")
-
-  local apiUrl, currentModel, payloadFormat
-  if selectedProvider == "OpenRouter" then
-    apiUrl = "https://openrouter.ai/api/v1/chat/completions"
-    currentModel = prefs.getString("or_model", "openai/gpt-4o")
-    payloadFormat = "openai"
-  elseif selectedProvider == "Groq" then
-    apiUrl = "https://api.groq.com/openai/v1/chat/completions"
-    currentModel = prefs.getString("groq_model", "llama-3.3-70b-versatile")
-    payloadFormat = "openai"
-  elseif selectedProvider == "Mistral" then
-    apiUrl = "https://api.mistral.ai/v1/chat/completions"
-    currentModel = prefs.getString("mistral_model", "mistral-small-latest")
-    payloadFormat = "openai"
-  elseif selectedProvider == "Gemini" then
-    apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/"
-    currentModel = prefs.getString("gemini_model", "gemini-2.5-flash")
-    payloadFormat = "google"
-  else
-    callback(nil)
-    return
-  end
-
-  local prompt = "Translate the following text into " .. targetLang .. " with strict word-for-word accuracy. Maintain the original tone, meaning and sentence structure exactly. CRITICAL: 1. ABSOLUTELY DO NOT add any new emojis. 2. If the original text has emojis, keep them exactly as they are. 3. If the original text has no emojis, the output MUST have no emojis. 4. ABSOLUTE PROHIBITION: DO NOT add any extra words, phrases, greetings, filler, explanations, or meaning that is not present in the original text. 5. DO NOT expand, elaborate, or paraphrase; translate ONLY what is literally present, nothing more. 6. The translated output MUST have the same number of sentences as the original text. 7. Output strictly the translated text and nothing else. No explanations, no markdown, no quotes, no preamble.\n\nText: " .. text
-
-  local finalUrl = apiUrl
-  local postData = {}
-  local headers = {}
-  if payloadFormat == "openai" then
-    postData = { model = currentModel, messages = {{role="user", content=prompt}}, temperature = 0.3 }
-    headers["Authorization"] = "Bearer " .. apiKey
-  elseif payloadFormat == "google" then
-    finalUrl = apiUrl .. currentModel .. ":generateContent?key=" .. apiKey
-    postData = { contents = {{parts = {{text = prompt}}}}, generationConfig = {temperature = 0.3} }
-  end
-
-  local ThreadCls = luajava.bindClass("java.lang.Thread")
-  local RunnableCls = luajava.bindClass("java.lang.Runnable")
-  ThreadCls(RunnableCls({run = function()
-    local outputText = nil
-    pcall(function()
-      local URL = luajava.bindClass("java.net.URL")
-      local conn = URL(finalUrl).openConnection()
-      conn.setRequestMethod("POST")
-      conn.setDoOutput(true)
-      conn.setConnectTimeout(5000)
-      conn.setReadTimeout(5000)
-      conn.setRequestProperty("Content-Type", "application/json")
-      for k,v in pairs(headers) do conn.setRequestProperty(k, v) end
-      local OutputStreamWriter = luajava.bindClass("java.io.OutputStreamWriter")
-      local writer = OutputStreamWriter(conn.getOutputStream(), "UTF-8")
-      writer.write(cjson.encode(postData))
-      writer.flush()
-      writer.close()
-      local responseCode = conn.getResponseCode()
-      if responseCode == 200 then
-        local is = conn.getInputStream()
-        local Scanner = luajava.bindClass("java.util.Scanner")
-        local scanner = Scanner(is).useDelimiter("\\A")
-        local result = scanner.hasNext() and scanner.next() or ""
-        scanner.close()
-        local ok, decoded = pcall(cjson.decode, result)
-        if ok and decoded then
-          if payloadFormat == "openai" and decoded.choices and decoded.choices[1] then
-            outputText = decoded.choices[1].message.content
-          elseif payloadFormat == "google" and decoded.candidates and decoded.candidates[1] then
-            outputText = decoded.candidates[1].content.parts[1].text
-          end
-          if type(outputText) ~= "string" or outputText == "" then outputText = nil end
-        end
-      end
-    end)
-    mainHandler.post(Runnable({run = function() callback(outputText) end}))
-  end})).start()
-end
-
-function stopListening()
-  forceStopDictation = true
-  isListening = false
-  consecutiveSilences = 0
-  if globalSR then
-    pcall(function() globalSR.cancel(); globalSR.destroy() end)
-    globalSR = nil
-  end
-end
-
-function startVoiceInput(callback)
-  if isListening then return end
-  isListening = true
-  local intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-  intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-  intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-IN")
-  intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak your question...")
-  local sr = SpeechRecognizer.createSpeechRecognizer(context)
-  sr.setRecognitionListener({
-    onResults = function(res)
-      local matches = res.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-      if matches and matches.size() > 0 then
-        local spokenText = matches.get(0)
-        if callback then callback(spokenText) end
-      end
-      sr.destroy()
-      isListening = false
-    end,
-    onError = function(error)
-      sr.destroy()
-      isListening = false
-      if callback then callback(nil) end
-    end,
-    onReadyForSpeech = function(params) triggerSound() end
-  })
-  sr.startListening(intent)
-end
-
-function showChatDialog()
-  local dlg = LuaDialog(context)
-  dlg.setTitle(getUIText("chat_title"))
-  local layout = {
-    LinearLayout, orientation="vertical", layout_width="fill", layout_height="fill", padding="10dp",
-    {ScrollView, id="scroll", layout_width="fill", layout_height="0dp", layout_weight=1,
-      {LinearLayout, id="messages_container", orientation="vertical", layout_width="fill", padding="5dp"}
-    },
-    {LinearLayout, orientation="horizontal", layout_width="fill", layout_marginTop="10dp",
-      {EditText, id="input_msg", hint=getUIText("type_message"), layout_width="0dp", layout_weight=1, backgroundColor="#F5F5F5", padding="10dp"},
-      {Button, id="mic_btn", text="🎤", textSize="20sp", backgroundColor="#4CAF50", textColor="#FFFFFF", padding="10dp", layout_marginLeft="5dp"},
-      {Button, id="send_btn", text=getUIText("send"), backgroundColor="#2196F3", textColor="#FFFFFF", padding="10dp", layout_marginLeft="5dp"},
-      {Button, id="close_chat_btn", text=getUIText("close"), backgroundColor="#F44336", textColor="#FFFFFF", padding="10dp", layout_marginLeft="5dp"}
-    }
-  }
-  dlg.setView(loadlayout(layout))
-  dlg.show()
-  local scroll = scroll
-  local container = messages_container
-  local input = input_msg
-  local sendBtn = send_btn
-  local micBtn = mic_btn
-  local closeBtn = close_chat_btn
-  local function addMessage(text, isUser)
-    local msgLayout = LinearLayout(container.getContext())
-    msgLayout.setOrientation(LinearLayout.VERTICAL)
-    msgLayout.setLayoutParams(LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-    local marginLeft = isUser and 100 or 10
-    local marginRight = isUser and 10 or 100
-    local params = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-    params.setMargins(marginLeft, 5, marginRight, 5)
-    msgLayout.setLayoutParams(params)
-    local msgText = TextView(container.getContext())
-    msgText.setText(text)
-    msgText.setTextSize(14)
-    msgText.setPadding(15, 10, 15, 10)
-    if isUser then
-      msgText.setBackgroundColor(0xFF2196F3)
-      msgText.setTextColor(0xFFFFFFFF)
-      msgText.setGravity(Gravity.RIGHT)
-    else
-      if text:match("^Error:") then
-        msgText.setBackgroundColor(0xFFFF5722)
-        msgText.setTextColor(0xFFFFFFFF)
-      else
-        msgText.setBackgroundColor(0xFFE0E0E0)
-        msgText.setTextColor(0xFF000000)
-      end
-      msgText.setGravity(Gravity.LEFT)
-    end
-    msgLayout.addView(msgText)
-    container.addView(msgLayout)
-    mainHandler.post(Runnable({run = function() scroll.fullScroll(ScrollView.FOCUS_DOWN) end}))
-  end
-  local function sendMessage(msg)
-    if msg == "" then return end
-    addMessage(msg, true)
-    input.setText("")
-    addMessage(getUIText("ai_is_thinking"), false)
-    local sysPrompt = "You are a helpful, friendly AI assistant. You chat naturally and provide helpful answers. Keep responses conversational and engaging."
-    executeMasterAIApiCall(selectedProvider, sysPrompt, msg, 0.7, function(reply)
-      mainHandler.post(Runnable({
-        run = function()
-          if container.getChildCount() > 0 then container.removeViewAt(container.getChildCount() - 1) end
-          if reply then
-            addMessage(reply, false)
-            announce(reply)
-          else
-            addMessage("Sorry, I couldn't process that. Please check your API Key and internet connection.", false)
-          end
-        end
-      }))
-    end)
-  end
-  sendBtn.setOnClickListener({onClick = function(v) sendMessage(input.getText().toString()) end})
-  micBtn.setOnClickListener({
-    onClick = function(v)
-      startVoiceInput(function(spokenText)
-        if spokenText and spokenText ~= "" then
-          input.setText(spokenText)
-          sendMessage(spokenText)
-        end
-      end)
-    end
-  })
-  closeBtn.setOnClickListener({onClick = function(v) dlg.dismiss() end})
-  input.setOnEditorActionListener({
-    onEditorAction = function(v, actionId, event)
-      if actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND then
-        sendMessage(input.getText().toString())
-        return true
-      end
-      return false
-    end
-  })
-end
-
-function processWithAI(text, isTranslatedAlready, callback)
-  local minE, maxE = 1, 3
-  if emojiQty == "Medium" then minE, maxE = 3, 5 elseif emojiQty == "High" then minE, maxE = 5, 7 end
-
-  local transRule = ""
-  local transForceCmd = "CRITICAL: NO TRANSLATION ALLOWED! YOU MUST KEEP EVERY SINGLE WORD IN ITS ORIGINAL LANGUAGE! "
-  if enableTranslation and useAITranslation and not isTranslatedAlready then
-    transRule = "TRANSLATION MODE ON (AI TRANSLATION): You MUST fully translate the spoken text into " .. targetLanguage .. " with strict word-for-word accuracy. Maintain the original tone, meaning and sentence structure exactly. Do NOT output the original language. ABSOLUTE PROHIBITION: DO NOT add any extra words, phrases, greetings, filler, or meaning that is not present in the original spoken text. DO NOT expand or elaborate; translate ONLY what was literally spoken. " .. (emojiEnabled and "Provide flawless formatting, advanced punctuation, and emojis." or "Provide flawless formatting and advanced punctuation. DO NOT add any emojis.")
-    transForceCmd = "CRITICAL: TRANSLATE TO " .. targetLanguage .. " REQUIRED! "
-  elseif isTranslatedAlready then
-    transRule = "TRANSLATION MODE ON: The text has already been accurately translated via Google Engine. Do NOT translate it again. " .. (emojiEnabled and "Provide flawless formatting, advanced punctuation, and emojis." or "Provide flawless formatting and advanced punctuation. DO NOT add any emojis.")
-  else
-    transRule = "TRANSLATION MODE OFF - ABSOLUTE PROHIBITION OF TRANSLATION:\nCRITICAL RULES (STRICT ENFORCEMENT):\n1. THIS IS A FORMATTING TASK, NOT TRANSLATION.\n2. NEVER TRANSLATE ANY NATIVE WORD TO ENGLISH. ABSOLUTE ZERO TOLERANCE.\n3. If input has 'नमस्ते', output 'नमस्ते' (NEVER 'hello').\n4. If input has 'समस्या', output 'समस्या' (NEVER 'problem').\n5. Every single word MUST remain in its exact original spoken language and script.\n6. DO NOT replace Hindi/Urdu/Marathi words with English equivalents under any circumstances."
-  end
-
-  local styleDirectives = "TONE: Auto-Correct. Fix minor spelling mistakes. DO NOT add extra information or filler."
-  local isProfessionalMode = (typingMode == "Professional Writer Mode")
-  local isNormalMode = (typingMode == "Normal Typer Mode (AI Grammar Correction)")
-  local isRomanTyperMode = (typingMode == "Roman Typer")
-  local isCustomMode = (typingMode == "Custom Typing Mode")
-  local scriptRule = ""
-  local userForceScriptCmd = ""
-
-  if isTranslatedAlready or (enableTranslation and useAITranslation and not isTranslatedAlready) then
-    scriptRule = "[SYSTEM DIRECTIVE: TRANSLATION MODE SCRIPT LOCK - ABSOLUTE HIGHEST PRIORITY, OVERRIDES THE CURRENTLY SELECTED TYPING MODE COMPLETELY]\nThe output MUST be a complete, accurate, professional-quality translation into " .. targetLanguage .. ", and the ENTIRE output MUST be written strictly and exclusively in the native script of " .. targetLanguage .. ", with ZERO exceptions.\n- Do NOT mix in any other script under any circumstances.\n- If " .. targetLanguage .. " is English, the ENTIRE output must be written purely in plain A-Z Roman script.\n- If " .. targetLanguage .. " has its own native script (for example Hindi uses Devanagari, Tamil uses Tamil script, Urdu uses Urdu script), the ENTIRE output must be written purely in that one native script only.\n- This rule completely overrides any Auto Detect Script mixed-script behavior, and overrides any script or formatting behavior from Professional, Normal, Roman Typer, or Custom typing modes. Only the translation and script rules apply here."
-    userForceScriptCmd = "CRITICAL SCRIPT LOCK: The final translated output must be entirely in the single native script of " .. targetLanguage .. ". Do NOT mix any other script anywhere in the output."
-  elseif typingMode == "Auto Detect Script" then
-    scriptRule = "SCRIPT MAPPING (STRICT DICTIONARY-BACKED ENGINE):\n- THE FIRST WORD RULE: Pay intense attention to the very first word of the dictation. If it is a greeting like 'hello', 'hi', or 'hey', it MUST be output in A-Z Roman script (e.g., 'Hello'), NEVER in a native script.\n- CROSS-CHECK EVERY WORD: You must verify if each spoken word exists in the standard English dictionary.\n- IF IT IS AN ENGLISH DICTIONARY WORD: You are STRICTLY FORBIDDEN from outputting it in a native script. It MUST be written in A-Z Roman script. This applies to ALL English words (e.g., 'hello', 'problem', 'perfect', 'typing', 'mobile', 'setting', 'offline', 'mode') regardless of their position in the sentence.\n- IF IT IS A NATIVE LANGUAGE WORD (in the source language, " .. selectedLanguage .. "): It MUST remain in its own native script (for example, Hindi words in Devanagari, Tamil words in Tamil script, Urdu words in Urdu script, matching whatever the source language's native script is). NEVER romanize native words, and NEVER transliterate them into any other script.\n- MANDATORY MIXED-SCRIPT OUTPUT: Every single sentence MUST correctly mix both scripts together, word by word, exactly following the two rules above. This is NEVER optional and applies to 100% of the output, every single time, with zero exceptions.\n- ABSOLUTELY FORBIDDEN (COMMON MISTAKE - NEVER DO THIS): Do NOT output the entire sentence purely in Roman/transliterated script by romanizing the native words too. Do NOT output the entire sentence purely in the native script by transliterating the English words into that native script either. Both of these are SEVERE FAILURES of this rule.\n- MANDATORY EXAMPLE (for a Hindi source sentence): if the person says 'mujhe apna mobile setting mein jaake wifi on karna hai', the CORRECT output is 'मुझे अपना mobile setting में जाके wifi on करना है।' The WRONG output, which must NEVER be produced, is 'mujhe apna mobile setting mein jaake wifi on karna hai.' (everything in Roman) and it is EQUALLY WRONG to produce 'मुझे अपना मोबाइल सेटिंग में जाके वाईफाई ऑन करना है।' (English words wrongly transliterated into the native script). The SAME mixed-script principle applies identically no matter which native language is being used."
-    userForceScriptCmd = "Enforce the FIRST WORD RULE. Convert ALL English dictionary words to A-Z Roman script, and keep ALL native-language words strictly in their own native script. NEVER output the whole sentence purely in Roman script, and NEVER output the whole sentence purely in the native script by transliterating the English words into it. Mix both scripts correctly in every single sentence, word by word."
-  elseif isProfessionalMode then
-    scriptRule = "[SYSTEM DIRECTIVE: PROFESSIONAL WRITER MODE - ULTRA PROFESSIONAL TYPING]\n[LANGUAGE: " .. selectedLanguage .. "]\n[PRIORITY: HIGHEST - PROFESSIONAL QUALITY IS MANDATORY]\nYou MUST transform the input text into HIGHLY PROFESSIONAL, FORMAL, POLITE, and POLISHED content.\nMANDATORY RULES:\n1. GRAMMAR PERFECTION: Ensure flawless grammar in the target language.\n2. HIGH-END VOCABULARY & EXTREME POLITENESS: Replace casual/everyday words with their most formal, refined, and respectful equivalents. For example, in Hindi, ALWAYS use 'आप' instead of 'तुम/तू', use 'भोजन ग्रहण' instead of 'खाना खाया', use 'कार्य' instead of 'काम'. Apply this highest level of formal vocabulary and extreme politeness to ALL languages.\n3. SENTENCE PROFESSIONALIZATION: Convert short, choppy sentences into smooth, flowing, and authoritative yet highly respectful sentences.\n4. PERFECT PUNCTUATION: Add ALL necessary advanced punctuation.\n5. NO TRANSLATION: The output MUST remain in the SAME EXACT language as the input."
-    userForceScriptCmd = "CRITICAL: Transform this into ULTRA PROFESSIONAL and EXTREMELY POLITE writing. Strictly upgrade all vocabulary to the highest formal standard (e.g., use 'आप', 'भोजन', 'कार्य' in Hindi). Fix ALL grammar. KEEP THE TEXT IN ITS ORIGINAL NATIVE LANGUAGE. Output ONLY the professional text. NO explanations. For language: " .. selectedLanguage
-  elseif isRomanTyperMode then
-    scriptRule = "[SYSTEM DIRECTIVE: ROMAN TYPER MODE - PERFECT TRANSLITERATION]\n[LANGUAGE: " .. selectedLanguage .. "]\nTransform the input text by changing its script to the Roman alphabet (A-Z) with 100% accuracy.\nCRITICAL ROMAN TYPER RULES:\n1. TRANSLITERATE ONLY: If the input is Hindi, output perfect 'Hinglish', etc.\n2. NO TRANSLATION: DO NOT translate the words into English meaning (e.g., 'नमस्ते' must become 'Namaste', NEVER 'Hello').\n3. PERFECT SPELLING: Use standard and widely accepted Roman spellings for the native words."
-    userForceScriptCmd = "Transliterate this text into the Roman alphabet (A-Z) with perfect spelling. DO NOT translate the meaning. Output ONLY the transliterated Roman text."
-  elseif isCustomMode then
-    local customPrompt = prefs.getString("custom_typing_prompt", "")
-    scriptRule = "[SYSTEM DIRECTIVE: CUSTOM TYPING MODE]\n[LANGUAGE: " .. selectedLanguage .. "]\n[PRIORITY: ABSOLUTE HIGHEST FOR CUSTOM INSTRUCTION]\nYou MUST transform the input text EXACTLY following the tone, style, and persona requested in the user's custom instruction.\nUSER CUSTOM INSTRUCTION: " .. customPrompt .. "\nCRITICAL RULES:\n1. The output MUST perfectly reflect the requested tone in the custom instruction.\n2. DO NOT translate the language unless the custom instruction explicitly asks for it.\n3. KEEP the original language and script."
-    userForceScriptCmd = "CRITICAL: You MUST type exactly in the tone and style of this instruction: '" .. customPrompt .. "'. Adhere to this instruction completely. DO NOT TRANSLATE UNLESS REQUESTED. Output ONLY the processed text. NO META-TEXT. For language: " .. selectedLanguage
-  elseif isNormalMode then
-    scriptRule = "[SYSTEM DIRECTIVE: NORMAL TYPING MODE]\n[LANGUAGE: " .. selectedLanguage .. "]\nTransform the input text into a cleanly typed string. Fix obvious voice-to-text spelling/grammar glitches but KEEP the original tone, style, and words. DO NOT make it overly professional or casual. Just natural normal typing.\nCRITICAL RULE: DO NOT TRANSLATE. Keep the text in the exact language it was spoken in. DO NOT translate native words to English."
-    userForceScriptCmd = "Format this as normal typed text. Fix voice typing glitches but maintain exact tone. DO NOT TRANSLATE. Output ONLY the text. For language: " .. selectedLanguage
-  end
-
-  local acronymRule = "ACRONYM & SHORT FORM FORMATTING - ABSOLUTE RULE:\n- ONLY apply this rule when the SPOKEN input is a genuine, well-known real-world abbreviation or short form, such as LPG, CNG, PNG, CSR, SIR, SBI, RBI, CID, URL, API, PDF, HTML, JSON, and similar established short forms.\n- When such a genuine short form is spoken, output it with a dot (full stop) placed immediately after EACH letter, including a trailing dot after the final letter. For example, CID must be typed as C.I.D., LPG must be typed as L.P.G., SBI must be typed as S.B.I., CSR must be typed as C.S.R.\n- STRICTLY FORBIDDEN: Do NOT apply this rule to normal English words, brand names, product names, or multi-word phrases, even if they sound short. For example, 'Play Store', 'Application', 'Store', 'Mobile', 'Setting', 'Play' are ORDINARY WORDS and MUST be typed exactly as normal words, NEVER split into individual dotted capital letters.\n- If you are not completely certain that the spoken word is a genuine, real-world short form, you MUST treat it as a normal word and leave it exactly as spoken, without any reformatting.\n- Do NOT convert genuine acronyms to dictionary words under ANY circumstances, but equally do NOT convert normal words into acronym-style formatting."
-
-  local emojiPlacement = emojiInline and "immediately after the specific word or phrase they match, spread naturally through the whole text" or "at the end"
-  local emojiRules = ""
-  if isProfessionalMode then emojiRules = emojiEnabled and ("EMOJIS: Insert between 1 and " .. maxE .. " professional emojis " .. emojiPlacement .. ".") or "EMOJIS: DO NOT ADD EMOJIS."
-  elseif isRomanTyperMode then emojiRules = emojiEnabled and ("EMOJIS: Insert between 1 and " .. maxE .. " relevant emojis " .. emojiPlacement .. ".") or "EMOJIS: DO NOT ADD EMOJIS."
-  elseif isCustomMode then emojiRules = emojiEnabled and ("EMOJIS: Add emojis if relevant to custom instruction, placed " .. emojiPlacement .. ".") or "EMOJIS: DO NOT ADD EMOJIS."
-  else emojiRules = emojiEnabled and ("EMOJIS: Insert between 1 and " .. maxE .. " relevant emojis " .. emojiPlacement .. ".") or "EMOJIS: DO NOT ADD EMOJIS." end
-  if emojiEnabled and emojiInline then emojiRules = emojiRules .. " Match each emoji to the exact word or phrase it follows, for example a greeting gets a waving hand, a food word like mango gets a mango emoji, and a question about thoughts or feelings gets a thinking face. Draw from the full range of available emoji categories (faces, gestures, hearts, animals, food, nature, weather, travel, objects, activities, symbols) to find the emoji that is genuinely the closest match to each word or phrase. STRICT NO-REPEAT RULE (ABSOLUTE): The EXACT SAME emoji character MUST NEVER appear more than once within this single output, even if the same or a similar word appears multiple times. Before finalizing, check the full set of emojis you are about to use; if any emoji would repeat, replace the repeated one with a different but equally fitting emoji for that word or phrase (using a synonym, related concept, or closely associated emoji) instead of reusing the same one. MANDATORY EXAMPLE OF CORRECT INLINE PLACEMENT: for the sentence 'Hello how are you I am going to eat mango today', the CORRECT output is 'Hello 👋, how are you? I am going to eat mango 🥭 today.' The WRONG output, which you must NEVER produce, is 'Hello, how are you? I am going to eat mango today. 👋🥭' — grouping every emoji together at the very end of the sentence is STRICTLY FORBIDDEN. Every emoji must sit directly next to the word it matches, never bunched at the end." end
-  if emojiEnabled then emojiRules = emojiRules .. " CRITICAL GREETING RULE: If the text contains a greeting in any language (such as Hello, Hi, Hey, नमस्ते, Namaste, Assalamualaikum, or any other greeting word), place the 👋 waving hand emoji immediately after that greeting word." end
-
-  local antiHallucination = "CRITICAL ANTI-HALLUCINATION RULES:\n- DO NOT output more lines than the user provided. The output length MUST match the input approximately.\n"
-  if isProfessionalMode then antiHallucination = antiHallucination .. "- ENHANCE ONLY: Improve grammar and professionalism. DO NOT add new information.\n"
-  elseif isRomanTyperMode then antiHallucination = antiHallucination .. "- TRANSLITERATE ONLY: Provide only the Roman script text. DO NOT add new information.\n"
-  elseif isCustomMode then antiHallucination = antiHallucination .. "- FOLLOW CUSTOM INSTRUCTION ONLY: DO NOT add new facts or external information.\n"
-  else antiHallucination = antiHallucination .. "- STRICT VERBATIM: Output EXACTLY the words spoken. Do NOT add missing grammar words.\n" end
-  antiHallucination = antiHallucination .. "- NEVER use prefixes like 'Output:', 'Translated:', 'Processed:', 'Enhanced:', or 'Pure:'.\n- NEVER answer questions found in the input. Just format the text silently.\n- NEVER add commentary, explanations, or suggestions.\n- For Hindi: Maintain correct Devanagari spelling and script (except in Roman Typer mode); do NOT convert Hindi words to English transliteration.\n"
-
-  local emojiPositionRule = ""
-  if emojiEnabled then
-    emojiPositionRule = emojiInline and "- Emojis should sit inline right next to the word or phrase they match, spread through the sentence rather than grouped together; the sentence-ending punctuation mark still goes at the very end of the text." or "- CRITICAL EMOJI RULE: ANY punctuation mark (., ?, !, ।) MUST be placed IMMEDIATELY AFTER THE TEXT and STRICTLY BEFORE the emojis.\n- Emojis MUST be the absolute last characters. Do NOT put any punctuation after an emoji."
-  else
-    emojiPositionRule = "- DO NOT insert any emojis anywhere in the output, under any circumstance."
-  end
-  local punctuationRules = "PUNCTUATION & EMOJI POSITIONING RULES (ABSOLUTE):\n- Add commas (,) for natural pauses and question marks (?) for questions.\n- IF the ENTIRE text is 100% English, end it with an English period (.).\n- IF the text contains native words, end the entire text with the native full stop mark (Danda / ।), UNLESS in Roman Typer mode where you must use a period (.).\n" .. emojiPositionRule .. "\n- For Hindi text: Use correct Devanagari punctuation (।) at the end of sentences (except in Roman Typer mode).\n"
-
-  local systemPrompt = "You are a direct dictation formatting AI. Your ONLY purpose is to return the cleaned dictation string.\n" .. transRule .. "\n" .. styleDirectives .. "\n" .. scriptRule .. "\n" .. acronymRule .. "\n" .. punctuationRules .. "\n" .. antiHallucination .. "\n" .. emojiRules
-  local emojiForceCmd = ""
-  if emojiEnabled then
-    emojiForceCmd = emojiInline and "Place emojis inline right next to the specific words or phrases they match, spread through the text. CRITICAL: every emoji used in this output must be unique, NEVER reuse the exact same emoji twice in the same output, pick the closest alternative matching emoji instead of repeating one. STRICTLY FORBIDDEN: do NOT group all emojis together at the end of the text; each emoji MUST be placed immediately after the specific word it matches, distributed throughout the sentence. " or "ALL PUNCTUATION (. । ?) MUST BE PLACED BEFORE EMOJIS! "
-  else
-    emojiForceCmd = "DO NOT use any emojis anywhere in this output, under any circumstance. The output must contain zero emoji characters. "
-  end
-  local userForceCommand = "Format the dictation strictly applying the rules. Scan EVERY word. " .. userForceScriptCmd .. " Only reformat genuine, well-known short forms (like LPG, CNG, PNG, CSR, SIR, SBI, RBI, CID, URL, API) by placing a dot after each letter, including a trailing dot (e.g. C.I.D., L.P.G.); leave all normal words, brand names, and phrases (like Play Store, Application) completely untouched. " .. transForceCmd .. emojiForceCmd .. "Output ONLY the exact raw final text. NO META-TEXT.\n<dictation>\n" .. text .. "\n</dictation>"
-
-  local temp = 0.0
-  if isProfessionalMode then temp = 0.4 elseif isCustomMode then temp = 0.4 elseif isRomanTyperMode then temp = 0.2 elseif isNormalMode then temp = 0.1 end
-  executeMasterAIApiCall(selectedProvider, systemPrompt, userForceCommand, temp, function(outputText)
-    if outputText then callback(outputText) end
-  end)
-end
-
-function trim(s)
-    if type(s) ~= "string" then return "" end
-    return s:gsub("^%s*(.-)%s*$", "%1")
-end
-
-function showUpdateErrorDialog(title, message)
-    mainHandler.post(Runnable({
-        run = function()
-            local errorDialog = LuaDialog(context)
-            errorDialog.setTitle(title)
-            errorDialog.setMessage(message)
-            errorDialog.setButton(getUIText("close"), function() errorDialog.dismiss() end)
-            errorDialog.show()
-        end
-    }))
-end
-
-function performUpdate(mainCode, onlineVersion)
-    if not mainCode or trim(mainCode) == "" then
-        showUpdateErrorDialog("Update Failed", "Update script is empty.")
-        return
-    end
-    updateInProgress = true
-    local function updateProcess()
-        local success = false
-        local tempPath = currentFilePath .. ".tmp"
-        local bakPath = currentFilePath .. ".bak"
-        pcall(function()
-            local f = io.open(currentFilePath, "w")
-            if f then
-                f:write(mainCode)
-                f:close()
-                local v = io.open(currentFilePath, "r")
-                if v then
-                    local content = v:read("*a")
-                    v:close()
-                    if content and #content == #mainCode then success = true end
-                end
-            end
-        end)
-        if not success then
-            pcall(function()
-                local tf = io.open(tempPath, "w")
-                if tf then
-                    tf:write(mainCode)
-                    tf:close()
-                    os.remove(bakPath)
-                    os.rename(currentFilePath, bakPath)
-                    os.rename(tempPath, currentFilePath)
-                    local v = io.open(currentFilePath, "r")
-                    if v then
-                        local content = v:read("*a")
-                        v:close()
-                        if content and #content == #mainCode then success = true end
-                    end
-                end
-            end)
-        end
-        if not success then
-            pcall(function()
-                local File = luajava.bindClass("java.io.File")
-                local FileOutputStream = luajava.bindClass("java.io.FileOutputStream")
-                local String = luajava.bindClass("java.lang.String")
-                local curF = File(currentFilePath)
-                local bakF = File(bakPath)
-                local tmpF = File(tempPath)
-                if tmpF.exists() then tmpF.delete() end
-                local fos = FileOutputStream(tmpF)
-                fos.write(String(mainCode).getBytes("UTF-8"))
-                fos.close()
-                if bakF.exists() then bakF.delete() end
-                curF.renameTo(bakF)
-                tmpF.renameTo(File(currentFilePath))
-                local v = io.open(currentFilePath, "r")
-                if v then
-                    local content = v:read("*a")
-                    v:close()
-                    if content and #content == #mainCode then success = true end
-                end
-            end)
-        end
-        if not success then
-            pcall(function()
-                os.execute("rm -f '" .. bakPath .. "'")
-                os.execute("mv '" .. currentFilePath .. "' '" .. bakPath .. "'")
-                os.execute("mv '" .. tempPath .. "' '" .. currentFilePath .. "'")
-                local v = io.open(currentFilePath, "r")
-                if v then
-                    local content = v:read("*a")
-                    v:close()
-                    if content and #content == #mainCode then success = true end
-                end
-            end)
-        end
-        if success then
-            updateInProgress = false
-            mainHandler.post(Runnable({
-                run = function()
-                    local successDialog = LuaDialog(context)
-                    successDialog.setTitle("Update Successful")
-                    successDialog.setMessage("Plugin successfully updated to version " .. onlineVersion .. ".\n\nPlugin will restart automatically.")
-                    successDialog.setButton("OK", function()
-                        successDialog.dismiss()
-                        if moreOptionsDlg then pcall(function() moreOptionsDlg.dismiss() end) end
-                        if settingsDlg then pcall(function() settingsDlg.dismiss() end) end
-                        mainHandler.postDelayed(Runnable({
-                            run = function()
-                                local func, err = loadfile(currentFilePath)
-                                if func then pcall(func) else announce("Error reloading plugin") end
-                            end
-                        }), 2000)
-                    end)
-                    successDialog.show()
-                end
-            }))
-        else
-            updateInProgress = false
-            showUpdateErrorDialog("Update Failed", "Update failed please, try again later.")
-        end
-    end
-    local updateThread = Thread(luajava.bindClass("java.lang.Runnable"){ run = updateProcess })
-    updateThread.start()
-end
-
-function checkForUpdates(manualCheck)
-    if updateInProgress then
-        if manualCheck then showUpdateErrorDialog("Update In Progress", "An update is already in progress. Please wait.") end
-        return
-    end
-    if manualCheck then announce("Checking for updates...") end
-    local timestamp = tostring(os.time())
-    local Http = luajava.bindClass("com.androlua.Http")
-    if not Http then Http = import("com.androlua.Http") end
-    Http.get(versionUrl .. "?t=" .. timestamp, function(code, response)
-        if code == 200 and response then
-            local onlineVersion = trim(response)
-            if onlineVersion ~= "" and onlineVersion ~= currentAppVersion then
-                Http.get(updateScriptUrl .. "?t=" .. timestamp, function(code2, mainCode)
-                    if code2 == 200 and mainCode and trim(mainCode) ~= "" then
-                        Http.get(notesUrl .. "?t=" .. timestamp, function(nCode, notesData)
-                            local releaseNotes = "A new version (" .. onlineVersion .. ") is available.\nCurrent version: " .. currentAppVersion .. "\n\nWould you like to update now?"
-                            if nCode == 200 and notesData then releaseNotes = "A new version (" .. onlineVersion .. ") is available.\n\nRelease Notes:\n" .. notesData .. "\n\nWould you like to update now?" end
-                            mainHandler.post(Runnable({
-                                run = function()
-                                    local updateAlertDlg = LuaDialog(context)
-                                    updateAlertDlg.setTitle("Update Available!")
-                                    updateAlertDlg.setMessage(releaseNotes)
-                                    updateAlertDlg.setButton("Update Now", function()
-                                        updateAlertDlg.dismiss()
-                                        performUpdate(mainCode, onlineVersion)
-                                    end)
-                                    updateAlertDlg.setButton2("Later", function()
-                                        updateAlertDlg.dismiss()
-                                    end)
-                                    updateAlertDlg.show()
-                                end
-                            }))
-                        end)
-                    elseif manualCheck then
-                        showUpdateErrorDialog("Update Failed", "Failed to fetch update script.")
-                    end
-                end)
-            else
-                if manualCheck then announce("You are on the latest version.") end
-            end
-        else
-            if manualCheck then announce("Failed to check for updates.") end
-        end
-    end)
-end
-
-function showWordDictionaryDialog()
-  local dlg = LuaDialog(context)
-  local layout = {
-    LinearLayout, orientation="vertical", padding="20dp",
-    {TextView, text=getUIText("word_dictionary_title"), textSize="20sp", textColor="#2196F3", layout_marginBottom="20dp", gravity="center"},
-    {CheckBox, id="dict_case_chk", text=getUIText("case_sensitive"), checked=dictCaseSensitive, layout_marginBottom="15dp"},
-    {Button, id="add_word_btn", text=getUIText("add_new_words"), backgroundColor="#4CAF50", textColor="#FFFFFF", layout_marginBottom="15dp"},
-    {Button, id="view_words_btn", text=getUIText("view_dictionary_words"), backgroundColor="#2196F3", textColor="#FFFFFF", layout_marginBottom="15dp"},
-    {Button, id="clear_dict_btn", text=getUIText("clear_dictionary"), backgroundColor="#F44336", textColor="#FFFFFF", layout_marginBottom="20dp"},
-    {Button, id="close_dict_btn", text=getUIText("close"), backgroundColor="#9E9E9E", textColor="#FFFFFF"}
-  }
-  dlg.setView(loadlayout(layout)).show()
-  dict_case_chk.onClick = function()
-    dictCaseSensitive = dict_case_chk.isChecked()
-    editor.putBoolean("dict_case_sensitive", dictCaseSensitive).commit()
-  end
-  add_word_btn.onClick = function() dlg.dismiss(); showAddWordDialog() end
-  view_words_btn.onClick = function() dlg.dismiss(); showViewDictionaryDialog() end
-  clear_dict_btn.onClick = function() dlg.dismiss(); showClearDictionaryConfirmDialog() end
-  close_dict_btn.onClick = function() dlg.dismiss() end
-end
-
-function showAddWordDialog()
-  local dlg = LuaDialog(context)
-  local layout = {
-    LinearLayout, orientation="vertical", padding="20dp",
-    {TextView, text=getUIText("add_word_title"), textSize="18sp", textColor="#2196F3", layout_marginBottom="15dp", gravity="center"},
-    {TextView, text=getUIText("word_to_replace"), layout_marginBottom="5dp"},
-    {EditText, id="original_word_et", hint="e.g., hello", layout_marginBottom="15dp", backgroundColor="#F5F5F5", padding="10dp"},
-    {TextView, text=getUIText("replacement_word"), layout_marginBottom="5dp"},
-    {EditText, id="replacement_word_et", hint="e.g., नमस्ते", layout_marginBottom="20dp", backgroundColor="#F5F5F5", padding="10dp"},
-    {LinearLayout, orientation="horizontal",
-      {Button, id="save_word_btn", text=getUIText("save"), backgroundColor="#4CAF50", textColor="#FFFFFF", layout_weight=1, layout_marginRight="5dp"},
-      {Button, id="cancel_word_btn", text=getUIText("cancel"), backgroundColor="#F44336", textColor="#FFFFFF", layout_weight=1}
-    }
-  }
-  dlg.setView(loadlayout(layout)).show()
-  save_word_btn.onClick = function()
-    local originalWord = tostring(original_word_et.text):gsub("^%s*(.-)%s*$", "%1")
-    local replacementWord = tostring(replacement_word_et.text):gsub("^%s*(.-)%s*$", "%1")
-    if originalWord == "" then announce(getUIText("please_enter_word")); return end
-    if replacementWord == "" then announce(getUIText("please_enter_replacement")); return end
-    changeTable[originalWord] = replacementWord
-    local saveJson = cjson.encode(changeTable)
-    editor.putString("word_dictionary", saveJson).commit()
-    announce(getUIText("word_added", originalWord, replacementWord))
-    dlg.dismiss()
-    showWordDictionaryDialog()
-  end
-  cancel_word_btn.onClick = function() dlg.dismiss(); showWordDictionaryDialog() end
-end
-
-function showViewDictionaryDialog()
-  if not next(changeTable) then
-    announce(getUIText("dictionary_empty"))
-    showWordDictionaryDialog()
-    return
-  end
-  local dictList = {}
-  for orig, repl in pairs(changeTable) do table.insert(dictList, orig .. " → " .. repl) end
-  table.sort(dictList)
-  local listDlg = LuaDialog(context)
-  listDlg.setTitle(getUIText("dictionary_words", #dictList))
-  local list = ListView(context)
-  list.setAdapter(ArrayAdapter(context, android.R.layout.simple_list_item_1, dictList))
-  list.onItemClick = function(parent, view, position, id) end
-  list.onItemLongClick = function(parent, view, position, id)
-    local selectedItem = dictList[position + 1]
-    local originalWord = selectedItem:match("^(.-) →")
-    if originalWord then
-      local confirmDlg = LuaDialog(context)
-      confirmDlg.setTitle(getUIText("delete_word"))
-      confirmDlg.setMessage(getUIText("delete_confirmation", originalWord))
-      confirmDlg.setButton(getUIText("delete"), function()
-        changeTable[originalWord] = nil
-        local saveJson = cjson.encode(changeTable)
-        editor.putString("word_dictionary", saveJson).commit()
-        announce(getUIText("deleted_word", originalWord))
-        confirmDlg.dismiss()
-        listDlg.dismiss()
-        showViewDictionaryDialog()
-      end)
-      confirmDlg.setButton2(getUIText("cancel"), function() confirmDlg.dismiss() end)
-      confirmDlg.show()
-    end
-    return true
-  end
-  listDlg.setView(list)
-  listDlg.setButton(getUIText("close"), function() listDlg.dismiss() end)
-  listDlg.show()
-end
-
-function showClearDictionaryConfirmDialog()
-  local confirmDlg = LuaDialog(context)
-  confirmDlg.setTitle(getUIText("clear_dict_title"))
-  confirmDlg.setMessage(getUIText("clear_dict_message"))
-  confirmDlg.setButton(getUIText("clear_all"), function()
-    changeTable = {}
-    editor.putString("word_dictionary", "{}").commit()
-    announce(getUIText("dictionary_cleared"))
-    confirmDlg.dismiss()
-    showWordDictionaryDialog()
-  end)
-  confirmDlg.setButton2(getUIText("cancel"), function() confirmDlg.dismiss(); showWordDictionaryDialog() end)
-  confirmDlg.show()
-end
-
-function showTypingHistoryDialog(node)
-  if #typingHistoryList == 0 then
-    announce("No typing history yet.")
-    return
-  end
-  local listDlg = LuaDialog(context)
-  listDlg.setTitle("Typing History (" .. #typingHistoryList .. ")")
-  local list = ListView(context)
-  list.setAdapter(ArrayAdapter(context, android.R.layout.simple_list_item_1, typingHistoryList))
-  list.onItemClick = function(parent, view, position, id)
-    local selText = typingHistoryList[position + 1]
-    if selText and node then
-      listDlg.dismiss()
-      pcall(function()
-        local freshNode = service.getEditText()
-        if not freshNode then freshNode = node end
-        service.insert(freshNode, selText)
-        triggerVibration("typing"); triggerSound()
-      end)
-    end
-  end
-  listDlg.setView(list)
-  listDlg.setButton("Clear History", function()
-    typingHistoryList = {}
-    saveTypingHistory()
-    announce("Typing history cleared")
-    listDlg.dismiss()
-  end)
-  listDlg.setButton2(getUIText("close"), function() listDlg.dismiss() end)
-  listDlg.show()
-end
-
-function showLanguageSelectDialog(isTarget, sourceBtn)
-  local favStr = prefs.getString("fav_languages", "[]")
-  local favs = {}
-  pcall(function() favs = cjson.decode(favStr) end)
-  if type(favs) ~= "table" then favs = {} end
-  local sortedList = {}
-  local displayList = {}
-  local counter = 1
-  for _, fl in ipairs(favs) do
-    table.insert(sortedList, fl)
-    table.insert(displayList, counter .. ". " .. fl .. " ⭐")
-    counter = counter + 1
-  end
-  for _, l in ipairs(langList) do
-    local isFav = false
-    for _, fl in ipairs(favs) do if l == fl then isFav = true break end end
-    if not isFav then 
-      table.insert(sortedList, l)
-      table.insert(displayList, counter .. ". " .. l)
-      counter = counter + 1
-    end
-  end
-  local listDlg = LuaDialog(context)
-  listDlg.setTitle(isTarget and getUIText("target_lang_title") or getUIText("typing_lang_title"))
-  local list = ListView(context)
-  list.setAdapter(ArrayAdapter(context, android.R.layout.simple_list_item_1, displayList))
-  list.onItemClick = function(parent, view, position, id)
-    local selected = sortedList[position + 1]
-    if isTarget then targetLanguage = selected else selectedLanguage = selected end
-    if sourceBtn then sourceBtn.setText(selected) end
-    listDlg.dismiss()
-  end
-  list.onItemLongClick = function(parent, view, position, id)
-    local selected = sortedList[position + 1]
-    local isFav = false
-    local favIdx = -1
-    for i, fl in ipairs(favs) do if fl == selected then isFav = true; favIdx = i; break end end
-    if isFav then
-      table.remove(favs, favIdx)
-      announce(selected .. " " .. getUIText("removed_from_fav"))
-    else
-      table.insert(favs, selected)
-      announce(selected .. " " .. getUIText("added_to_fav"))
-    end
-    editor.putString("fav_languages", cjson.encode(favs)).commit()
-    listDlg.dismiss()
-    showLanguageSelectDialog(isTarget, sourceBtn)
-    return true
-  end
-  listDlg.setView(list)
-  listDlg.show()
-end
-
-function showOtherSettingsDialog()
-  local uiLanguagesList = {"English", "Hindi", "Urdu"}
-  local endActionsList = {getUIText("none"), getUIText("new_line"), getUIText("space"), getUIText("space_newline")}
-  local dlg = LuaDialog(context)
-  local layout = {
-    LinearLayout, orientation="vertical", padding="20dp",
-    {TextView, text=getUIText("other_settings_title"), textSize="20sp", textColor="#2196F3", layout_marginBottom="20dp", gravity="center"},
-    {TextView, text=getUIText("select_ui_lang"), layout_marginBottom="5dp"},
-    {Spinner, id="ui_lang_sp", layout_marginBottom="15dp"},
-    {CheckBox, id="sub_unlimited_chk", text=getUIText("unlimited_dictation"), checked=unlimitedDictation, layout_marginBottom="15dp"},
-    {CheckBox, id="sub_show_preview_chk", text=getUIText("show_preview_before_typing"), checked=showPreview, layout_marginBottom="15dp"},
-    {CheckBox, id="sub_ai_trans_chk", text=getUIText("use_ai_translation"), checked=useAITranslation, layout_marginBottom="15dp"},
-    {CheckBox, id="sub_copy_chk", text=getUIText("copy_clipboard"), checked=copyToClipboard, layout_marginBottom="15dp"},
-    {CheckBox, id="sub_typing_history_chk", text="Enable Typing History", checked=typingHistoryEnabled, layout_marginBottom="10dp"},
-    {Button, id="sub_show_history_btn", text="Show Typing History", backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginBottom="15dp"},
-    {CheckBox, id="sub_punct_voice_chk", text="Enable Punctuation Voice Commands", checked=punctuationVoiceEnabled, layout_marginBottom="15dp"},
-    {TextView, text=getUIText("end_action"), layout_marginBottom="5dp"},
-    {Spinner, id="sub_end_sp", layout_marginBottom="20dp"},
-    {Button, id="sub_other_save_btn", text=getUIText("save_close"), backgroundColor="#4CAF50", textColor="#FFFFFF"}
-  }
-  dlg.setView(loadlayout(layout)).show()
-  ui_lang_sp.setAdapter(ArrayAdapter(context, android.R.layout.simple_spinner_item, uiLanguagesList))
-  for i,v in ipairs(uiLanguagesList) do if v == uiLanguage then ui_lang_sp.setSelection(i-1) end end
-  sub_end_sp.setAdapter(ArrayAdapter(context, android.R.layout.simple_spinner_item, endActionsList))
-  local endActionText = getUIText(string.lower(endAction:gsub(" ", "_"):gsub("%+", "_plus")))
-  for i,v in ipairs(endActionsList) do 
-    if v == endAction or v == endActionText then sub_end_sp.setSelection(i-1); break end
-  end
-  sub_show_history_btn.setVisibility(typingHistoryEnabled and 0 or 8)
-  sub_typing_history_chk.onClick = function()
-    local nowChecked = sub_typing_history_chk.isChecked()
-    sub_show_history_btn.setVisibility(nowChecked and 0 or 8)
-  end
-  sub_show_history_btn.onClick = function() showTypingHistoryDialog(nil) end
-  sub_punct_voice_chk.onClick = function()
-    if sub_punct_voice_chk.isChecked() then
-      announce("Punctuation voice commands enabled. Say comma, full stop, question mark, exclamation mark, colon, semicolon, new line, hyphen, or at the rate to insert symbols.")
-    end
-  end
-  sub_other_save_btn.onClick = function()
-    uiLanguage = uiLanguagesList[ui_lang_sp.getSelectedItemPosition() + 1]
-    unlimitedDictation = sub_unlimited_chk.isChecked()
-    showPreview = sub_show_preview_chk.isChecked()
-    useAITranslation = sub_ai_trans_chk.isChecked()
-    copyToClipboard = sub_copy_chk.isChecked()
-    typingHistoryEnabled = sub_typing_history_chk.isChecked()
-    punctuationVoiceEnabled = sub_punct_voice_chk.isChecked()
-    local selectedEndAction = endActionsList[sub_end_sp.getSelectedItemPosition() + 1]
-    if selectedEndAction == getUIText("none") then endAction = "None"
-    elseif selectedEndAction == getUIText("new_line") then endAction = "New Line"
-    elseif selectedEndAction == getUIText("space") then endAction = "Space"
-    elseif selectedEndAction == getUIText("space_newline") then endAction = "Space + New Line" end
-    editor.putString("ui_language", uiLanguage).putBoolean("unlimited_dictation", unlimitedDictation).putBoolean("show_preview", showPreview).putBoolean("use_ai_trans", useAITranslation).putBoolean("typing_history_enabled", typingHistoryEnabled).putBoolean("punctuation_voice_enabled", punctuationVoiceEnabled).commit()
-    dlg.dismiss()
-  end
-end
-
-function showAISettingsDialog()
-  local providers = {"OpenRouter", "Gemini", "Groq", "Mistral"}
-  local currentRawModelsList = {}
-
-  local dlg = LuaDialog(context)
-  local layout = {
-    LinearLayout, orientation="vertical", padding="20dp",
-    {TextView, text=getUIText("ai_settings_title"), textSize="20sp", textColor="#2196F3", layout_marginBottom="20dp", gravity="center"},
-    {TextView, text=getUIText("select_ai_provider"), layout_marginBottom="5dp"},
-    {Spinner, id="sub_provider_sp", layout_marginBottom="15dp"},
-    {LinearLayout, orientation="horizontal", layout_marginBottom="5dp", gravity="center_vertical",
-      {TextView, text="Select Model", layout_weight=1},
-      {Button, id="sub_fetch_btn", text="Fetch Models", padding="5dp"}
-    },
-    {Spinner, id="sub_model_sp", layout_marginBottom="20dp"},
-    {CheckBox, id="sub_auto_switch_chk", text="Auto-Switch Models (Seamless Multi-Model Fallback, Never Stops on Limit Reached)", checked=autoSwitchModels, layout_marginBottom="20dp"},
-    {Button, id="sub_manage_api_btn", text=getUIText("manage_api_keys"), backgroundColor="#FF9800", textColor="#FFFFFF", layout_marginBottom="20dp"},
-    {Button, id="sub_ai_save_btn", text=getUIText("save_close"), backgroundColor="#4CAF50", textColor="#FFFFFF"}
-  }
-  dlg.setView(loadlayout(layout)).show()
-
-  sub_provider_sp.setAdapter(ArrayAdapter(context, android.R.layout.simple_spinner_item, providers))
-  for i,v in ipairs(providers) do if v == selectedProvider then sub_provider_sp.setSelection(i-1) end end
-
-  sub_auto_switch_chk.onClick = function()
-    autoSwitchModels = sub_auto_switch_chk.isChecked()
-    editor.putBoolean("auto_switch_models", autoSwitchModels).commit()
-  end
-
-  local function updateModelSpinner(fetchedData)
-     local prov = providers[sub_provider_sp.getSelectedItemPosition() + 1]
-     local mainM, secM = "", ""
-     local savedM = ""
-     if prov == "OpenRouter" then mainM = "openai/gpt-4o"; secM = "openai/gpt-4o-mini"; savedM = prefs.getString("or_model", mainM)
-     elseif prov == "Groq" then mainM = "llama-3.3-70b-versatile"; secM = "llama-3.1-8b-instant"; savedM = prefs.getString("groq_model", mainM)
-     elseif prov == "Mistral" then mainM = "mistral-small-latest"; secM = "open-mistral-nemo"; savedM = prefs.getString("mistral_model", mainM)
-     elseif prov == "Gemini" then mainM = "gemini-2.5-flash"; secM = "gemini-2.0-flash"; savedM = prefs.getString("gemini_model", mainM) end
-
-     local seenModels = {}
-     local rawList = {}
-     local uiList = {}
-     table.insert(rawList, mainM)
-     table.insert(uiList, mainM .. " (Recommended)")
-     seenModels[mainM] = true
-     table.insert(rawList, secM)
-     table.insert(uiList, secM)
-     seenModels[secM] = true
-
-     if prov == "Gemini" then
-        local curatedGemini = {"gemini-2.5-flash-lite","gemini-3.5-flash","gemini-3.1-flash-lite","gemini-flash-latest","gemini-3-flash-preview"}
-        for _, m in ipairs(curatedGemini) do
-           if not seenModels[m] then
-              table.insert(rawList, m)
-              table.insert(uiList, m)
-              seenModels[m] = true
-           end
-        end
-     elseif prov == "OpenRouter" then
-        local curatedOpenRouter = {"google/gemini-2.5-flash","google/gemini-2.0-flash-001"}
-        for _, m in ipairs(curatedOpenRouter) do
-           if not seenModels[m] then
-              table.insert(rawList, m)
-              table.insert(uiList, m)
-              seenModels[m] = true
-           end
-        end
-     elseif prov == "Mistral" then
-        local curatedMistral = {"ministral-8b-latest","ministral-3b-latest","mistral-large-latest"}
-        for _, m in ipairs(curatedMistral) do
-           if not seenModels[m] then
-              table.insert(rawList, m)
-              table.insert(uiList, m)
-              seenModels[m] = true
-           end
-        end
-     end
-
-     if fetchedData then
-        for _, m in ipairs(fetchedData) do
-           if not seenModels[m] then
-              table.insert(rawList, m)
-              table.insert(uiList, m)
-              seenModels[m] = true
-           end
-           if #rawList >= 15 then break end
-        end
-     end
-
-     currentRawModelsList = rawList
-     local selIdx = 0
-     for i, v in ipairs(rawList) do
-        if v == savedM then selIdx = i - 1; break end
-     end
-
-     mainHandler.post(Runnable({
-         run = function()
-             sub_model_sp.setAdapter(ArrayAdapter(context, android.R.layout.simple_spinner_item, uiList))
-             sub_model_sp.setSelection(selIdx)
-         end
-     }))
-  end
-
-  local function doFetch()
-     local prov = providers[sub_provider_sp.getSelectedItemPosition() + 1]
-     local url = ""
-     local headers = {["Content-Type"] = "application/json"}
-     if prov == "OpenRouter" then
-        url = "https://openrouter.ai/api/v1/models"
-     elseif prov == "Groq" then
-        if groqKey == "" then updateModelSpinner(nil); return end
-        url = "https://api.groq.com/openai/v1/models"
-        headers["Authorization"] = "Bearer " .. groqKey:gsub("^%s*(.-)%s*$", "%1")
-     elseif prov == "Gemini" then
-        if geminiKey == "" then updateModelSpinner(nil); return end
-        url = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000&key=" .. geminiKey:gsub("^%s*(.-)%s*$", "%1")
-     elseif prov == "Mistral" then
-        if mistralKey == "" then updateModelSpinner(nil); return end
-        url = "https://api.mistral.ai/v1/models"
-        headers["Authorization"] = "Bearer " .. mistralKey:gsub("^%s*(.-)%s*$", "%1")
-     end
-
-     mainHandler.post(Runnable({run = function() sub_fetch_btn.setText("Fetching...") announce("Fetching models") end}))
-
-     pcall(function()
-         local Thread = luajava.bindClass("java.lang.Thread")
-         local Runnable = luajava.bindClass("java.lang.Runnable")
-         Thread(Runnable({run = function()
-             pcall(function()
-                 local URL = luajava.bindClass("java.net.URL")
-                 local conn = URL(url).openConnection()
-                 conn.setRequestMethod("GET")
-                 for k,v in pairs(headers) do conn.setRequestProperty(k, v) end
-                 conn.setConnectTimeout(2000)
-                 conn.setReadTimeout(2000)
-                 local responseCode = conn.getResponseCode()
-                 if responseCode == 200 then
-                     local is = conn.getInputStream()
-                     local Scanner = luajava.bindClass("java.util.Scanner")
-                     local scanner = Scanner(is).useDelimiter("\\A")
-                     local result = scanner.hasNext() and scanner.next() or ""
-                     scanner.close()
-
-                     local ok, j = pcall(cjson.decode, result)
-                     if ok and j then
-                         local fetched = {}
-                         if prov == "Gemini" and j.models then
-                             for _, m in ipairs(j.models) do
-                                 local supportsText = false
-                                 if m.supportedGenerationMethods then
-                                     for _, method in ipairs(m.supportedGenerationMethods) do
-                                         if method == "generateContent" then supportsText = true end
-                                     end
-                                 end
-                                 local modelId = m.name:gsub("models/", "")
-                                 if supportsText and not modelId:lower():find("pro") then table.insert(fetched, modelId) end
-                             end
-                         elseif prov == "Groq" and j.data then
-                             for _, m in ipairs(j.data) do
-                                 local isActive = (m.active == nil) or (m.active == true)
-                                 if isActive and not m.id:lower():find("pro") then table.insert(fetched, m.id) end
-                             end
-                         elseif prov == "OpenRouter" and j.data then
-                             for _, m in ipairs(j.data) do
-                                 local isFree = m.id:lower():find(":free") ~= nil
-                                 if m.pricing and m.pricing.prompt == "0" and m.pricing.completion == "0" then isFree = true end
-                                 if isFree and not m.id:lower():find("pro") then table.insert(fetched, m.id) end
-                             end
-                         elseif prov == "Mistral" and j.data then
-                             for _, m in ipairs(j.data) do
-                                 if not m.id:lower():find("embed") and not m.id:lower():find("ocr") and not m.id:lower():find("moderation") then table.insert(fetched, m.id) end
-                             end
-                         end
-                         updateModelSpinner(fetched)
-                         mainHandler.post(Runnable({run = function() announce(#fetched .. " models fetch successfully") end}))
-                     end
-                 end
-             end)
-             mainHandler.post(Runnable({run = function() sub_fetch_btn.setText("Fetch Models") end}))
-         end})).start()
-     end)
-  end
-
-  sub_provider_sp.setOnItemSelectedListener(luajava.createProxy("android.widget.AdapterView$OnItemSelectedListener", {
-      onItemSelected = function(parent, view, position, id)
-          updateModelSpinner(nil)
-          doFetch()
-      end,
-      onNothingSelected = function(parent) end
-  }))
-
-  sub_fetch_btn.onClick = function() doFetch() end
-
-  sub_manage_api_btn.onClick = function() showApiDialog() end
-  sub_ai_save_btn.onClick = function()
-    selectedProvider = providers[sub_provider_sp.getSelectedItemPosition() + 1]
-    editor.putString("provider", selectedProvider)
-    local selModelIdx = sub_model_sp.getSelectedItemPosition() + 1
-    if currentRawModelsList[selModelIdx] then
-        if selectedProvider == "OpenRouter" then
-            editor.putString("or_model", currentRawModelsList[selModelIdx])
-        elseif selectedProvider == "Groq" then
-            editor.putString("groq_model", currentRawModelsList[selModelIdx])
-        elseif selectedProvider == "Gemini" then
-            editor.putString("gemini_model", currentRawModelsList[selModelIdx])
-        elseif selectedProvider == "Mistral" then
-            editor.putString("mistral_model", currentRawModelsList[selModelIdx])
-        end
-    end
-    editor.commit()
-    dlg.dismiss()
-  end
-
-  updateModelSpinner(nil)
-  doFetch()
-end
-
-function showAboutDialog()
-  local dlg = LuaDialog(context)
-  local info = getUIText("about_info")
-  local layout = {
-    LinearLayout, orientation="vertical", padding="20dp",
-    {TextView, text=getUIText("about_title"), textSize="20sp", textColor="#2196F3", layout_marginBottom="15dp", gravity="center"},
-    {ScrollView, layout_width="fill", layout_weight=1, layout_marginBottom="20dp",
-      {TextView, text=info, textSize="15sp", textColor="#333333"}
-    },
-    {Button, text=getUIText("close"), backgroundColor="#F44336", textColor="#FFFFFF", onClick=function() dlg.dismiss() end}
-  }
-  dlg.setView(loadlayout(layout)).show()
-end
-
-function showContactDialog()
-  local dlg = LuaDialog(context)
-  local layout = {
-    LinearLayout, orientation="vertical", padding="20dp",
-    {TextView, text=getUIText("contact_title"), textSize="20sp", textColor="#2196F3", layout_marginBottom="20dp", gravity="center"},
-    {Button, text="Subscribe to YouTube Channel", onClick=function() openUrl(youtubeChannelUrl) end, backgroundColor="#F44336", textColor="#FFFFFF", layout_marginBottom="15dp"},
-    {Button, text=getUIText("join_telegram"), onClick=function() openUrl("https://t.me/Ttforblind") end, backgroundColor="#2196F3", textColor="#FFFFFF", layout_marginBottom="15dp"},
-    {Button, text=getUIText("give_feedback"), onClick=function() dlg.dismiss(); showFeedbackDialog() end, backgroundColor="#FF9800", textColor="#FFFFFF", layout_marginBottom="20dp"},
-    {Button, text=getUIText("close"), backgroundColor="#F44336", textColor="#FFFFFF", onClick=function() dlg.dismiss() end}
-  }
-  dlg.setView(loadlayout(layout)).show()
-end
-
-function sendFeedbackToTelegram(nameVal, whatsappVal, telegramIdVal, feedbackVal, callback)
-  local whatsappDisplay = whatsappVal ~= "" and whatsappVal or "Not Provided"
-  local telegramIdDisplay = telegramIdVal ~= "" and telegramIdVal or "Not Provided"
-  local messageText = "New Feedback Received\n\nName: " .. nameVal .. "\nWhatsApp Number: " .. whatsappDisplay .. "\nTelegram User ID: " .. telegramIdDisplay .. "\n\nFeedback:\n" .. feedbackVal
-  local encodedText = luajava.bindClass("java.net.URLEncoder").encode(messageText, "UTF-8")
-  local url = "https://api.telegram.org/bot" .. feedbackBotToken .. "/sendMessage?chat_id=" .. feedbackChatId .. "&text=" .. encodedText
-  local ThreadCls = luajava.bindClass("java.lang.Thread")
-  local RunnableCls = luajava.bindClass("java.lang.Runnable")
-  ThreadCls(RunnableCls({run = function()
-    local success = false
-    pcall(function()
-      local URL = luajava.bindClass("java.net.URL")
-      local conn = URL(url).openConnection()
-      conn.setRequestMethod("GET")
-      conn.setConnectTimeout(8000)
-      conn.setReadTimeout(8000)
-      local responseCode = conn.getResponseCode()
-      if responseCode == 200 then success = true end
-    end)
-    mainHandler.post(Runnable({run = function() callback(success) end}))
-  end})).start()
-end
-
-function showFeedbackSuccessDialog()
-  local successDlg = LuaDialog(context)
-  successDlg.setTitle(getUIText("feedback_form_title"))
-  successDlg.setMessage(getUIText("feedback_sent_success"))
-  successDlg.setButton(getUIText("close"), function() successDlg.dismiss() end)
-  successDlg.show()
-end
-
-function showFeedbackDialog()
-  local dlg = LuaDialog(context)
-  local layout = {
-    LinearLayout, orientation="vertical", padding="20dp",
-    {TextView, text=getUIText("feedback_form_title"), textSize="20sp", textColor="#2196F3", layout_marginBottom="15dp", gravity="center"},
-    {TextView, text=getUIText("feedback_name_label"), layout_marginBottom="5dp"},
-    {EditText, id="feedback_name_et", text=registeredUserName, hint=getUIText("feedback_name_hint"), layout_marginBottom="15dp", backgroundColor="#F5F5F5", padding="10dp"},
-    {TextView, text=getUIText("feedback_whatsapp_label"), layout_marginBottom="5dp"},
-    {EditText, id="feedback_whatsapp_et", hint=getUIText("feedback_whatsapp_hint"), inputType="phone", layout_marginBottom="15dp", backgroundColor="#F5F5F5", padding="10dp"},
-    {TextView, text=getUIText("feedback_telegram_label"), layout_marginBottom="5dp"},
-    {EditText, id="feedback_telegram_et", hint=getUIText("feedback_telegram_hint"), layout_marginBottom="15dp", backgroundColor="#F5F5F5", padding="10dp"},
-    {TextView, text=getUIText("feedback_message_label"), layout_marginBottom="5dp"},
-    {EditText, id="feedback_message_et", hint=getUIText("feedback_message_hint"), minLines=4, gravity="top", layout_marginBottom="20dp", backgroundColor="#F5F5F5", padding="10dp"},
-    {LinearLayout, orientation="horizontal",
-      {Button, id="feedback_send_btn", text=getUIText("send"), backgroundColor="#4CAF50", textColor="#FFFFFF", layout_weight=1, layout_marginRight="5dp"},
-      {Button, id="feedback_cancel_btn", text=getUIText("cancel"), backgroundColor="#F44336", textColor="#FFFFFF", layout_weight=1}
-    }
-  }
-  dlg.setView(loadlayout(layout)).show()
-  feedback_send_btn.onClick = function()
-    local nameVal = tostring(feedback_name_et.text):gsub("^%s*(.-)%s*$", "%1")
-    local whatsappVal = tostring(feedback_whatsapp_et.text):gsub("^%s*(.-)%s*$", "%1")
-    local telegramIdVal = tostring(feedback_telegram_et.text):gsub("^%s*(.-)%s*$", "%1")
-    local feedbackVal = tostring(feedback_message_et.text):gsub("^%s*(.-)%s*$", "%1")
-    if nameVal == "" then announce(getUIText("please_enter_name")); return end
-    if feedbackVal == "" then announce(getUIText("please_enter_feedback")); return end
-    feedback_send_btn.setEnabled(false)
-    feedback_send_btn.text = getUIText("sending_feedback")
-    sendFeedbackToTelegram(nameVal, whatsappVal, telegramIdVal, feedbackVal, function(success)
-      if success then
-        dlg.dismiss()
-        showFeedbackSuccessDialog()
-      else
-        feedback_send_btn.setEnabled(true)
-        feedback_send_btn.text = getUIText("send")
-        announce(getUIText("feedback_send_failed"))
-      end
-    end)
-  end
-  feedback_cancel_btn.onClick = function() dlg.dismiss(); showContactDialog() end
-end
-
-function sendRegistrationToTelegram(nameVal, emailVal, deviceVal, callback)
-  local messageText = "New User Registration\n\nName: " .. nameVal .. "\nEmail: " .. emailVal .. "\nDevice Information: " .. deviceVal
-  local encodedText = luajava.bindClass("java.net.URLEncoder").encode(messageText, "UTF-8")
-  local url = "https://api.telegram.org/bot" .. feedbackBotToken .. "/sendMessage?chat_id=" .. feedbackChatId .. "&text=" .. encodedText
-  local ThreadCls = luajava.bindClass("java.lang.Thread")
-  local RunnableCls = luajava.bindClass("java.lang.Runnable")
-  ThreadCls(RunnableCls({run = function()
-    local success = false
-    pcall(function()
-      local URL = luajava.bindClass("java.net.URL")
-      local conn = URL(url).openConnection()
-      conn.setRequestMethod("GET")
-      conn.setConnectTimeout(8000)
-      conn.setReadTimeout(8000)
-      local responseCode = conn.getResponseCode()
-      if responseCode == 200 then success = true end
-    end)
-    mainHandler.post(Runnable({run = function() callback(success) end}))
-  end})).start()
-end
-
-function showRegistrationDialog(onDone)
-  local dlg = LuaDialog(context)
-  local layout = {
-    LinearLayout, orientation="vertical", padding="20dp",
-    {TextView, text="User Registration", textSize="20sp", textColor="#2196F3", layout_marginBottom="15dp", gravity="center"},
-    {TextView, text="To use this plugin, please register your name, email and device information below.", textSize="14sp", textColor="#757575", layout_marginBottom="15dp", gravity="center"},
-    {TextView, text="Name", layout_marginBottom="5dp"},
-    {EditText, id="reg_name_et", hint="Enter your name", layout_marginBottom="15dp", backgroundColor="#F5F5F5", padding="10dp"},
-    {TextView, text="Email ID", layout_marginBottom="5dp"},
-    {EditText, id="reg_email_et", hint="Enter your email ID", inputType="textEmailAddress", layout_marginBottom="15dp", backgroundColor="#F5F5F5", padding="10dp"},
-    {TextView, text="Device Information", layout_marginBottom="5dp"},
-    {EditText, id="reg_device_et", hint="Enter your device information", layout_marginBottom="20dp", backgroundColor="#F5F5F5", padding="10dp"},
-    {Button, id="reg_submit_btn", text="Submit", backgroundColor="#4CAF50", textColor="#FFFFFF"}
-  }
-  dlg.setView(loadlayout(layout))
-  pcall(function() dlg.setCancelable(false) end)
-  dlg.show()
-  reg_submit_btn.onClick = function()
-    local nameVal = tostring(reg_name_et.text):gsub("^%s*(.-)%s*$", "%1")
-    local emailVal = tostring(reg_email_et.text):gsub("^%s*(.-)%s*$", "%1")
-    local deviceVal = tostring(reg_device_et.text):gsub("^%s*(.-)%s*$", "%1")
-    if nameVal == "" then announce("Please enter your name"); return end
-    if emailVal == "" then announce("Please enter your email ID"); return end
-    if deviceVal == "" then announce("Please enter your device information"); return end
-    reg_submit_btn.setEnabled(false)
-    reg_submit_btn.text = getUIText("sending_feedback")
-    sendRegistrationToTelegram(nameVal, emailVal, deviceVal, function(success)
-      if success then
-        registeredUserName = nameVal
-        registeredUserEmail = emailVal
-        isUserRegistered = true
-        editor.putString("registered_user_name", registeredUserName).putString("registered_user_email", registeredUserEmail).putBoolean("is_user_registered", true).commit()
-        dlg.dismiss()
-        if onDone then onDone() end
-      else
-        reg_submit_btn.setEnabled(true)
-        reg_submit_btn.text = "Submit"
-        announce(getUIText("feedback_send_failed"))
-      end
-    end)
-  end
-end
-
-function showWelcomeDialog(onDone)
-  local dlg = LuaDialog(context)
-  local welcomeName = registeredUserName ~= "" and registeredUserName or ""
-  local layout = {
-    LinearLayout, orientation="vertical", padding="20dp",
-    {TextView, text="Welcome to Extreme AI Voice Typer", textSize="20sp", textColor="#2196F3", layout_marginBottom="10dp", gravity="center"},
-    {TextView, text="Developer: Anurag Anant", textSize="14sp", textColor="#757575", gravity="center", layout_marginBottom="5dp"},
-    {TextView, text="Welcome, " .. welcomeName, textSize="16sp", textColor="#333333", gravity="center", layout_marginBottom="20dp"},
-    {Button, text="Subscribe to YouTube Channel", onClick=function() openUrl(youtubeChannelUrl) end, backgroundColor="#F44336", textColor="#FFFFFF", layout_marginBottom="15dp"},
-    {Button, text="Subscribe to Telegram Channel", onClick=function() openUrl(telegramChannelUrl) end, backgroundColor="#2196F3", textColor="#FFFFFF", layout_marginBottom="15dp"},
-    {Button, text="Give Feedback to Developer", onClick=function() dlg.dismiss(); showFeedbackDialog() end, backgroundColor="#FF9800", textColor="#FFFFFF", layout_marginBottom="20dp"},
-    {CheckBox, id="welcome_dont_show_chk", text="Don't show this again", checked=false, layout_marginBottom="15dp"},
-    {Button, id="welcome_close_btn", text=getUIText("close"), backgroundColor="#9E9E9E", textColor="#FFFFFF"}
-  }
-  dlg.setView(loadlayout(layout)).show()
-  welcome_close_btn.onClick = function()
-    if welcome_dont_show_chk.isChecked() then
-      welcomeDontShowAgain = true
-      editor.putBoolean("welcome_dont_show_again", true).commit()
-    end
-    dlg.dismiss()
-    if onDone then onDone() end
-  end
-end
-
-function showSoundVibSettingsDialog()
-  local sList = {getUIText("default_beep"), getUIText("soft_click"), getUIText("sharp_pop")}
-  local vibIntensityList = {getUIText("low"), getUIText("medium"), getUIText("high")}
-  local dlg = LuaDialog(context)
-  local layout = {
-    LinearLayout, orientation="vertical", padding="20dp",
-    {TextView, text=getUIText("sound_vibration_title"), textSize="20sp", textColor="#2196F3", layout_marginBottom="15dp", gravity="center"},
-    {CheckBox, id="sub_vib_chk", text=getUIText("enable_vibration"), checked=vibrationEnabled, layout_marginBottom="15dp"},
-    {TextView, text=getUIText("vibration_intensity"), layout_marginBottom="5dp"},
-    {Spinner, id="sub_vib_intensity_sp", layout_marginBottom="15dp"},
-    {CheckBox, id="sub_sound_chk", text=getUIText("enable_typing_sound"), checked=soundEnabled, layout_marginBottom="15dp"},
-    {CheckBox, id="sub_startup_sound_chk", text=getUIText("enable_startup_sound"), checked=startupSoundEnabled, layout_marginBottom="15dp"},
-    {TextView, text=getUIText("typing_sound_type"), layout_marginBottom="5dp"},
-    {Spinner, id="sub_sound_sp", layout_marginBottom="20dp"},
-    {Button, id="sub_sv_save_btn", text=getUIText("save_close"), backgroundColor="#4CAF50", textColor="#FFFFFF"}
-  }
-  dlg.setView(loadlayout(layout)).show()
-  sub_sound_sp.setAdapter(ArrayAdapter(context, android.R.layout.simple_spinner_item, sList))
-  local soundTypeText = getUIText(soundType:lower():gsub(" ", "_"))
-  for i,v in ipairs(sList) do 
-    if v == soundType or v == soundTypeText then sub_sound_sp.setSelection(i-1); break end
-  end
-  sub_vib_intensity_sp.setAdapter(ArrayAdapter(context, android.R.layout.simple_spinner_item, vibIntensityList))
-  local vibIntensityText = getUIText(vibrationIntensity:lower())
-  for i,v in ipairs(vibIntensityList) do 
-    if v == vibrationIntensity or v == vibIntensityText then sub_vib_intensity_sp.setSelection(i-1); break end
-  end
-  sub_sv_save_btn.onClick = function()
-    vibrationEnabled = sub_vib_chk.isChecked()
-    soundEnabled = sub_sound_chk.isChecked()
-    startupSoundEnabled = sub_startup_sound_chk.isChecked()
-    local selectedSound = sList[sub_sound_sp.getSelectedItemPosition() + 1]
-    if selectedSound == getUIText("default_beep") then soundType = "Default Beep"
-    elseif selectedSound == getUIText("soft_click") then soundType = "Soft Click"
-    elseif selectedSound == getUIText("sharp_pop") then soundType = "Sharp Pop" end
-    local selectedVibIntensity = vibIntensityList[sub_vib_intensity_sp.getSelectedItemPosition() + 1]
-    if selectedVibIntensity == getUIText("low") then vibrationIntensity = "Low"
-    elseif selectedVibIntensity == getUIText("medium") then vibrationIntensity = "Medium"
-    elseif selectedVibIntensity == getUIText("high") then vibrationIntensity = "High" end
-    editor.putBoolean("vibration_enabled", vibrationEnabled).putBoolean("sound_enabled", soundEnabled).putString("sound_type", soundType).putBoolean("startup_sound_enabled", startupSoundEnabled).putString("vibration_intensity", vibrationIntensity).commit()
-    dlg.dismiss()
-  end
-end
-
-function showMoreOptionsDialog()
-  moreOptionsDlg = LuaDialog(context)
-  local layout = {
-    ScrollView, layout_width="fill",
-    {LinearLayout, orientation="vertical", padding="20dp",
-      {TextView, text=getUIText("more_options_title"), textSize="22sp", textColor="#2196F3", layout_marginBottom="20dp", gravity="center"},
-      {Button, text="Check For Updates", onClick=function() checkForUpdates(true); moreOptionsDlg.dismiss() end, backgroundColor="#FF5722", textColor="#FFFFFF", layout_marginBottom="10dp"},
-      {Button, text=getUIText("chat_with_ai"), onClick=function() 
-        local key = getActiveApiKey()
-        if not key or key == "" then announce("Please add API Settings first."); return end
-        moreOptionsDlg.dismiss()
-        showChatDialog()
-      end, backgroundColor="#FF9800", textColor="#FFFFFF", layout_marginBottom="10dp"},
-      {Button, text=getUIText("other_settings"), onClick=function() showOtherSettingsDialog() end, backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginBottom="10dp"},
-      {Button, text=getUIText("sound_vibration_settings"), onClick=function() showSoundVibSettingsDialog() end, backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginBottom="10dp"},
-      {Button, text=getUIText("word_dictionary"), onClick=function() showWordDictionaryDialog() end, backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginBottom="10dp"},
-      {Button, text=getUIText("about"), onClick=function() showAboutDialog() end, backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginBottom="10dp"},
-      {Button, text=getUIText("contact_us"), onClick=function() showContactDialog() end, backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginBottom="20dp"},
-      {Button, text=getUIText("close"), backgroundColor="#F44336", textColor="#FFFFFF", onClick=function() moreOptionsDlg.dismiss() end}
-    }
-  }
-  moreOptionsDlg.setView(loadlayout(layout)).show()
-end
-
-function showApiDialog()
-  local layout = {
-    ScrollView, layout_width="fill",
-    {LinearLayout, orientation="vertical", padding="15dp",
-      {TextView, text=getUIText("manage_api_title"), textSize="20sp", textColor="#2196F3", layout_marginBottom="15dp"},
-      {TextView, text=getUIText("openrouter_key")}, {EditText, id="or_et", text=orKey},
-      {Button, text=getUIText("get_openrouter_key"), onClick=function() openUrl("https://openrouter.ai/keys") end, backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginBottom="10dp"},
-      {TextView, text=getUIText("gemini_key")}, {EditText, id="gem_et", text=geminiKey},
-      {Button, text=getUIText("get_gemini_key"), onClick=function() openUrl("https://aistudio.google.com/app/apikey") end, backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginBottom="10dp"},
-      {TextView, text=getUIText("groq_key")}, {EditText, id="groq_et", text=groqKey},
-      {Button, text=getUIText("get_groq_key"), onClick=function() openUrl("https://console.groq.com/keys") end, backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginBottom="10dp"},
-      {TextView, text=getUIText("mistral_key")}, {EditText, id="mistral_et", text=mistralKey},
-      {Button, text=getUIText("get_mistral_key"), onClick=function() openUrl("https://console.mistral.ai/api-keys/") end, backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginBottom="10dp"},
-      {Button, id="save_api_btn", text=getUIText("save_keys"), backgroundColor="#2196F3", textColor="#FFFFFF"}
-    }
-  }
-  local dlg = LuaDialog(context).setView(loadlayout(layout)).show()
-  save_api_btn.onClick = function()
-    editor.putString("or_key", tostring(or_et.text)).putString("gemini_key", tostring(gem_et.text)).putString("groq_key", tostring(groq_et.text)).putString("mistral_key", tostring(mistral_et.text)).commit()
-    orKey = tostring(or_et.text); geminiKey = tostring(gem_et.text); groqKey = tostring(groq_et.text); mistralKey = tostring(mistral_et.text)
-    dlg.dismiss()
-  end
-end
-
-function showEmojiSettingsDialog()
-  local qtyList = {"Low", "Medium", "High"}
-  local layout = {
-    LinearLayout, orientation="vertical", padding="20dp",
-    {TextView, text=getUIText("emoji_settings_title"), textSize="20sp", textColor="#2196F3", layout_marginBottom="15dp", gravity="center"},
-    {CheckBox, id="sub_emoji_chk", text=getUIText("enable_smart_emojis"), checked=emojiEnabled, layout_marginBottom="15dp"},
-    {CheckBox, id="sub_emoji_inline_chk", text=getUIText("emoji_inline_setting"), checked=emojiInline, layout_marginBottom="15dp"},
-    {TextView, text=getUIText("emoji_quantity"), layout_marginBottom="5dp"},
-    {Spinner, id="sub_emoji_qty_sp", layout_marginBottom="20dp"},
-    {Button, id="sub_emoji_save_btn", text=getUIText("save_close"), backgroundColor="#4CAF50", textColor="#FFFFFF"}
-  }
-  local dlg = LuaDialog(context).setView(loadlayout(layout)).show()
-  sub_emoji_qty_sp.setAdapter(ArrayAdapter(context, android.R.layout.simple_spinner_item, qtyList))
-  for i,v in ipairs(qtyList) do if v == emojiQty then sub_emoji_qty_sp.setSelection(i-1) end end
-  sub_emoji_save_btn.onClick = function()
-    emojiEnabled = sub_emoji_chk.isChecked()
-    emojiInline = sub_emoji_inline_chk.isChecked()
-    emojiQty = qtyList[sub_emoji_qty_sp.getSelectedItemPosition() + 1]
-    dlg.dismiss()
-  end
-end
-
-function handleTranslateAndType(spokenText)
-  if not spokenText or spokenText == "" then return end
-  announce("Translating and processing...")
-  local function executeAIFinalFormat(textToProcess, isTranslatedFlag)
-    processWithAI(textToProcess, isTranslatedFlag, function(aiText)
-      local finalText = finalGuard(aiText)
-      finalText = applyDictionaryReplacement(finalText)
-      local node = service.getEditText()
-      if node then
-        finalizeTyping(node, finalText)
-      end
-    end)
-  end
-  if useAITranslation then
-    local originalEnableTrans = enableTranslation
-    enableTranslation = true
-    executeAIFinalFormat(spokenText, false)
-    enableTranslation = originalEnableTrans
-  else
-    local targetCode = getLangCode(targetLanguage)
-    targetCode = string.sub(targetCode, 1, 2)
-    if targetLanguage == "Chinese (Mandarin)" then targetCode = "zh-CN" end
-    googleTranslateQuick(spokenText, targetCode, function(translatedText)
-      if translatedText and translatedText ~= "" then
-        executeAIFinalFormat(translatedText, true)
-      else
-        local originalEnableTrans = enableTranslation
-        enableTranslation = true
-        executeAIFinalFormat(spokenText, false)
-        enableTranslation = originalEnableTrans
-      end
-    end)
-  end
-end
-
-function showCustomPromptDialog()
-  local dlg = LuaDialog(context)
-  dlg.setTitle("Custom Typing Mode")
-  local layout = {
-    LinearLayout, orientation="vertical", padding="20dp",
-    {TextView, text="Give your custom instruction to AI for typing:", layout_marginBottom="10dp", textColor="#2196F3"},
-    {EditText, id="custom_prompt_et", hint="e.g., Type professionally or type casually", layout_marginBottom="15dp", backgroundColor="#F5F5F5", padding="10dp", text=prefs.getString("custom_typing_prompt", "")},
-    {LinearLayout, orientation="horizontal", layout_marginBottom="15dp",
-      {Button, id="save_persona_btn", text="Save As Style", backgroundColor="#FF9800", textColor="#FFFFFF", layout_weight=1, layout_marginRight="5dp"},
-      {Button, id="my_personas_btn", text="My Styles", backgroundColor="#9C27B0", textColor="#FFFFFF", layout_weight=1}
-    },
-    {LinearLayout, orientation="horizontal",
-      {Button, id="save_cp_btn", text="Save", backgroundColor="#4CAF50", textColor="#FFFFFF", layout_weight=1, layout_marginRight="5dp"},
-      {Button, id="cancel_cp_btn", text="Cancel", backgroundColor="#F44336", textColor="#FFFFFF", layout_weight=1}
-    }
-  }
-  dlg.setView(loadlayout(layout))
-  dlg.show()
-  save_cp_btn.onClick = function()
-    local cp = tostring(custom_prompt_et.text)
-    editor.putString("custom_typing_prompt", cp).commit()
-    dlg.dismiss()
-    announce("Custom prompt saved")
-  end
-  cancel_cp_btn.onClick = function() dlg.dismiss() end
-  save_persona_btn.onClick = function()
-    local cp = tostring(custom_prompt_et.text):gsub("^%s*(.-)%s*$", "%1")
-    if cp == "" then announce("Please enter an instruction first"); return end
-    dlg.dismiss()
-    showSaveAsPersonaDialog(cp)
-  end
-  my_personas_btn.onClick = function()
-    dlg.dismiss()
-    showPersonaListDialog()
-  end
-end
-
-function showSaveAsPersonaDialog(promptText)
-  local dlg = LuaDialog(context)
-  dlg.setTitle("Save As Style")
-  local layout = {
-    LinearLayout, orientation="vertical", padding="20dp",
-    {TextView, text="Give this style a name:", layout_marginBottom="10dp", textColor="#2196F3"},
-    {EditText, id="persona_name_et", hint="e.g., Formal Boss, Funny Friend", layout_marginBottom="20dp", backgroundColor="#F5F5F5", padding="10dp"},
-    {LinearLayout, orientation="horizontal",
-      {Button, id="save_persona_name_btn", text="Save", backgroundColor="#4CAF50", textColor="#FFFFFF", layout_weight=1, layout_marginRight="5dp"},
-      {Button, id="cancel_persona_name_btn", text="Cancel", backgroundColor="#F44336", textColor="#FFFFFF", layout_weight=1}
-    }
-  }
-  dlg.setView(loadlayout(layout))
-  dlg.show()
-  save_persona_name_btn.onClick = function()
-    local pname = tostring(persona_name_et.text):gsub("^%s*(.-)%s*$", "%1")
-    if pname == "" then announce("Please enter a name"); return end
-    local foundIndex = nil
-    for i, p in ipairs(personaList) do if p.name == pname then foundIndex = i; break end end
-    if foundIndex then personaList[foundIndex].prompt = promptText
-    else table.insert(personaList, {name = pname, prompt = promptText}) end
-    savePersonas()
-    announce("Style saved: " .. pname)
-    dlg.dismiss()
-    showCustomPromptDialog()
-  end
-  cancel_persona_name_btn.onClick = function() dlg.dismiss(); showCustomPromptDialog() end
-end
-
-function showPersonaListDialog()
-  if #personaList == 0 then
-    announce("No saved styles yet. Save one first.")
-    showCustomPromptDialog()
-    return
-  end
-  local names = {}
-  for i, p in ipairs(personaList) do table.insert(names, p.name) end
-  local listDlg = LuaDialog(context)
-  listDlg.setTitle("My Styles (Tap to Use, Long Press to Delete)")
-  local list = ListView(context)
-  list.setAdapter(ArrayAdapter(context, android.R.layout.simple_list_item_1, names))
-  list.onItemClick = function(parent, view, position, id)
-    local p = personaList[position + 1]
-    if p then
-      editor.putString("custom_typing_prompt", p.prompt).commit()
-      announce("Style applied: " .. p.name)
-      listDlg.dismiss()
-      showCustomPromptDialog()
-    end
-  end
-  list.onItemLongClick = function(parent, view, position, id)
-    local p = personaList[position + 1]
-    if p then
-      local confirmDlg = LuaDialog(context)
-      confirmDlg.setTitle("Delete Style?")
-      confirmDlg.setMessage("Delete '" .. p.name .. "' from saved styles?")
-      confirmDlg.setButton("Delete", function()
-        table.remove(personaList, position + 1)
-        savePersonas()
-        announce("Deleted: " .. p.name)
-        confirmDlg.dismiss()
-        listDlg.dismiss()
-        showPersonaListDialog()
-      end)
-      confirmDlg.setButton2("Cancel", function() confirmDlg.dismiss() end)
-      confirmDlg.show()
-    end
-    return true
-  end
-  listDlg.setView(list)
-  listDlg.setButton("Close", function() listDlg.dismiss(); showCustomPromptDialog() end)
-  listDlg.show()
-end
-
-function showSettings()
-  if not isUserRegistered then
-    showRegistrationDialog(function()
-      if welcomeDontShowAgain then
-        showSettingsMain()
-      else
-        showWelcomeDialog(function() showSettingsMain() end)
-      end
-    end)
-    return
-  end
-  if welcomeDontShowAgain then
-    showSettingsMain()
-  else
-    showWelcomeDialog(function() showSettingsMain() end)
-  end
-end
-
-function showSettingsMain()
-  local typingModes = {"Auto Detect Script", "Professional Writer Mode", "Normal Typer Mode (AI Grammar Correction)", "Roman Typer", "Offline Dictation (No AI)", "Custom Typing Mode"}
-  local startupActionsList = {"Ask Every Time", "AI Dictation", "Process the Text From Textbox", "Translate Text From Textbox", getUIText("translate_and_type")}
-  local layout = {
-    ScrollView, layout_width="fill",
-    {LinearLayout, orientation="vertical", padding="20dp",
-      {TextView, text="Extreme AI Voice Typer v3.1", textSize="22sp", gravity="center", textColor="#2196F3"},
-      {TextView, text="Developer: Anurag Anant", textSize="14sp", gravity="center", textColor="#757575", layout_marginBottom="5dp"},
-      {TextView, text="Welcome, " .. registeredUserName, textSize="14sp", gravity="center", textColor="#333333", layout_marginBottom="20dp"},
-      {TextView, text=getUIText("select_typing_mode"), textSize="16sp", textColor="#2196F3", layout_marginBottom="5dp"},
-      {Spinner, id="typing_mode_sp", layout_marginBottom="10dp"},
-      {Button, id="edit_custom_prompt_btn", text="Edit Custom Prompt", backgroundColor="#FF9800", textColor="#FFFFFF", layout_marginBottom="20dp"},
-      {TextView, text="Extension Startup Action", textSize="16sp", textColor="#2196F3", layout_marginBottom="5dp"},
-      {Spinner, id="startup_action_sp", layout_marginBottom="15dp"},
-      {Button, id="ai_settings_btn", text=getUIText("ai_settings"), backgroundColor="#2196F3", textColor="#FFFFFF", layout_marginBottom="15dp"},
-      {View, layout_height="1dp", backgroundColor="#CCCCCC", layout_marginTop="5dp", layout_marginBottom="15dp"},
-      {TextView, text=getUIText("source_language"), layout_marginBottom="5dp"},
-      {Button, id="src_btn", text=selectedLanguage, backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginBottom="10dp"},
-      {Button, id="swap_btn", text=getUIText("swap"), backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginTop="10dp"},
-      {TextView, text=getUIText("target_language"), layout_marginTop="10dp", layout_marginBottom="5dp"},
-      {Button, id="tgt_btn", text=targetLanguage, backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginBottom="15dp"},
-      {View, layout_height="1dp", backgroundColor="#CCCCCC", layout_marginTop="15dp", layout_marginBottom="15dp"},
-      {Button, id="emoji_settings_btn", text=getUIText("emoji_settings"), backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginTop="10dp"},
-      {Button, id="more_options_btn", text=getUIText("more_options"), backgroundColor="#9E9E9E", textColor="#FFFFFF", layout_marginTop="10dp"},
-      {View, layout_height="1dp", backgroundColor="#CCCCCC", layout_marginTop="20dp", layout_marginBottom="15dp"},
-      {Button, id="save_main_btn", text=getUIText("save_close"), backgroundColor="#4CAF50", textColor="#FFFFFF"}
-    }
-  }
-  triggerVibration("settings"); playStartupSound()
-  settingsDlg = LuaDialog(context).setView(loadlayout(layout))
-  settingsDlg.show()
-  
-  local isSpinnerInit = true
-  typing_mode_sp.setAdapter(ArrayAdapter(context, android.R.layout.simple_spinner_item, typingModes))
-  for i,v in ipairs(typingModes) do if v == typingMode then typing_mode_sp.setSelection(i-1) end end
-  typing_mode_sp.setOnItemSelectedListener(luajava.createProxy("android.widget.AdapterView$OnItemSelectedListener", {
-    onItemSelected = function(parent, view, position, id)
-      local sel = typingModes[position + 1]
-      if sel == "Custom Typing Mode" then
-        edit_custom_prompt_btn.setVisibility(0)
-        if not isSpinnerInit then
-          showCustomPromptDialog()
-        end
-      else
-        edit_custom_prompt_btn.setVisibility(8)
-      end
-      isSpinnerInit = false
-    end,
-    onNothingSelected = function(parent) end
-  }))
-  edit_custom_prompt_btn.onClick = function() showCustomPromptDialog() end
-
-  Thread(luajava.bindClass("java.lang.Runnable"){
-      run = function() Thread.sleep(3000); checkForUpdates(false) end
-  }).start()
-  startup_action_sp.setAdapter(ArrayAdapter(context, android.R.layout.simple_spinner_item, startupActionsList))
-  for i,v in ipairs(startupActionsList) do if v == startupAction then startup_action_sp.setSelection(i-1) end end
-  
-  ai_settings_btn.onClick = function() showAISettingsDialog() end
-  emoji_settings_btn.onClick = function() showEmojiSettingsDialog() end
-  more_options_btn.onClick = function() showMoreOptionsDialog() end
-  src_btn.onClick = function() showLanguageSelectDialog(false, src_btn) end
-  tgt_btn.onClick = function() showLanguageSelectDialog(true, tgt_btn) end
-  swap_btn.onClick = function()
-    local temp = selectedLanguage; selectedLanguage = targetLanguage; targetLanguage = temp
-    src_btn.setText(selectedLanguage); tgt_btn.setText(targetLanguage)
-    announce("Source language is " .. selectedLanguage .. ", Target language is " .. targetLanguage)
-  end
-  save_main_btn.onClick = function()
-    typingMode = typingModes[typing_mode_sp.getSelectedItemPosition() + 1]
-    startupAction = startupActionsList[startup_action_sp.getSelectedItemPosition() + 1]
-    autoDetect = (typingMode == "Auto Detect Script"); enableTranslation = false
-    editor.putString("typing_mode", typingMode).putString("startup_action", startupAction).putBoolean("auto_detect", autoDetect).putString("lang", selectedLanguage).putString("target_lang", targetLanguage).putBoolean("emoji_enabled", emojiEnabled).putBoolean("emoji_inline", emojiInline).putBoolean("vibration_enabled", vibrationEnabled).putBoolean("sound_enabled", soundEnabled).putString("sound_type", soundType).putBoolean("copy_clipboard", copyToClipboard).putString("emoji_qty", emojiQty).putString("end_action", endAction).putBoolean("enable_trans", enableTranslation).putBoolean("use_ai_trans", useAITranslation).putBoolean("startup_sound_enabled", startupSoundEnabled).putString("vibration_intensity", vibrationIntensity).commit()
-    settingsDlg.dismiss() 
-  end
-end
-
-function flushUnlimitedDeactivation()
-  if not unlimitedDictation then return end
-  announce("No voice detected. Microphone stopped.")
-  if showPreview and accumulatedPreviewText ~= "" then
-    local pendingText = accumulatedPreviewText
-    local pendingNode = accumulatedPreviewNode
-    accumulatedPreviewText = ""
-    accumulatedPreviewNode = nil
-    showSmartPreviewDialog(pendingNode, pendingText)
-  end
-end
-
-function startListening(overrideLang, customHandler)
-  if forceStopDictation then return end
-  forceStopDictation = false
-  consecutiveSilences = 0
-  isListening = true
-  local intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-  intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-  local langCode = getLangCode(overrideLang or selectedLanguage)
-  intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, langCode)
-  local sr = SpeechRecognizer.createSpeechRecognizer(context)
-  globalSR = sr
-  sr.setRecognitionListener({
-    onResults = function(res)
-      isListening = false; consecutiveSilences = 0
-      local matches = res.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-      local spokenText = nil
-      if matches and matches.size() > 0 then
-        spokenText = matches.get(0)
-      end
-      if globalSR then pcall(function() globalSR.destroy() end); globalSR = nil end
-      if customHandler then
-        customHandler(spokenText)
-      elseif spokenText and spokenText ~= "" then
-        if startupAction == "Translate & Type" or startupAction == getUIText("translate_and_type") then handleTranslateAndType(spokenText)
-        else insertText(spokenText) end
-      elseif not forceStopDictation then
-        flushUnlimitedDeactivation()
-      end
-    end,
-    onError = function(err)
-      isListening = false
-      local wasManualStop = forceStopDictation
-      if globalSR then pcall(function() globalSR.destroy() end); globalSR = nil end
-      if customHandler then
-        customHandler(nil)
-      elseif not wasManualStop then
-        flushUnlimitedDeactivation()
-      end
-    end
-  })
-  sr.startListening(intent)
-end
-
-function finalizeTyping(node, finalText)
-  if showPreview and unlimitedDictation then
-    if accumulatedPreviewText ~= "" then
-      accumulatedPreviewText = accumulatedPreviewText .. " " .. finalText
-    else
-      accumulatedPreviewText = finalText
-    end
-    accumulatedPreviewNode = node
-    if forceStopDictation then
-      local pendingText = accumulatedPreviewText
-      local pendingNode = accumulatedPreviewNode
-      accumulatedPreviewText = ""
-      accumulatedPreviewNode = nil
-      showSmartPreviewDialog(pendingNode, pendingText)
-    else
-      mainHandler.postDelayed(Runnable({run = function()
-        if unlimitedDictation and not forceStopDictation and not isListening then
-          startListening()
-        end
-      end}), 350)
-    end
-    return
-  end
-  if showPreview then
-    showSmartPreviewDialog(node, finalText)
-    return
-  end
-  local suffix = (endAction == "New Line" and "\n" or (endAction == "Space" and " " or (endAction == "Space + New Line" and " \n" or "")))
-  pcall(function()
-    service.insert(node, finalText .. suffix)
-    if copyToClipboard then
-      local clip = ClipData.newPlainText("AI Voice Typer", finalText)
-      context.getSystemService(Context.CLIPBOARD_SERVICE).setPrimaryClip(clip)
-    end
-    addToTypingHistory(finalText)
-    triggerVibration("typing"); triggerSound(); announce(finalText)
-  end)
-  if unlimitedDictation and not forceStopDictation then
-    mainHandler.postDelayed(Runnable({run = function()
-      if unlimitedDictation and not forceStopDictation and not isListening then
-        startListening()
-      end
-    end}), 350)
-  end
-end
-
-function showSmartPreviewDialog(node, initialText)
-  local previewTypingModes = {"Auto Detect Script", "Professional Writer Mode", "Normal Typer Mode (AI Grammar Correction)", "Roman Typer", "Offline Dictation (No AI)", "Custom Typing Mode"}
-  local dlg = LuaDialog(context)
-  dlg.setTitle("Smart Preview")
-  local layout = {
-    ScrollView, layout_width="fill",
-    {LinearLayout, orientation="vertical", padding="20dp",
-      {EditText, id="preview_et", text=initialText, minLines=4, gravity="top|left", backgroundColor="#F5F5F5", padding="10dp", layout_marginBottom="15dp"},
-      {TextView, text=getUIText("select_typing_mode"), layout_marginBottom="5dp"},
-      {Spinner, id="preview_mode_sp", layout_marginBottom="15dp"},
-      {LinearLayout, orientation="horizontal", layout_marginBottom="10dp",
-        {Button, id="preview_copy_btn", text="Copy", backgroundColor="#607D8B", textColor="#FFFFFF", layout_weight=1, layout_marginRight="5dp"},
-        {Button, id="preview_translate_btn", text="Translate", backgroundColor="#FF9800", textColor="#FFFFFF", layout_weight=1, layout_marginRight="5dp"},
-        {Button, id="preview_continue_btn", text="Continue Typing", backgroundColor="#4CAF50", textColor="#FFFFFF", layout_weight=1}
-      },
-      {LinearLayout, orientation="horizontal",
-        {Button, id="preview_insert_btn", text="Insert Text", backgroundColor="#4CAF50", textColor="#FFFFFF", layout_weight=1, layout_marginRight="5dp"},
-        {Button, id="preview_close_btn", text=getUIText("close"), backgroundColor="#F44336", textColor="#FFFFFF", layout_weight=1}
-      }
-    }
-  }
-  dlg.setView(loadlayout(layout))
-  dlg.setCancelable(false)
-  dlg.show()
-
-  preview_mode_sp.setAdapter(ArrayAdapter(context, android.R.layout.simple_spinner_item, previewTypingModes))
-  for i,v in ipairs(previewTypingModes) do if v == typingMode then preview_mode_sp.setSelection(i-1) end end
-  local isPreviewSpinnerInit = true
-  preview_mode_sp.setOnItemSelectedListener(luajava.createProxy("android.widget.AdapterView$OnItemSelectedListener", {
-    onItemSelected = function(parent, view, position, id)
-      if not isPreviewSpinnerInit then
-        typingMode = previewTypingModes[position + 1]
-        autoDetect = (typingMode == "Auto Detect Script")
-        editor.putString("typing_mode", typingMode).putBoolean("auto_detect", autoDetect).commit()
-      end
-      isPreviewSpinnerInit = false
-    end,
-    onNothingSelected = function(parent) end
-  }))
-
-  preview_copy_btn.onClick = function()
-    pcall(function()
-      local clip = ClipData.newPlainText("AI Voice Typer", tostring(preview_et.text))
-      context.getSystemService(Context.CLIPBOARD_SERVICE).setPrimaryClip(clip)
-      announce("Copied")
-    end)
-  end
-
-  preview_translate_btn.onClick = function()
-    local currentText = tostring(preview_et.text)
-    if currentText == "" then return end
-    local transLangs = {"English", "Hindi", "Marathi", "Bengali", "Tamil", "Telugu", "Kannada", "Malayalam", "Punjabi", "Urdu", "Odia", "Assamese", "Sindhi", "Nepali", "Sinhala", "Arabic", "Spanish", "French", "German", "Russian", "Japanese", "Korean", "Chinese (Mandarin)", "Italian", "Portuguese", "Dutch", "Turkish", "Persian", "Swahili"}
-    local listDlg = LuaDialog(context)
-    listDlg.setTitle("Choose target language")
-    local list = ListView(context)
-    list.setAdapter(ArrayAdapter(context, android.R.layout.simple_list_item_1, transLangs))
-    list.onItemClick = function(parent, view, position, id)
-      local selectedLang = transLangs[position + 1]
-      listDlg.dismiss()
-      preview_translate_btn.setText(getUIText("processing"))
-      local translationPrompt = "Translate the following text into " .. selectedLang .. " with strict word-for-word accuracy. Maintain the original tone, meaning and sentence structure exactly. CRITICAL: 1. ABSOLUTELY DO NOT add any new emojis. 2. If the original text has emojis, keep them exactly as they are. 3. If the original text has no emojis, the output MUST have no emojis. 4. ABSOLUTE PROHIBITION: DO NOT add any extra words, phrases, greetings, filler, explanations, or meaning that is not present in the original text. 5. DO NOT expand, elaborate, or paraphrase; translate ONLY what is literally present, nothing more. 6. The translated output MUST have the same number of sentences as the original text. 7. TRANSLATE, DO NOT TRANSLITERATE: Every word, including greetings, MUST be converted to its actual meaning in " .. selectedLang .. " using the vocabulary and script of " .. selectedLang .. ". For example, नमस्ते MUST become the real greeting word of the target language (such as Hello in English), NEVER a romanized or transliterated spelling like Namaste. Do NOT simply romanize or transliterate any word; every word must carry its true translated meaning. 8. Output strictly the translated text and nothing else. No explanations, no markdown, no quotes, no preamble.\n\nText: " .. currentText
-      executeMasterAIApiCall(selectedProvider, nil, translationPrompt, 0.3, function(outputText)
-        mainHandler.post(Runnable({run = function()
-          preview_translate_btn.setText("Translate")
-          if outputText then
-            local finalText = finalGuard(outputText); finalText = applyDictionaryReplacement(finalText)
-            preview_et.setText(finalText)
-            announce(finalText)
-          end
-        end}))
-      end)
-    end
-    listDlg.setView(list)
-    listDlg.show()
-  end
-
-  preview_continue_btn.onClick = function()
-    preview_continue_btn.setText(getUIText("processing"))
-    startListening(selectedLanguage, function(spokenText)
-      local function finishContinue()
-        mainHandler.post(Runnable({run = function() preview_continue_btn.setText("Continue Typing") end}))
-      end
-      if not spokenText or spokenText == "" then finishContinue(); return end
-      local function appendResult(processedText)
-        mainHandler.post(Runnable({run = function()
-          local existing = tostring(preview_et.text)
-          local combined = existing
-          if existing ~= "" then combined = combined .. " " end
-          combined = combined .. processedText
-          preview_et.setText(combined)
-          pcall(function() preview_et.setSelection(string.len(combined)) end)
-          triggerVibration("typing"); triggerSound(); announce(processedText)
-        end}))
-        finishContinue()
-      end
-      if typingMode == "Offline Dictation (No AI)" then
-        local ft = finalGuard(spokenText)
-        processOffline(ft, function(resText)
-          resText = applyDictionaryReplacement(resText)
-          appendResult(resText)
-        end)
-      else
-        processWithAI(spokenText, false, function(aiText)
-          local finalText2 = finalGuard(aiText)
-          finalText2 = applyDictionaryReplacement(finalText2)
-          appendResult(finalText2)
-        end)
-      end
-    end)
-  end
-
-  preview_insert_btn.onClick = function()
-    local finalText = tostring(preview_et.text)
-    dlg.dismiss()
-    local freshNode = service.getEditText()
-    if not freshNode then freshNode = node end
-    if freshNode and finalText ~= "" then
-      local suffix = (endAction == "New Line" and "\n" or (endAction == "Space" and " " or (endAction == "Space + New Line" and " \n" or "")))
-      pcall(function()
-        service.insert(freshNode, finalText .. suffix)
-        if copyToClipboard then
-          local clip = ClipData.newPlainText("AI Voice Typer", finalText)
-          context.getSystemService(Context.CLIPBOARD_SERVICE).setPrimaryClip(clip)
-        end
-        addToTypingHistory(finalText)
-        triggerVibration("typing"); triggerSound(); announce(finalText)
-      end)
-    end
-  end
-
-  preview_close_btn.onClick = function()
-    dlg.dismiss()
-  end
-end
-
-function insertText(spoken)
-  if not spoken or spoken == "" then return end
-  spoken = applyPunctuationVoiceCommands(spoken)
-  announce(getUIText("processing"))
-  local function executeAIFinalFormat(textToProcess, isTranslatedFlag)
-    processWithAI(textToProcess, isTranslatedFlag, function(aiText)
-      local finalText = finalGuard(aiText)
-      finalText = applyDictionaryReplacement(finalText)
-      local node = service.getEditText()
-      if node then
-        finalizeTyping(node, finalText)
-      end 
-    end)
-  end
-
-  if typingMode == "Offline Dictation (No AI)" then
-    local finalText = finalGuard(spoken)
-    processOffline(finalText, function(resText)
-      resText = applyDictionaryReplacement(resText)
-      local node = service.getEditText()
-      if node then
-        finalizeTyping(node, resText)
-      end end)
-    return 
-  end
-
-  if enableTranslation then
-    if useAITranslation then executeAIFinalFormat(spoken, false)
-    else
-      local targetCode = getLangCode(targetLanguage)
-      targetCode = string.sub(targetCode, 1, 2)
-      if targetLanguage == "Chinese (Mandarin)" then targetCode = "zh-CN" end
-      local encodedText = luajava.bindClass("java.net.URLEncoder").encode(tostring(spoken), "UTF-8")
-      local url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=" .. targetCode .. "&dt=t&q=" .. encodedText
-      pcall(function()
-          local Http = luajava.bindClass("com.androlua.Http")
-          if not Http then Http = import("com.androlua.Http") end
-          if Http then
-              Http.get(url, function(status, result)
-                  if status == 200 and result then
-                      local ok, decoded = pcall(cjson.decode, result)
-                      if ok and type(decoded) == "table" and decoded[1] then
-                          local translatedText = ""
-                          for i = 1, #decoded[1] do
-                              if type(decoded[1][i]) == "table" and decoded[1][i][1] then translatedText = translatedText .. decoded[1][i][1] end
-                          end
-                          if translatedText ~= "" then executeAIFinalFormat(translatedText, true); return end
-                      end
-                  end
-                  local originalUseAITrans = useAITranslation
-                  useAITranslation = true
-                  executeAIFinalFormat(spoken, false)
-                  useAITranslation = originalUseAITrans
-              end)
-          else executeAIFinalFormat(spoken, false) end
-      end)
-    end
-  else executeAIFinalFormat(spoken, false) end
-end
-
-function processTextboxText(node, text)
-  if not text or text == "" or text == "nil" then if node then pcall(function() text = tostring(node.getText() or "") end) end end
-  if not text or text == "" or text == "nil" then return end
-  announce("Processing text with AI for professional conversion.")
-  local professionalUserCommand = "Transform the following text into professional quality content. Fix grammar, improve vocabulary, add proper punctuation, use professional tone. Keep the text in its original language. Do NOT translate to English or any other language. Return ONLY the enhanced text in the original language.\n\nText: " .. text
-  
-  executeMasterAIApiCall(selectedProvider, nil, professionalUserCommand, 0.3, function(outputText)
-    if outputText then
-      local finalText = finalGuard(outputText); finalText = applyDictionaryReplacement(finalText)
-      mainHandler.post(Runnable({
-        run = function()
-          pcall(function()
-            local freshNode = service.getEditText()
-            if not freshNode then freshNode = node end
-            local suffix = (endAction == "New Line" and "\n" or (endAction == "Space" and " " or (endAction == "Space + New Line" and " \n" or "")))
-            local fullText = finalText .. suffix
-            local Bundle = luajava.bindClass("android.os.Bundle")
-            local bundle = Bundle()
-            bundle.putCharSequence("ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE", fullText)
-            local success = freshNode.performAction(2097152, bundle)
-            if not success then
-               bundle.putCharSequence("ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE", "")
-               freshNode.performAction(2097152, bundle)
-               service.insert(freshNode, fullText)
-            end
-            if copyToClipboard then 
-              local clip = ClipData.newPlainText("AI Voice Typer", fullText)
-              context.getSystemService(Context.CLIPBOARD_SERVICE).setPrimaryClip(clip) 
-            end
-            addToTypingHistory(finalText)
-            triggerVibration("typing"); triggerSound(); announce("Professional conversion complete")
-          end)
-        end
-      }))
-    else announce("Professional conversion failed") end
-  end)
-end
-
-function translateTextboxTextWithAI(node, text, targetLang)
-  announce("Translating text to " .. targetLang)
-  local translationPrompt = "Translate the following text into " .. targetLang .. " with strict word-for-word accuracy. Maintain the original tone, meaning and sentence structure exactly. CRITICAL: 1. ABSOLUTELY DO NOT add any new emojis. 2. If the original text has emojis, keep them exactly as they are. 3. If the original text has no emojis, the output MUST have no emojis. 4. ABSOLUTE PROHIBITION: DO NOT add any extra words, phrases, greetings, filler, explanations, or meaning that is not present in the original text. 5. DO NOT expand, elaborate, or paraphrase; translate ONLY what is literally present, nothing more. 6. The translated output MUST have the same number of sentences as the original text. 7. Output strictly the translated text and nothing else. No explanations, no markdown, no quotes, no preamble.\n\nText: " .. text
-  
-  executeMasterAIApiCall(selectedProvider, nil, translationPrompt, 0.3, function(outputText)
-    if outputText then
-      local finalText = finalGuard(outputText); finalText = applyDictionaryReplacement(finalText)
-      mainHandler.post(Runnable({
-        run = function()
-          pcall(function()
-            local freshNode = service.getEditText()
-            if not freshNode then freshNode = node end
-            local suffix = (endAction == "New Line" and "\n" or (endAction == "Space" and " " or (endAction == "Space + New Line" and " \n" or "")))
-            local fullText = finalText .. suffix
-            local Bundle = luajava.bindClass("android.os.Bundle")
-            local bundle = Bundle()
-            bundle.putCharSequence("ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE", fullText)
-            local success = freshNode.performAction(2097152, bundle)
-            if not success then
-               bundle.putCharSequence("ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE", "")
-               freshNode.performAction(2097152, bundle)
-               service.insert(freshNode, fullText)
-            end
-            if copyToClipboard then 
-              local clip = ClipData.newPlainText("AI Voice Typer", fullText)
-              context.getSystemService(Context.CLIPBOARD_SERVICE).setPrimaryClip(clip) 
-            end
-            addToTypingHistory(finalText)
-            triggerVibration("typing"); triggerSound(); announce("Translation complete")
-          end)
-        end
-      }))
-    else announce("Translation failed") end
-  end)
-end
-
-function showTranslationLanguageDialog(node, text)
-  if not text or text == "" or text == "nil" then if node then pcall(function() text = tostring(node.getText() or "") end) end end
-  if not text or text == "" or text == "nil" then announce("Textbox is empty"); return end
-  local transLangs = {"English", "Hindi", "Marathi", "Bengali", "Tamil", "Telugu", "Kannada", "Malayalam", "Punjabi", "Urdu", "Odia", "Assamese", "Sindhi", "Nepali", "Sinhala", "Arabic", "Spanish", "French", "German", "Russian", "Japanese", "Korean", "Chinese (Mandarin)", "Italian", "Portuguese", "Dutch", "Turkish", "Persian", "Swahili"}
-  local listDlg = LuaDialog(context)
-  listDlg.setTitle("Choose target language")
-  local list = ListView(context)
-  list.setAdapter(ArrayAdapter(context, android.R.layout.simple_list_item_1, transLangs))
-  list.onItemClick = function(parent, view, position, id)
-    local selectedLang = transLangs[position + 1]
-    listDlg.dismiss()
-    translateTextboxTextWithAI(node, text, selectedLang)
-  end
-  listDlg.setView(list)
-  listDlg.show()
-end
-
-function showChangeTypingModeDialog()
-  local tModes = {"Auto Detect Script", "Professional Writer Mode", "Normal Typer Mode (AI Grammar Correction)", "Roman Typer", "Offline Dictation (No AI)", "Custom Typing Mode"}
-  local listDlg = LuaDialog(context)
-  listDlg.setTitle("Change typing mode")
-  local list = ListView(context)
-  list.setAdapter(ArrayAdapter(context, android.R.layout.simple_list_item_1, tModes))
-  list.onItemClick = function(parent, view, position, id)
-    typingMode = tModes[position + 1]
-    autoDetect = (typingMode == "Auto Detect Script")
-    editor.putString("typing_mode", typingMode).putBoolean("auto_detect", autoDetect).commit()
-    mainHandler.postDelayed(Runnable({
-      run = function()
-        announce("Typing mode changed to " .. typingMode)
-      end
-    }), 3000)
-    listDlg.dismiss()
-    if typingMode == "Custom Typing Mode" then
-        showCustomPromptDialog()
-    end
-  end
-  listDlg.setView(list)
-  listDlg.setButton(getUIText("cancel"), function() listDlg.dismiss() end)
-  listDlg.show()
-end
-
-function showStartupDialog(node, initialText)
-  local dlg = LuaDialog(context)
-  dlg.setTitle("What do you want to do?")
-  local layout = {
-    LinearLayout, orientation="vertical", padding="20dp",
-    {Button, text="AI Voice Dictation", backgroundColor="#4CAF50", textColor="#FFFFFF", layout_marginBottom="10dp", onClick=function() dlg.dismiss() startListening() end},
-    {Button, text=getUIText("translate_and_type"), backgroundColor="#9C27B0", textColor="#FFFFFF", layout_marginBottom="10dp", onClick=function() 
-      dlg.dismiss(); startupAction = getUIText("translate_and_type"); startListening()
-    end},
-    {Button, text="Process the Text From Textbox", backgroundColor="#2196F3", textColor="#FFFFFF", layout_marginBottom="10dp", onClick=function() 
-      dlg.dismiss() 
-      mainHandler.postDelayed(Runnable({run = function() processTextboxText(node, initialText) end}), 200)
-    end},
-    {Button, text="Translate Text From Textbox", backgroundColor="#FF5722", textColor="#FFFFFF", layout_marginBottom="10dp", onClick=function() 
-      dlg.dismiss() 
-      mainHandler.postDelayed(Runnable({run = function() showTranslationLanguageDialog(node, initialText) end}), 200)
-    end},
-    {Button, text="Change typing mode", backgroundColor="#607D8B", textColor="#FFFFFF", layout_marginBottom="10dp", onClick=function() dlg.dismiss() showChangeTypingModeDialog() end},
-    {Button, text="Open Settings", backgroundColor="#9E9E9E", textColor="#FFFFFF", onClick=function() dlg.dismiss() showSettings() end}
-  }
-  if typingHistoryEnabled then
-    table.insert(layout, #layout, {Button, text="Typing History", backgroundColor="#009688", textColor="#FFFFFF", layout_marginBottom="10dp", onClick=function() dlg.dismiss() showTypingHistoryDialog(node) end})
-  end
-  dlg.setView(loadlayout(layout))
-  dlg.show()
-end
-
-function main()
-  if not service then showSettings(); return end
-  if isListening then
-    stopListening()
-    return
-  end
-  forceStopDictation = false
-  consecutiveSilences = 0
-  accumulatedPreviewText = ""
-  accumulatedPreviewNode = nil
-  local node = service.getEditText()
-  if not node then showSettings(); return end
-  local initialText = ""
-  pcall(function() initialText = tostring(node.getText() or "") end)
-  if initialText == "nil" then initialText = "" end
-  if startupAction == "Ask Every Time" then showStartupDialog(node, initialText)
-  elseif startupAction == "AI Dictation" then startListening()
-  elseif startupAction == "Translate & Type" or startupAction == getUIText("translate_and_type") then startListening()
-  elseif startupAction == "Process the Text From Textbox" then processTextboxText(node, initialText)
-  elseif startupAction == "Translate Text From Textbox" then showTranslationLanguageDialog(node, initialText)
-  else showSettings() end
-end
-
-task(300, main)
+while false do break end
+pcall(function()end)
+while false do break end
+do jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde=lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef or 464 end
+do lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=OJKLMNOPQRSTUVWXYZab or 62 end
+do local lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=507 end
+pcall(function()end)
+do l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL=35 end
+pcall(function()end)
+if lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef~=PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI then else end
+if jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde~=jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde then else end
+repeat until true
+while false do break end
+pcall(function()end)
+if PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI then OJKLMNOPQRSTUVWXYZab=56 end
+pcall(function()end)
+pcall(function()end)
+do local OJKLMNOPQRSTUVWXYZab=909 end
+while false do break end
+do OJKLMNOPQRSTUVWXYZab=42 end
+local _IoklmnopklmnopqrEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmn0IJKLMNOPQRSTUVWXYZabcdefghOIHIJKLMNOPQRSTUVWXYZabcdefghiABCDEFGHIJKLMNOPQRSTUVWABCDE,lcdefghijklmnopqrstuvwxyIUVWXYZabcdefghijklmnopqrsMNOPQRSTUVWVWXYZabIJKLMNOPQRLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwx,defghijk1_lIFHIJKLMNOPQRSTUVWXYZabcdefghijklmnopq,_lBCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmijklmnopqrstuvwghijklmnopqrstuvTUVWXYZabcdefghijklmnopqrIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrLMNOPQRSTUVWXYZab_=string,math,table,bit32
+local OOFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwx1_,abcdefghijklmnopqrstuvwuvwxyzQRSTUVWXYZabcdefghijklghijklmnol,uvwGHIJKLMNOPQRSTUVWXYZabcdefghijklmnJKLMNOPQRSTUVWXYZabefghijklmno,IILM0MNOPQRSTJKLMNOPQRSTUVWXYZabcdefghijklmnopqrijklm,NOPWXYZabcdefgWXYZabcdefghijklmnopqrstuvwJKLMNO11
+repeat until true
+for _=1,2 do end
+if jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde then jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde=75 end
+if OJKLMNOPQRSTUVWXYZab then lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=70 end
+if jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde then OJKLMNOPQRSTUVWXYZab=35 end
+for _=2,5 do end
+do local _=249 end
+do local _={95,69}end
+local function HIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrs(d)
+local b='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+local m,o={},{}for i=1,#b do m[b:sub(i,i)]=i-1 end;m['=']=0
+local i=1;while i<=#d do
+local a,b,c,e=m[d:sub(i,i)]or 0,m[d:sub(i+1,i+1)]or 0,m[d:sub(i+2,i+2)]or 0,m[d:sub(i+3,i+3)]or 0
+local n=a*262144+b*4096+c*64+e
+o[#o+1]=_IoklmnopklmnopqrEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmn0IJKLMNOPQRSTUVWXYZabcdefghOIHIJKLMNOPQRSTUVWXYZabcdefghiABCDEFGHIJKLMNOPQRSTUVWABCDE.char(lcdefghijklmnopqrstuvwxyIUVWXYZabcdefghijklmnopqrsMNOPQRSTUVWVWXYZabIJKLMNOPQRLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwx.floor(n/65536)%256)
+if d:sub(i+2,i+2)~='='then o[#o+1]=_IoklmnopklmnopqrEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmn0IJKLMNOPQRSTUVWXYZabcdefghOIHIJKLMNOPQRSTUVWXYZabcdefghiABCDEFGHIJKLMNOPQRSTUVWABCDE.char(lcdefghijklmnopqrstuvwxyIUVWXYZabcdefghijklmnopqrsMNOPQRSTUVWVWXYZabIJKLMNOPQRLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwx.floor(n/256)%256)end
+if d:sub(i+3,i+3)~='='then o[#o+1]=_IoklmnopklmnopqrEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmn0IJKLMNOPQRSTUVWXYZabcdefghOIHIJKLMNOPQRSTUVWXYZabcdefghiABCDEFGHIJKLMNOPQRSTUVWABCDE.char(n%256)end
+i=i+4 end
+return defghijk1_lIFHIJKLMNOPQRSTUVWXYZabcdefghijklmnopq.concat(o)end
+repeat until true
+if PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI then jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde=48 end
+do PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=31 end
+do jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde=l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL or 84 end
+repeat until true
+do l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL=l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL or 96 end
+while false do break end
+do local _=30 end
+do local jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde=504 end
+pcall(function()end)
+local function OOoVWXYZabcdefghijklmnopqrstuvwxABCDEFGHIJKLMNOPQRPQRSTUVWXYZabcdefghijklmnopqrst(d,k)
+local o={}for i=1,#d do
+o[#o+1]=_IoklmnopklmnopqrEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmn0IJKLMNOPQRSTUVWXYZabcdefghOIHIJKLMNOPQRSTUVWXYZabcdefghiABCDEFGHIJKLMNOPQRSTUVWABCDE.char(_lBCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmijklmnopqrstuvwghijklmnopqrstuvTUVWXYZabcdefghijklmnopqrIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrLMNOPQRSTUVWXYZab_.bxor(d:byte(i),k))end
+return defghijk1_lIFHIJKLMNOPQRSTUVWXYZabcdefghijklmnopq.concat(o)end
+do OJKLMNOPQRSTUVWXYZab=lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef or 38 end
+do local _={80,32}end
+pcall(function()end)
+do local _=320 end
+do local _=36 end
+if OJKLMNOPQRSTUVWXYZab then PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=35 end
+do PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef or 933 end
+if PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI then OJKLMNOPQRSTUVWXYZab=60 end
+do l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL=40 end
+pcall(function()end)
+local function BCDEFGHIJKLMNOPQRSTUVWWXYZabcdefghijklmnoXYZabcdefghijklmnopqrstabcdefghijklmnopq(d,s)
+local o={}for i=1,#d do
+local b=d:byte(i)
+o[#o+1]=_IoklmnopklmnopqrEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmn0IJKLMNOPQRSTUVWXYZabcdefghOIHIJKLMNOPQRSTUVWXYZabcdefghiABCDEFGHIJKLMNOPQRSTUVWABCDE.char(_lBCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmijklmnopqrstuvwghijklmnopqrstuvTUVWXYZabcdefghijklmnopqrIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrLMNOPQRSTUVWXYZab_.bor(_lBCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmijklmnopqrstuvwghijklmnopqrstuvTUVWXYZabcdefghijklmnopqrIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrLMNOPQRSTUVWXYZab_.rshift(b,s),_lBCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmijklmnopqrstuvwghijklmnopqrstuvTUVWXYZabcdefghijklmnopqrIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrLMNOPQRSTUVWXYZab_.lshift(b,8-s)%256))end
+return defghijk1_lIFHIJKLMNOPQRSTUVWXYZabcdefghijklmnopq.concat(o)end
+do l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL=jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde or 898 end
+do local lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=758 end
+if PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI~=jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde then else end
+do jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde=jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde or 927 end
+do PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI or 37 end
+repeat until true
+do local PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=32 end
+do lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL or 327 end
+repeat until true
+if OJKLMNOPQRSTUVWXYZab~=l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL then else end
+local function OO0TUVW0STUVWXYZabcdefghijkabcdefghijklmnoklmnopqrs(d,k)
+local o={}for i=1,#d do
+o[#o+1]=_IoklmnopklmnopqrEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmn0IJKLMNOPQRSTUVWXYZabcdefghOIHIJKLMNOPQRSTUVWXYZabcdefghiABCDEFGHIJKLMNOPQRSTUVWABCDE.char((d:byte(i)-k)%256)end
+return defghijk1_lIFHIJKLMNOPQRSTUVWXYZabcdefghijklmnopq.concat(o)end
+do PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=41 end
+if l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL then lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=89 end
+pcall(function()end)
+repeat until true
+do jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde=32 end
+pcall(function()end)
+do local PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=451 end
+do jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde=16 end
+pcall(function()end)
+if OJKLMNOPQRSTUVWXYZab~=PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI then else end
+pcall(function()end)
+do l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL=lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef or 696 end
+local GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR={}
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[1]='1uWV6t718ZKT6vPI0OnwnfXDl53A5ZTA4PfznZfol8CL4O7I3v3c8vTy7dDix+icncf8xdTm8cWV6e7V3vfWwNDly9Dcx+jIw8vVkvTB7ffTyJTdk/OXwO3W1vHlz5Sd3Pbd59Dj/MeR/PWd0c2Ux+/J/OGX8JTI086VwOfS1ciQztbVzc+Uku3DlpzG8Zfi08/xnePS893O/NbIxsfx797j1pziwejd/MX83f3N1ciSz5Xqzv3VnPL81PKX5dWc/c/8lePQlc3hzMud7cr24vD1y83O4O3i3POVyJf91NXGwJbvk+H8yO3MlMjv19TF8P3W94vC1erw9fLq4PXxnZTV/Or9yPHq4PfzyMbx8sDxz/zxzvWX9+Dy6NDUx9bN/vfx7/HNldWcw5TF'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[2]='xvDLneXPleLg99TnzvDLwN7z8pXS/NbXi8CW5+731ur09e33zufzyPHI8vKV6peV4dLy597Blurwx5ed69b1xZPC6Pftzfzn0vOX8tLB8sX08fzi68+X7+XD8siX9cud3sb3ldPW3pzjzJWU5sXx75zR8vf2wvyd0v3eleDy8+/Oxtbn3sXw3ej36NfhyPOS69HvyI/D7+/2wdzQwPfozevX6M3Ax/zylfXUxcPR/N3xztT3xvKV6tfI/Mjex93d9sGVwJPplZWQ0PHv0MbL75bN6MeP1tT39PCXxdzy7dWV6e/d4P2VlZf11PKc1tbp9vGVwOPRlZTU7e3A68+WkpDJy++U15bnwOnyxZDJ1erdzpT37sHd59D08ueRxvXi3vbW8t7olsjox/zX'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[3]='6MDulZPG053FyPzA4cnWnfDC08DO48vQ3PLo1ZXGlPKczpac7dfoxcPLlMX+8ujN89Du0PXSy+Lh0d734c/oxY/Q7dX+/Pec59Ld75fl75TO/d2c08PxzdT11enc55fQwOaXxc3P6J2d9ujFltDewO3Q9+eLwfLNle3o15Xo8PHA48vHl/DVndz0leLm/dbi3PKW55Pp1JLTzuidi8fWzZbXy+Kd95XA0daU6vT278/c8pfNzuftx4v0y+rz1svq5ciXnfT38sDS5dbF7cOU9/3R3uLmwu+Uzv3v6v7G1PLcx9Xp4vGX4pfjl/eV9tXd4MeU1cXX7cfc4tWSwMbW75LQ3s3sxtbv8cjxnY/W3vLN1ujp1OjektT38uLux/eckMjy587i1M2SyejV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[4]='5dLy8pPClc2c1pbPkfbvlP3V9dWV8u7I3vXUwPDG9ffr1/yS1PPVlc3Qy93p1/bNlcby5+/I7sjR1pSSnfPzyOnXy52R8e3q0c6WnP7895XF0cvQ69fe1ZPx8pKL4+jd0vTvlM7G8ZL119Xd4vWW6pPCy+/h0pedk+nozd3L3ZWX58v3w8vvyN7o9+ro/d2S5sLV3eHR7+rnyvDyxvPWkuvO7+fGwe/q7cjt6pPwlMeV9+3qwPHzlJH275T90dT3i/PLzZ338c3GwpadkNCU1ebH3enmx9Xn8sD2wNTj8cfowPLNls3ulN3Plp2VwPfqzcuX6dzA9pLo9/KU08j8zdPIldDiwZX3ltLz55bV8OH+9fyV0cuUndfO1JXDyvDy3Obt74/OlOfTztWS'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[5]='3Oz86t7o/Ongx9Wd09KW6tDql8eQy+iV4vXU987n8+rmxfLqxdboyPL31pLlw+jhk+H8wOHL6Pf10dPNzuDL9+HRls/c8u6U/c7o6t3MlcDe8pfN3ObW3ZPg1sWX8e+dktf8787r1sjX0N3d3u/w8eDC7ZLox/ec7Pb8x+vW8tWSzZSS3uaW3dDq9tWW1pSS0vHt0OvK/JXg8NXd3PXVnfXX7+fr19PF3v3TxcXX9+fOwfzA3uqUxdTo95TDw8vV4sKU95Pny/fe5tbhle/zz9Di6PHT1+6U5cr88dfV9+fQ89bIlcHc0Ozr3OeS0u7n3OiX6cPK1PLU8NTV7cntkuXR3JLB0tTI9cnWyIv93OLR1tXv89KWlJX01p38/NTFlM/yxY/O6OLS55fx'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[6]='0uvdyOvMl/L9zsvVnfXW4tHR0+eS0NbI3Pby4t3PleqVwPaV88/ylf3J1uH0/PbN3sHUxcPX9dCL99WV7Pbo8e3R1sfFy+j3w9DT95bW7sDN0JfA3cjVlNzrldDO99bVkfXWzd7g7pXAx/LqwOL875XG3ZKL9Pzv/dHUxcHQ8OfO6O3nnNDozebA3ensx/bilteU55P89cDS6/zplMmWnY/DlunwxsvV8PXt58PQ8eLd15Tnl+zznefJ/MCLx+7Q9seUxc7n7dDu8ZSd0OLx4pXm0/Le8NbAktXwnJHAlefdze7ni8aX6dLF8vLly+6S4vPz3fbGl92P0vHV3c3owNHP7fLc8JbP683WxePQlZLSwfzpwOre1+/Wy83tzN2d5sKWnPXLy8XXzNac'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[7]='3POU1ZbS78+X8/LI8PfxkpTD1Mj2wtPy79Holfz91Z2Rwd6cwdbLx8D01Pfgx9zQxcnL8pXtlOru8fzV/Pfo6evPlpKT55X3ltLW8vXSl+fxzPHi6dX2lfHR/PH889Wd8Mbc0P7H3ZWX95Xn09He8eHQ3ufj0e+c9cjtkpPy6O+X59Xnzc2Ux/D81tDnyfHH8cvtyOjB08jy8svI59DL58HLlND8wsvA5vDt79Lq9e+V45WSwMLWlYvg6PHA6vDh8MfUksPS1MXxyvHdk/Xy6p3C3teP1u2d88uWlfz9l8jO7PXi7Of8x5f31ZXU8ZfF6MCV4pXol8Dh0uid9PKU1dLil/fXzpSdl8He1Zfq1M2V/ej33vz3nNTj6JWX8NaS49bo1c7m75Xm/dPF'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[8]='59fTzZXq3sePydTn8vzUxf7A9tXr0ejN7MbclZDI7pTS7/bNncCXx9HW1sXc/Mv30PXz6ePD1umQ1/DXl+vyxdzi8pLzyfzxxc7WzZDS3vHA8fzy7c3W6tzv8M3U4+jF/MfT78DB6PfswNTN/vbW4ubw7e/p0ZTFl+fWlefW1p3S55fq7PLyxZXm6JWX6fzy9crV5/b2/MjS9Oji0daU75DW053s8JfA0dH85+PS7ZKL85fv/vaU5+/R8ufS8Ojy782U95Hx7eLA4O6Uj8n84cDw753Bzcvy6PWW6pzX1MWV/ejn4PKV95LW6NeX4tbn0MeUyN7q/N3x0pXN1MfL95X08sDoxfOdwOzwkovCl8jQwsvv48jtxdzi/MCL6u7V0PWX6dDt1Z3DydaS'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[9]='8sf3lOXR3NDewNbq0sfckuDB1sfGwfzxwOjw75LK1eniwfPP19L88t7z7+nS9/Hqkcfu9+/X7cDcx9Xvxsfc99zql/Ld19Til/Hxxf3K9efT1vKVw8rVnebH1Z2Vx/Xi4v3L7+zl85SQ1t3I0ur88pH89+rFzsud/Pbv6fPW053Q7PCS1P3t55H2753ewvPI9cjt6uzB1e+dwZTd0cryktL385LA7PGS5sb2lI/O1urc5u3qncGUnez3/OfhyZbv0df25/HR/O+T5+7y1OXLzdzi1vLe6JTVltD3z5X31PKT9pfFwdLU58XV8+qR8e3Vk8bT5+zB1sXSxtznk+n299z21Z30x9bp9sLo3dPX/PLzw5T3i+j8wOLyy+fSx/DAxseXyN7i8tDc8pXN'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[10]='7vbt1dHM1uGX8ejxw83W15Xn7cDQ6d3qi+vU95Xpl+n8wpTNwOOV9/XN8urFyfHAj8/88vXIl8Xz0O+c/PWU9+79l5Lv0ZXF0vWV8sHNlpTTzejx3v3e1ZXqlJL29vzQi8DUlIvr85Wc0tySwdaUzezH1d3X0vOd09DWnZDM3cjF0dbh7MeW59LglcDRy92V7OGWlNPN78/BydWV3dDe7+zG9pTi8fz359ft4tz9l9eX9tbQwPfvld3X3OLTzNbHlcbw1cDGlJ3h197i49Lu58XV8sXOwe3Fk8CX4f7G/JL+x9bX3sfTyNHO7dCW0PLnnfzWldDly8XFy5WV9sf159HI6MeVwu6U1PfV5/PX1p39zPzh4vHznNzC7vLU/cvn0cjukpXz/PflzPH3'
+if OJKLMNOPQRSTUVWXYZab then PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=35 end
+for _=5,3 do end
+do local _={14,57}end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[11]='0OiX75Xl1ZLxyved08PW3dzH1p39zPzNi/CX6fb8/Mjc5+jvzsLVksDs1cjcwO6U4sGV4p3x85zt0fH35czz3c7ol9DQ6ZfA7P3c1ZPo7vLwx/PI59LdnM3L7c3Tw9T3k8fW4pzN8cCLxu+d89fc99Ds/Orm8fOSlcKX6dHK/NXr1vzI1OrL55P0/PGVxfzh0uDL8pPr8sDXze7n9dDz3eHJ6OmS0PLI59f84ezAl83h0t7dnMuWnNLs1Z3FzNbvxcvL8tDF993t1/zd4PPo8s7085LS8+jx48nLwJDK1ZTl0u3Q0vz87+HMlM2cw+3d6P3U1dHS8c3y8ujH6Pbx95Ph7vKL4Ojdj8nW8dDx7vLR19bN79Lvlez97tXi9pXA4cnznZzS7uft1fOV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[12]='zdHy95Ppy+/ywvHV4vft3c7q3MjQ69bx9vGX6eDzlc2V9fHIi8b3lOPQ8efUxsvI/cPz3ZXrlN2S1pbn9sHc0NDj6JLtze7Q69eX3ePK9+rAwsvyi+2W6evLlung9ZT3k+Hoku/W1Z3ux9Xp0u3TyNDg6NXS/e+Vks7U6pH38sid9vKV6cnVndL18pXQ/ZbP8dDu1cDs1uHU6tbV9c+XwJ3H7feXx97d09D81/78/N3e5/ziwMXy1Z3B1Orm8+jV48uV5+fO1pLv1svI9vP8yPz21Zzp1vXF3sKWktHM/Jzv1t7A187o1ZP285KR9ZbP5c6VktLzy+rh0e/d8dHTxc7olu/D193q5cno4ZfC8sjgx9TyxsGWz/XS/O/vzPyS3OqV55Xt3umS0vHQ'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[13]='leDVldDBlp2Q0N7qxdKU6vzBlNCPz+3I8vDuyJHH09DQ9ZWS59GU8pf1lJL+85aUzsbo8tLz1ZWWyPHikNHV3fXR6NDgxfzh0uCXncb36JLA6+3i0MLt9+zq8Z389pfn6Pz1ndzileKcytXni/H859fS85Tvz+jy1MLT94v075T9ze7VxdLL3d7t3OryxfySnM+UncPNlt3c8ZXql8LUwODzl5zA9cvQ0O2VyO789tX+9vOV1Or8wP3M3umX9/OSnNDc6v7y7cfDytT3wc/u59HDlMDy8Mvi9dLe4Yvq3JX9ze/vksmXkv7C1t2d/d3P0OOX5/PJ1JX0x5WS3Mft6uHQ1unS9dbh3uX89+3LlNDA6O6U7MCU1ZXC7dXGx/Dnw87Vz97ilurs/ZXI'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[14]='j8+WldfNy9XR0dPFwObe4tLq7vL2/dzq8MDWxd7l6OqL5svn6PDtyNzH8Nf08/HH1PbU1fLH7Z2RwsvAzcOU6vXI75yRxvzV6PCV9+nR1pKU0pfQi8DvnfXN8ueVxvHH7Oje59737+/jzsvn/ciX1f7zy+KX5tTIks6X583JlMjr0dPHi/bz3ePD6JXxztb3zuve3Yv89ZLS6pTq7OntxevI/OGV8NWSls2Vle/Rl8fu8NT38ML88tHQlurO9ejq9vaVkvL895Ty9t7H3OuVld7ql5WX6NPqw9eX4dPW1sXO7Pzh4MXx6vXQlff09+jv3urTx5bK95SQ0svdle3t4pP3l+/hydbQ9sLV6dDo/OHA/dP3xvDokt738ZLB0N7q1MDwnO/WlJLs7db3'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[15]='5vfV7+fX8N2Qy9Xp7P3WxevPlZTywt2V0PDV55bM8vLO7PCd5sGV0NT36PKX6fHVzun84sXJy+LjzpTq0OjW15P3/NXc7ejxnMnuktTwlcDOwO6UktGU4unW6OHT1/bi3PPo0Pb97ciP0vOc0PDW74/LleKQ0dbq0uDolfDyl/He7/bAxczT8sHSlpXwx+jHl/3W4dLo9Z2XwO/v7MDyzdT0y+/s5tOSxsaU6pHGl/Hc7e+VzvGVyODH/PGX4/Lqk+vu8v7ylOKQz/ycxvfLwNLllsjc9NWU8vfU1ZXq1uKVwN7x/PeX197l7tXF19zV3unT6uLz1M2L7NWUltbw6ZbRy+/e9vLA8dDw6fHP7+nmx/Oc3MbwlenR6M3e6NPH6P3oxcXX8s3RyJeV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[16]='l/LWwJbN8s3Nw+6V/vDWyN3I8fLgxu/P8dHonebG0930xfPvi8b36ubwy8j8x/D3lNbowJ39ls+T9tXq0vWX8ZPA6JLT0d7qzcjW59HXlPKL6O331OzVkovBlunjzO/p5vXokvXW3vHjze3q/c388eXMy/f9zJfAxdbo8pPG8cX28/zn9dX8xdLB/N2T6/Lq1PXWkpDNlPf9zPGd78nW4pP0lOr1z5TN/POU0PPPldX89vH3i+HxzZDX6J38we3Hl/WX6fHOlZXh1fznzvzx4uPM7sjc5fzIi+nW4ZzMlc3p1/XykNLUyOLB7efU/Zbdl/TUwMPX78/U9fHVwOrwncD9lu+V8tby/MDV78D21tXlydT30sDo1f3N7ef+wu/pk/OV4tztl9DAwO6S'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[17]='0c7o4pfq3erjyfLA6dLWwN3M6M311vGS/PLuzZfx8sDA4O/P0OH8zYvp3sjU4/LF/PH8zevM8c3R1ffv4PDL5+fV8cX29fPp5vHoxebz7s3tyZTAkNX21d3W8NDrzZTF7vXo6pbKy53l0tPNxc7L55bIy5LGwNzqzubU587l8uLByfzhzvOU8pTQ7ffs5cvNl/boxdLv9e/s/NbIleiX1ZXF8d3e4+ic4vfylMD0lNCV6dbV3czy1ZPo1vLA7NTNk/bz6tTs8tWVxu3n3vbelfT8y8CL8Nbh9dfczYv89+no/ZfNw9X14t3W8NDrzZTF8vXo95bKy53l0tPNxc7L55bIy5LG9vHQk+fu587l8uLByfzxwOOU1dztl9DAwO6S0c7o4pfq3ervyfzd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[18]='6ML8wN3M6M311vPq49GXxfLwl5KL4pXI9cPtx/PP7tCT55edzdHU5+3D6Nfhy9Pdl/H88c7BlJLNysuS3sCXx5frlMX+9+7Q5cjo6ePMlufzy+7I7PKXxeL3leqT/PLAzdbenOvRlZX89dTVxseW587G9tDe8ZaS3uPx1ZP01tX+9tWd5c3WyO7Gy83ywN7hnM/81+/SlPfU9vHQ3Or28ufQ083+9vzF69fv5+LF8MfBzPHHwMfUlfHD6PHsxtT3l/TyyPHQ75LS4+7VwPHx74v01PLGwtPF7dLc59Li6Ofl1/CS0PXoyPXOl+Lvw5Ti3O/1wO7w1ZzU7/Lnltbc94v0lJLT0NPA3ufW0MDC1ur10fzA4ciVyP3I1MXu9tbF8vDW3ebBl5Xz15bd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[19]='4v3UlfLC1M2X6dPAxc7t8s7C3pLh19ySnM3879Lz1sX+9t2S4dLW4uHP6MXn0fPd7vXW78PS8s3S69zV0uzw1+jG9tDDyeicwOrW0NLo3MXnzuj3k+3d6pPF9pX88+2S0czu55XG/J3X1tSU89eWlfLx7veTwNTI68jt4uj97sDAwd7i9MbTkpfA/OmL6O/p59aU4tDClefRydbv/veXx/PD1MXt0JfA08vtwJTMlsjU45Xnl+j8x5Pr7cXAxu+Sxczt8tTp1ZzXzsvI0cnowNfMlPfdy+3H3cj855DJ6OHBw9SSwOvL4uLH1vKL9NP359LezfHS/JydwNWS59GVlcDg7s3c9fLNl/bx54vtl5XUxt7hk+DvnPb91erA/NSS9sGX4pLO1uKP19zF'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[20]='/sDdlZHwlfLT1/aV9PLz6ZHH1sWL8/L34cnU4sDG8OLe7daS0unW8f3X3ers7/yc19Hz59Tp6Nfs9t7vlsvWyMD2/JzRy97X7PGVzZfB8pTU5fHn0crxnfPL7pTQ65fdi8Lz55Po3pLD0dOS7sX8xej2l+Hux/HH0MCU1cbH/Pf9yJfy08n86fb11sCQ19znkNf8nZXs8fLmwvHQ5vLW98XOlsiVx/Xn6Pbdz/XO753i9/PqkNDy1ZHCy93uwfzX3MX8987ol+L9zPyS7cvt4sD93un2x9bA6db3yO738cDjzdbx19DVlO3V9dXG9tyS9sDewN7p/JXT0ZbplejylM3Q3ciS0suSkMjV55zR1vfBzpXF/PPL6uz91seL7dbI88uW6Y/L1vKX9ejx'
+do OJKLMNOPQRSTUVWXYZab=lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef or 38 end
+if jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde then OJKLMNOPQRSTUVWXYZab=53 end
+if OJKLMNOPQRSTUVWXYZab then PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=32 end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[21]='/vfvneXLlt3yx/Hi0uCVzdzy/Nfz0cvAkfPW4dD27ffs9fPn0vTW4ZbWy+fd0Zad1OPWlZfxl5yX5tzN9c385+/D7siW1sv348mWndPW1t3Q49ac0PSU7+PL75X90PfIj8zVz4vB0+fw8fyS48uWyI/J8+rh18uSzdCVyMDH3OfgwNPAxdLW4Zfpl5XTz/Ppl8D2lJPxls+S0vLV3uuV59Ll7+qT9fHi4czvlJbMlpzO4fLn48rWwJfllcjuwZWV882WlfzB8urXyfLQkM3t1c7G09DywujVl8b88pbQ3Z3i/Nbiw9KVlN3L1tXDyvDF18Po8tPW3p3BzfPdlM3L1d7w1sD8/PXyj9fo0PDzl9XTyNXI9MX8lfbx78/F0dXnzujenefW9efxy5SS'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[22]='wc7W0O7wl52c1tbhl+z83dHLlOr1yvOS7dfW3dTG8ZLG9fzn/cry8uzty83G/NWS58juyNLB1Oqdx/fplMz88pfol5zO9PHd1MDx98bC8eKSz5TNkM6Xx93Iy8fm/d7d1MeVwJTV9cDoxfOU5sHdle/Jl8fy8pfFlMr3lM3Llt2V5dTF7vXvz9Ds8cXFzujqzdfu58Dp09XN192S69bU99zj7pWTwu7N9c7olZfpl8X91/GS4cOUx9D8/Pf1y5XI79bT5+PL6O/w95Sd3dKUnfPR1t2W0NyV7PXy6ufQ9ffmxpbp/vLWnJLJ1c/9y9XPkM/twObC3Of1ztbx5sX3587BldWVwd3pk/bu4pfil5Xgx/ydleKW55fB3PeWyZeVkMnylM7v8+/XzsuS'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[23]='w8nV6d7ol+f0x8vFxdCU55DR6MeQzOid9MbwyJbLlJLs6fOS8Mby58bHlfKd9e3H59b15+fWl+KU1u33lMPxyM3Q0/Lzzu7qkcf358DA8dDm8pbI4MDLndzz1Orj0ZT308/xxfD3/JL9zsvN7OPUxfDGl83F0pTA3sDenJLK9Z3e5ZaU7dLvz+/M7uqW0u+c5cPL6unJlPftyOj368+UndDB8pLe5dXPls3Vld7B1uqd8+jixcjx3fbA3s3Bw5XV1OrVlf3W3PeR9pfy6MDT1dDG9++dxvbN5cr359zo3ZTD1pWV9v3W1fLG7sCX9vHHi+Ho6cPI8s3r1svi4dLWwM7895Sc1pbdk/eX3dDm8+rc9fKU0dCX59Li8cDS9vKV0u3e6s7r1enhzu7V'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[24]='xc+X8tfO6JXp0NTFlcX2yOLC1sDgwu3Fxcze3ebG9d3T0e/p3OPVndT17dDj0tWU3OKX1+3Jl/f+8pXn8vWVkpLKy9XlzZfxk+uV0OfWlunU6ejVw9bW4dDClpLjw+jN88vVndT21enB1pXVw8zWnOzqlZWc0e3qzc+X5+vW1JXSwu7I0Oz33Zfi8c311tbIw9bU1ZXGlOfg99Xq1OiXx/3P6N3v193P/sDyzdLF/JyL7dz3i+rL1fPWl+eT7NTN/cPz3f3J1MDTyZec3sbu1ezH8e/O8Mvq/sDd75P81c/08paVw8nzz9PSlOru9pfHl8b1x8PJ/JXv0NSV3sCVxc7i7urp1vPd08PW3ejG052T7PHA0uqX4Yv36MXrzujd7dDykv79lc3AwJeV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[25]='wMKX8ZDX3PLX0e3N0OndlcHWlPLAx9SU0uLLyPzH6PL288vV0Mfw6vPQ/OLOxfzFlNH8wP3Oy+KSyO3Vk+rt5+/K8erl1/HIkNLulJLQ1ZLc4fGSl/b875bS3u/A55XN3ODo4uzx6Oncwu+dwdHVz9TB7++U1+7Q0czUyNz18pLQ9e7nk/CVyJLSlOLUwPDq7saUxe7y8ZLQ4fzvwPHu4sXV9tXh1fzq7PLoyOLH8OLG9e+S9sbW5+vS7c3sx5XN4MXwyOzG/Nfx1t7389He0J3B8ZLp0Jfixc7v3dLA85WX9dbd/sbWnIv03enDw+3d0dX2993P/J3A68vn78P8nNDj1MjA/e7I88/xyOzg7pLxzdTIwMfwnJbJ8c2V9dTI69fx9+LB6JLo9tyU'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[26]='3dKUkvHL3sD1zpTvxc6VlcbxlOLx0ejA59HUlMXW052L5svv5deVkpbJy8WXwZTnk+mW3cPW8cCXwe3Q0v3ox/zy7eLUwvH349D8wPDH1ueX9/HFwPPo15bM/Mje6ZaVnM/v6tLr3ZL29tXP/sf88ovp8efA9Pzn0daXne726Mf1z+3A8db159LHl82L4/LAwObL4ovB1vKXx97379fL78PMls/c8tbi9sfT0I/S8+nywvOU4dDT8tzy1c+SytbXxsfU8pPx8pSczZXnktX2xdLl1eeQze/I6PaUku/J75XU7dzykND3lPPK/JyWyfzy/dD20JPh/Onm/e/q3O3t1ZDP7Z2X9Nad4sX21c711MX91/GdltHdz9PX8pLrydbv5vbc5+vK1p2d8u3q'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[27]='186W5+XD7pLXzsudlMuX6d72/NCdxtzV9vfzlO/K8JKRxvGSj82X4pXh7dXOx/bq4vfznd736JyV8/zpnM/txd3Q1JXU49Wd/dLuzY/N1vHSwZTy59aXyOXP85Lr1vXN4czWx5DV/JzgwZXV18nW19fQ95zc6/KV3Mf88ZPG3pXxyvXqi8f3597wlO/+xpX319De8cD03vKQ0PeU0v3L1ezH6J31zcvA6c7Wlez36JyP1+jvnNX13c3W1u/n0fKUktbx75f18pXc6tP30c7v5/3J1uGL8/zH9vPV6uvI7cfzw/HI0uLW1fb3y5LmxtzVzsftkuzr8ufU8+jv5cj88cDq1sWQy9zii+LUlNzG3ueP0Nbdi8Dtzc3PlMfAwcvFnfPv7973lZWSzdbn'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[28]='8cnUldzq0/fr1fH38sDv5/LG8JzX1ujH79fTx+nM09Xj0PDyzdLoldTl8uLc5fHykcLUyO3N6JXt0N7v/PbWzfPL75zhy9bNj8nvnMPM8tX+wN6dw8jx4ufJ/OmV/POVltDulY/D1vGW1+ji787v593M6N388e7q3uz2lN3R6M3c4Zfv/PzW6tfP8cft1/zFlenckvPWl8DF19T33db1x97A8s38x93plsz86u3I6J2XwPfPw9KVzZPl8d3Ox/HV1MfL9+LC1sWVxvDn0uDVnfPQ1NWX5pTnkcaVzZzQ1siQ197pnNLVyPPS1JTzyvGS4sDdld7i1M3X0vydleXxyM7xlfKRx+jI48yWldHK8cWT8pSS9MX13ZfjlM2W1fDqwcnx1ZP01ZTNz/PI'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[29]='ncHxwJzXldX28Zfh49GUx87H/NWSyvLQzc7V54vz8Z3s6fOUzvTylcXQ9tXz0e3I4Pzw1ZzS1NWT55fi3ODu4u3J8pLrz/LV5sLv6pXn1c/+wJXF8v3u4uvIlffo8+ic0dfT6tTt3MDryJaS89by997B6MjF0t3I5sbLzf3R8vfA4tWUlerL79fPlpznzOiVw9fT59T91NXS59bxkNHz5/Dz7cXdyfLQkNX8xefS3seV6sud4MLc1e7zy+KPzZfX0vfL4pHH7cf10tWV1O3v587r3u/UwNTykfCUwOfQlpyT8+jV7ODW7+DG1uLU7e33i8D8yJDJ6MXO7NTFwMeVzcHM6OLgxu3Qi+jt6ubAlMDcwN6d7dDtzfbG9ffc9svi/sH8x5LLlfLAwvzn'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[30]='l+3v3ZLX7cCXwfPv/dXyxYvo8On28vHH78mXxdDt1vHU85XFl/PvlN7r1vLd0dbNl/b8yOzh6OH08e3iktbz6tfLy8DO58vQw8PL0Nzz6O/2wej3/dHU597q1tXDzN6c0Ore4ZTX7veczdaS6c3tzeL90+LmwsuS48iV1ezp753dye/n3vWW6pPA8NDQ45Xy3Ont8ovi7fLg85aVle3e1fb2lpXs/d6V68ztkv3W8ND8wNaSktHTyOnQ/JKW0tyVltaX1+/W8dXv0dXd3OLVndLB8e/e9PzI1PbWnfL96OHQ9dTn483Vkov2luf10svV0df3ktHLy8DO45XFl/XL1cDH7cje4/zp4Mf86c7v/N39ztbq0uHu5/TF95WPw+3v8ciVlePP7+njzNzA'
+do OJKLMNOPQRSTUVWXYZab=l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL or 911 end
+if lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef~=OJKLMNOPQRSTUVWXYZab then else end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[31]='6MXwnM7h8eqU0NTnw9fyyIvjy92Vx/Dy/vHx4uPI7sju9vzXzsD24pLJy93SxsuSk+rx0NDq3ZSc1vHQ0MLvz87l8++T9u3Vj8/u4sDH3unpw/z37MLyleLz793j1/DhkMrWnZPG3pznzfLA0uvy95Pz8+mP1u+S0OPV5+PPl+mSw+7I7MKU0MPQ1e+S0t6S08nU55DD1Z3r1tTqw8jVlJP3lsiV4pfvi+/wnenS6NfjztSS7Mbxkv7G7dDD1fDF3PPUyNTC8tXS4tTQ1PeX8tLo1vHlyOjN0dbLne/Rl8fU6O+S/Pz81cHX1cjFyPzv9sLL8pPq9eLoxfPp4vPUlc718erc8e+ck+j8wN7By9XXzNac89DU1Z327cXUwtWc/PXL6pDDl+HFw+/P'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[32]='/P3olcb93erBzJfQ6PaX1Z3C/PH+/dXd59CUxcDzlNWX4e7q49bdyNPRlp2d/dXd3MDWleL9lOfd0PDn3uf8x5LJ1sec0fKSi+3WzfXL3NWUw5XV0PTulc7ql8fA8/zy3Ofu4vXL3c/r0eji4c3vz9fK1uL0x/OS5sfw95P285zO7/zVzvLVldzBlPfhzpfh0MLLx9Tm3sXc9u3N5vzy4s7G8OrQ4Jfn4cjuyOzx7tD+9+jH69GVleD8/JzR0Pyd1Or83c7A3teX7/PIksr20N7y8tDO8Mud09LtxcHM3c/+99WV586XkpHwlpLt0PHi9MHuxfT97s3c6O3F0PTU0PPMy+/A8/GS08+X3ZLOl8fg8JfF9MLVleHDl5Lc5pTF9vPo593Ql8j+8vHq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[33]='zsLcyOHJ6ND0x9by0ujc5/HJ1p391vfvltGU1fXI1vHp0vLVks/v58711vL1zPHvl+/2xdTBlpXN0ZfpksyWyJHxl8jpzZfyi+P86d7jlc2c19TA0ur21fPK893tyej33vaX6tLG1vHs4NbA9cjo9+b1lOru8tbF0uLvz+nNy8jNzN2Vzdbwx5DW8+nA59Xd3OfVlZXs8tXg9vHQ0P3enND9y/L1yMuS8MHL0JzL6MjvyPyS49fw1dzHl+fAwdPv1PHyyMDA9cjt0fzx18jx75LD8eKL9ujQlcX84ePJ8ufA5vLI0dby8vbB1M3O5fPP8c3Wx53H/PHF1fDQ8P2X58PI6OrG9vz36Mbw8sXO1sjm8ZbI7cvV74vh/O/j0PKU7dLvlPT26PfA8+/d'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[34]='6c3Uko/Ml9ecyfHQ3sLW3dLm1ZLywNPn3MLT5+fD7+/O6PHq3OXt9+vDy83U6PLV4dbz59LG9sCRwZfn1MDu0NfNlM3e6fyc4v3t5+zn8vfX0ZTn6Mfcze3Ilt3j0u730OvLwNzj753Tw5eS0PTVlNHS7cf1zNbF0crU4t3RlpLFyJXq8ciVzZPhl+eX4e3Il+ju1dfR7efw8+3V5seX79PS8+rQ6fLQl8by0OvW993U6NadkfzW3d7qls/m9dSU/df814/K9siQzu7F7PPVyM3Q88jxw9bH5sfTx5H96M3+wN736dCXndfX95WV9N2V68vW1ezo9sjjye7IxczuldLm/N39zPydnMnywMPRl+eT4pbd3OXL1dLC1seUzuiV7Obx6sXQ9cWX8/zX'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[35]='l+n1ndHMy+fs8/LinMnylNLB8e/S6vbi9dLox8D008fs5tOd7OuU1ZX2l9De55bP3PKVlNLi8pTcx+/q08zonfzH8fLdy+id9PXo0MHN793zyPPPlcDTncHJ1JSU1u+S8PfW1eHXlcDs7ZfH5dD1kpbQ3vfF0vGS3unwxZX97eqPytXp3sDenZTRl/Kc1+ickcfeneDG8+fc6+7A6P3T1c7o3er+xuic3vHulJbX3pLj15fvj9D1xezw1cjiwdXn8vfo6t7B3u/AwPfn/sbvksPXl+f+wJfqj8n88ubBl9Xw9dbIi+WXneXP6O+LwdbQ7MDuzZ3x6OHFydbX59HznfPJy92Lxt2c0OH84eXMy+LxyJXI0PTo75LM3JXp1tTyxvH859zo7+nQx/eV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[36]='68rVkpbD7dDGwtPN89Dz6efS1vHO8/PqzsHU983R1sDR0ej30vXV3eL3lpyc0e/P3cr8nNztlun+wdaV3dD1zfHR7cjNyJXqi8Xy6s7H/JXS6d7x8sbTyPHO6OLR0ujdkMnUzdL36PLswt7V9vDv59z1y5KLxpfNnfXyxc7n85KVwO7i3Pbc5/XM3vfgwPLN3saV59LAlNWX8fzqi/LU6o/I8efN1paS0PLx55X9y+re5tbyks/okt3QlJ31zfHNw8zT4uzB3enF0ZWS3sbenZH1/Jz1ydTqwcnW3Zfoy/fxy+3N0sLtxdzi/OnU6OjN/PPt4tLyy8jO4pfnnM/ox4vllM3d0t73l/L81ez31u+T5u+c8Mby55fm7fecyfGd49b36ZP88MCLwsvN'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[37]='3dDx4tTo7c3cwd6V0sHc95X0y+/e9vLAzcrW0OHD/Jzv0pfd0sDT98PX7sjyx+/vncbw75HzlOfA6dTAncLvnNTo6NX+wfzX0MfU8uzyl+nA5/OSl+bu1ZLR8erS4MvVw8zex53C1tCVxvzX887VlP7B09WX5/Hd5cPUlM7n8pXD0Ojv89Dwx97olcD29/zHzvXo6fPX1uqPyvCczunclJ3G7tDO7dzqkNDenN3RlJL+xtbAwObVkufW1NWSzPPIxc6X7+3Dl8Dl1+/P8PWUx+XN1NDtz5Tyi+ry0NLp7+fd1/HNwOPv5+by8ZKTx9b33uKX15bD7ffQwvGS6dfUyNzt3ND8x9zikMr2yOzA7sWPw5bnlffylND17fKLwpfF1MKVwMDH75Ld15eS'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[38]='486WyM79753Q55bI6Pz3yJLWlciV8tbNk/2U9+vM3JTU4fznktbw7/PXy8jDycuS0sHtzdT31sDQ4tTN1PGVwPb1y/Ld1vDx8Pz3nJ311u/e7cvikffyktzw1MXoxvOS68ry8tPXl9Xvze6UkNbLkunM1tXuwfzqk8HT98D88tXs4Oid6Mfe8fXSlffmwsvNw9CX99fX/PGc1vzpkNaWyI/N7fLwwtTNk+Xzldzp3OeXxt7N5df1yMHM3teL5svQwMbezdz81efxy9PA4cyX58DB7vfo/e334PeUzYvA753j0NWS3OnU1f726N2Lx/bNktLW8cHQy8XQ/cvA5c6U3dPW3uHs4NTN08zT99zGlsjzz/Hn/cvvz4v1l/He9fPv/vaV0I/Ry+fi/NaS'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[39]='3u/yxfLA9vLdw++dwdeU79THl9fvyPLAl/WV4tDjlfLU7/bFxvHo1c7l8eeRx/Pql/Tuxd3O6Ofi9fHA0vfUlNz2/NXS6pfV5vLyldDG6Omc0dPQ8cvcxfPS7eKcyfPp883ulN3X8Pfh0Ojnk/zVnP3D8++T6vDq6c3UyN3D75WV8/KUxdXy6uL3lOrcx+7IzdeUx5Xn7+nG8tTNzun8ncbz8c3N1fzHi+rdktLB8ufX1fbik8aVlfz9l+Lo89TN8PPVyPXX88/mx/PI3c3WwNDg1JXRztby7deUwPXW1efS7Nb3xdLo0N7v8Mjg99bh0PTdneDw1tDByPHy3P3c5+L31p2V/dbXl+aWnO/O1MXzzNzVktDUzdHR7sDXztaVxcuUneL1lefU7/LV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[40]='l+nw4f7H8cXt1pWVnM/oyI/W7+/U7ZTHnMnUzezBlOrt1/fq7OuU9/PD6J3+wt7p1PDox83K8+rc9dTnl8fd6t7q98js/dbxkfbTx/L91tf10pSSlevo3Y/D6OHU9u7n49He1d7n6NfS49TNi/DLwJzV98+W0fHi4MLdnOL88dWX9Mvn5dfW19HK8tWQytWd8dXwnJfq3un+88uSnNby99zh7fKV/dXp19bc1dz895zr0O3yl+HulIvw1u/O4vH3wMGXktDylufu8tWcj82Wz8bx8ufx0PaUxvDvnM7B1c+Rx97x/dfW4tDm78iL6N7A1MKXlfPS3uKV7dbi4db179Tv8c3e6tTN0ubv7+7z/MDgxtWSlceV6s7Al/Ln1pXVzdbo4pDQ1efryfLN'
+while false do break end
+for _=5,3 do end
+do local lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=659 end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[41]='7cuVwOHR08fTw9bnl8fclI/R8eqU1fXF4PWX3f7w6OfQ7/X34Mb29+vP7veL8NaS7MX8ktzG6PGXxfDx78j88fDy8uqXwMuS8vbd59zl1pXp0uiV0uHowPDA1vHO/ZXI8cnv6c796N3t1vzv6PXL4uXX6PKUzfGSl/fx1YvmlfLFyO+U59bt8tzo3vGT6vDIzvPW99781M3m8ejAkfOX8evDlMePy9Xv4sfvz+7Cl53pzfzV7v2X4dz9lMiX7ejp4vKUwJLL75zewpfVwPXo3dTp9efUxvHFj9Dz3d3X9ced9/z39v3u4vDA8JXxzdTQ9sbonM3Q7eLd197349Le6ZbK8s3A55Tvkcbx5+7wlMDTw5X3i/LUyPHQ/O/lz5aUj9Lv7+fV9eeS1+jd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[42]='4PPLnZLI75Lt0svV79X3nOHS1u/j0dbxzu3L0Oj3y8XA7e7n7sf8187085XD0vHnwOjvndTv8cDA65TnnfKV0OvQ7dXUwPzF3u3UktDv9ciW0O733MDu5/3Q8uLs8fLN/cmV4ubF8Ofyx+/v3vfoxf7zldX+/dbQ7PDuyN3SlpXgwtbi183LwOHP6Or89pTq3PWX6eXNleKTxfzQ3dbeyNDp08juwNbx9vzL1ZPpl8eT6JfX5vGU3eXQ3PKWw5fQ9vbz75DM7d3w/dznkcaWz9PJ6Orhzu7FlNHt3fDx8sWWyPyV7Ofo1+j23MDtyPznktLo0MPXlOLFzu7i4cPylJ336NX+xfed59X2lcbB/Pfu/d7AnNaU8tTo3MDp0PbN0seVyMDg1uHx1/Dx'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[43]='/dfu8vXJ/O+V9fPp/vLzlfb91sXlzPPnnffLxfHW6PLx19PH/MHo4pf1/OqXxujdkNLTwMPI/Mfc8u7QkNXznevO6Mj09dTQ6MfWx5X3/PKUysvF4PKX4t7G6M3j15TVle/w4ZzW3ZScyZf3587onOjA9pKc0fHv9dGV94vz8vfc7d7d09b24sXQ/NXzzfzdzsCXku3Q6JzpzPHy9Pzx0MDHlp3e8NaVktfc0Iv89tCT4u2S/PbtyPLH1OrOwpX31Mfw7+fXlurv0N7N8MeW78XN1pWT9ZXV3vzzlOzolNDOwu3n6MaWnNDAlZTg8+jX7Ore6eDH6NXw/ejilcGWlOj38cDB1vX3/dfe9/zB8e/08vLnzdHxx+PDlpLx0tbdnNX28pHH1sWV9Zfi'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[44]='7sLzyN3Q1MCQyfGS5dfw55PC6PL0wOjXnNfxndLA6Pfc9MudlNLW1d7ql9DT197QwdHulOXI7vLQ8Zbp79bT0MDnl8CVwPHA6Pf8yPXRl+LAwdXnkcDtyOnK/N2RxtTF4PeXwMDH9cjtzJfpi/2X8sDnl+fQ9dT319Xx6uvLl+nxw9ac1PHvnNzolcCQzZfN7MGUx5Phlerc8MvA/c7t9+zA7e+V4+6SzvfxyNLn7eLs68vN79D10MHW05L289TV4MbczZXq8N3c6ujN7cvtzZTLl+rO9vzH3cvU59T20530wd3qnMiX4uLwlcXuwPbnktbwne/RleKSye3v3PzW3ZDOlcWVwMvN0P3WkuvL3pz88fLN4vPVnZPn6MeV6+/P09bUxfDC893p0NzI'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[45]='lez20NLw7+rvye/pwPDWxfT23efO5e+Vj83okuzG993Q6Zfy0dbT59zr7c3Q7dyS1On11ZLW6OHpz+7n6dfTxfb1793A/NbH/MKX6dHS6JWLxvDX09f2yJXo6OrU5pXA8veX6sHO7sX1ydXI0cuXzeHX95Lix/H3len84sPD/JKRwsvHwOPLx5filu/s89TN3vT815f18Z2V9ZTIkMvu99zl6O/N18vFxdX8xZLI1unTzfLIwPLx8pzI/PLRztbNkNHx7+LC7uL+wpSdlenL6uDA6NXgx97Ni+3e4pDJ8tX2xtzV0uXxzZHy7urA6MvQl/DW4dzrl+Hty+jnwOXo0OvS75WQ0N3pnfWU7/Lwy/f+wejF7PzUld7h/M2d8vzX0PDvlcDG3Ors9NTV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[46]='5c6UktLn1c/t1/HV1OnW59PX793X0pTN69fTxf7x88/s6dbH3uvW7/Dw1tDe7dXq7MX37/zHy8WPyvHNk+uXnOj23M3A8/Hv4vzLx4vz6Nf11taSwcPo4d3X3s30wNPHw9aV59Tx7ufQ6tWS0sb3ktDty8eV4Jfd483W4sDGlpzyx/PP9cPt3f3X78jAwd3q7OnT1fHI6OrQ7/HF58jo54vs/JyXwd7VnMrx8tD38tXy9vyc7Mf14pP18eeR8ZTd9sKW75DD6OnO9pac9dHVkuvSlZSL59T37MX159zr3s3S9/PI78+U94vH3ZzX0ZeSnMnWyIvqlOfc5dbqleWV0O3I7+mTxpfQlNf855P9lcjcxujH1Of8x+jA8+mc0taS787onZHz75yT9ujQ'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[47]='68mX3ZH88MjBzsvF0On159HN1ZSR/d2Uj8ntx9TrlpLU4ZX30cnuyOHX/O+TwPPpwOjU5+XX6J2U0t3vleCUnf3L3vfXyvOVksjWyJbDy+/r0dXdkNf2zc3Q3vL08ejp9dHz3eHWy8DewNSVw9bo583X7+ro/PHNlM3L0O71l9XAwPz30sDo4sbA3ZT+8+jQ3MeWne3OlsjUwOjyi8HdnZPtlPed99TIwOre55Pq7+fTyMudleXzz/7ylcjN1paczdDewNLr3tXDw5WV19bW1/7G6PLA/PfvzuXv5/3I/Jzs4ZfF3dD18pf08s3U4svF0ujuwPbG7sWW0dbi6c2Xnc7h75LA8fHF9PzWzcHM8+qV95SSzujL4ufLlJKTx92c9dCX4vTB1ZWdwO7I'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[48]='3c+U5+j93sCV6Nbd0vHvlN3I8ufGwfznl/by8uz2lp3vytTFwOLLzfTH05Lo9t7N4db2lNzol+nBw+3Fxv3L3dPD8sDl1faV0Ord6t3Ny5LO85TnwdHt0OnM78jU8/Od7sKUkpfl6NWc1fKVk+LU5/7H1cjc9tTqj8jvnPb81Pf+wNzil+bc55TP6PLFztacwciU553Gy/KV4ZbpzufL8tzj85TRzfLNl8X8x8bz7+/rz+6U0ujWle3Q7+qT4vGd/vKU987G3MXtzfzd/vPy1cbH/J3O5fyS3MfVnJPi1OeSzZaU79GU1ePO75Lc/dbQ0urd75DO75zm89bVktf36vHP6JXsxtbd783W6dPMl+/c9eicks2U9/T90/fdze7i4sfW98Dv/N3T1/aU'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[49]='0P3o6sDl1sWSw9bNj8nzlMXJ1u+V/ejI1Obeku781tXe6tySzvbe8ufQ1pLA6e7QlePt95Pq1ZTlyvDxwMCX6dLj1ZT10NTFlcLc59zj1JTGwJWVlMPVlOj9y9DO4fLF79D1wO7H8OHnyPHIi/zy1dz21JXowujF4cvVktLH8vLewNT3l/bLyJfpy52WzdXPk+b8ktPOy+rTzZX34dHe18Dp/OmRwe7y5daV6vXN7eLc6O3dj82V0NfQ3d3S89bn/dCUnePS3vKQ1fH3j8uW6dTr1sjF0JfV0c2Wz+/DleKd8ZTd9dfW7+HS3tDhyJfq78/vyJX91s3pzpTqksPv78XS8vfywZXinfXx54vy1e+T6ejI1Or8yI/L7tDh0tPy1PfukuPR093S4tWd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[50]='l/bxzevX75KX4vLV0uLW6cXJ6MCSyNTnwdb1zcDnlufQ8NXqxcve75DSl+He88vNl8bdlND3l83e4Ojv19byld7t7sjzzfHn4sfe0M3Q9c3U7NXPkMOWyNPX8Jzewuji6PPozfPI1vf898vAw9buyJDJlp3SxvDpi8Ld74v31pzn0Nzy3sD24u3X1pyT8vzQi+uX14vs9d3h0Jbn78jL0Nzq3c/FzNbIlfH8x/z1l8jT0vzAlebt587oy/fgwe7qle/87/D26OnU8fLVj9Lz6pfildDU9e7V5crxksXX8cfowtTi68ny4p39793zyejy5c2X8d7m7pXQx93P1Mb2xefM75Xlz+3F59aX187j753A9tOdlsjL6pDQ8+f0/PXHxsfL0NHO7cji8eic'
+if OJKLMNOPQRSTUVWXYZab~=OJKLMNOPQRSTUVWXYZab then else end
+do OJKLMNOPQRSTUVWXYZab=l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL or 82 end
+do OJKLMNOPQRSTUVWXYZab=PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI or 88 end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[51]='w9f8x5DK8sXQxvHV0sDu1dDm3vLiwNbxl+jw59DH9pLy/PHi6MCUxcbH08DT0Zbvls7L3eLz1ZXNz/Hd0OzwndPSlMjN0u/n7ciVlevR7uKV4vydzuPvz9Lm3vf2/dT39dCX4ubHl8iSyZSS7OKU59Th7cjh1vfqi+XL0Mb9lfKL9NbH1OnvldDl1s3g9ejy4vPu8tLq/NXhy9Pyks3y4tzm7ufO6d7Hl8f33e/K/Onm8tbQzuGX6s70lMX0xtTVlMyX4enS3vfs4uj31PzxwOfQlO/11vLN5dH88tPJ7tWT89bN68vt4uLz1sXRz+6VwdGXksHM3PfBytbQ0PaWnMDt3vHB0ZXFwO/2zejwlJLs6NSUkcD88ovqlJKSw9WS3dXznJPzlNX+wNXP'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[52]='8Pft99HX093T1t7pnMrL4tTHlNXS65eS8Mftnezqy+riwdTQzvX8kpzD/OnD1vHNnNbWlcHD6M3uwN7h5vHt9/7z7vLn1vyck/3ulJbX8ur29u7AnMmU5/HP8pXuwNTylfDonJPA093X1ujh68r8yNHM1MXzy9WVk/PUkunXl5zywJeV9v3UzeLyy8WRwtTIk+LWlY/W95zA8vHdkMnW4tzF9efNy5WVwc6X78HP/Ofd193P/PLLyJbIlcXox+iSk/KUxdTo95XN1/Dn3unxxfHI6MWRwe/p9vCVyJP18cfl0t2S9POX1+XKy+fSwejV58rLkov21cjT19Wczvfoldzj1ueV/Zed0vHv3dPR7d3g9t7v4PPL1ZXi7dDn1u7A0uXV6dTp/JLc6fKS'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[53]='0dLWlcPO753U6ffP69LuxfDCl/Hn1pf3w9fL6sPN78+Q1/DI18nUkpH97ZLe5dbVnM3W9/HQ3uKSy8vq79fw6evX3cjG8e3I9v3onNzqlPeX9dTq4MfWyJHA85zF0e/d0urdnezpl+KX69SVl/CWlOXSlsjr0O/IktaX7+zny8je9Nac/sGVxZPo6PLixt7d1On13Y/P75zhzO+S48nWle/D85L098uSkMPz6pPC3uKPzO+U1PKVyNz27fftztTV0PXo0Jf81uLlzdad0OjVlMXM6NfT0tbn7PPW75fCl8Dh0PXFwdbe1dHS1M3z1fbqw9eX8fXQ/PKWztXql8H8yJX06JzT19Tn8vL83c7p3un90fLV3sDowMPK1OfU45bnltf80OHQ8eqd/PbN'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[54]='3dfW4ZP27+/ywZfX49H86tPK8uLw/ZXV49fznJDI8s3pzejI7PHo0M7o9ffp0ZXA0MeX8sHD/O/O5e3I8PzL0JHwlsjg8tbXlNDU55PB7c3tw+jp3Mf88ujG/Orj0u/P3ObdnJ3C3e+WyJWSw8uUwJzX8Jzsx+/P/vH80MbB3NXs/Pec0daV8sHV/On0x/Od4cPonfDA8ZKR8JTV/dDc6tfX1M30/ZfX/MXx55Hx6One4svv0ujx3fbzlPfyxpeS79fz6Zf08pXBy5fNlfboxdLpl+rg/Zad3v3c0MXX9siT9NbQzubVnY/Q/MfBzNzQ4c+Wz5LK1PLlyZeSl8aVlN7o7vfG/d7N4sKXkpTW7e/i8uidkffV7/bx8+nO9/HH8PzWksHR1vHs9cvi'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[55]='8cjxx+fDlfKR9+7388zu0JPll/fwx9bpwOqUwPzy1NDAwPXN0PbL3cXI8+nny9XnlsjU9/TB3vHs9pTv19DyktTq9tCX8JfFwMb1yM7F8sDc6PWS58mWku717pST9/Ln6Pzw99Tp9feX4+3VwPL8x+XX1d3ux+6S4dDw6c3R6JXoxfHN69Dc9/3N7ufc8O/d4vDu95fjl5KX9NTi8dbW6pDS6Onjw+3H58mUzc7plO/09/ySncfx55TP/N3Q6+7A5c/u6vDC08fA99Xn9dbW9+z96NeX9tTA19XyktDplc3e9pX37dbo19Lq/JzwwN6d79Xx1ZPr3sDzzNzV4Mb3z+DA1ZXQ6/KU8c7oxZXA/M308/zXw8zvnJDN8s2U0taSwODo3d7p3tfh1/Pq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[56]='79Dex9PW3MD+x/z34cPvkt71/M3OwZfA4MDx79Lp1NCc1+6V4PH8zZHx853j1pfh/sHU5/Dy1sfvzu3Nlszd55XxlOrU9++S9sfL4vDx6Pfe6PzXw9fcyM3W8Ofc4/HAw8jUkvXK1vHs9JTql8bUlZH8/OeRxffqi+LLwMDA9uqL5e3d6PCV9+D1lc3T0dPn0sHe8fXM8cjuwejQk+XW8Zf3y5L2xvDn1OfWkpf18sji8u6Si/z8yNDg6O/wxvD36dDznNTp8ufsxvbV5sDt6u7x8+/S/ZXQl8HekvTHlO/A6/LV9sXzkt7G1uHl0pXy3vGV9+vK8NDX1tWUzueXlcb1lc2UytTI5cmUxeDzlMjuxu+d48PW5/bw7vLx0Jbdi+HuwObx8+eXwNzI'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[57]='wdDw95Hw1emLx/ySzsH85/zB/NDO6PHNlfLt98Dy1sDQ8ZfQk+Lx1fLH8JLn0d3ql+/wxY/Qlerly97Q3sH8ldzG6JXg9vH3lenT79PW7siV6fbi5vbuwMHLy8D11pTH8MDczezl7+n1yJfF7vbTxd7p9ufS7PHFi+b81dDyls/A9pTNk+r26t7s1sDU9u3ii+zzlOnX1NDpyfycj9DW0OvK8NWSy9Xq9veWlOHR3sjwxfDFnMrwwOLw752L9vzXwObulNzl7Z3T0MvH7MCU8uPMl+rvydWVk+3vlOjH75Tiwd2di/fWzcPRlpyQyJTVwdHWkvPK8PHU4fKUi/TL9539lfLc6e3A9dHz6tzz1ZX88OjF5deVlJTM6NX+wPfI0MHeleHXlMWRxfzx'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[58]='7vLVkovH6JzowPCc4vKUncXP7eKLx9bq3P2WnZfB3sfUwN2c5cmXxd7oluqP0pSS7vHxkuzH3d3Dw9T37c3y94vq95zc4JfykNDd3enS7erc7e7IxsfonMXPlpKSzujvkNeV1e7H3eeT/PbA3vXW6uzF8tCRx9Xqls/u997B8pL+/MuS/c3u8u7C8pTrw/Gdk8bxwO3Xl/f29tXq3Ob83eXM3u/y9uj3xvz24uHW1d3O9JfQxczLwO/X7+qV6/zv9sf8wJTQlcDr1veS783LyPHSy+Lux/z3l/Lt75LR05Lw8O7AnMmUx/PS/N3d1ujd58/u0OnR1umQyJXN/PLU8pTS/OqT/dPd0PXVz/7x/JyT8pXileDoxcDwl8XdztXP08nokt7p05KQz/PI'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[59]='88rU8pLLlsjs9PzdxvzLnfTy1Mjs9pbPlMzVnd7h7efX0pTi0uKXnd7908jN0PDdk+Dvz/T97+rt0JTQ0OPyxdDp853Q6vfIk+rd75TM1cjdy9XP/vLxnd7wl82L9Mvni8Xy587A0/L8xtPF9sbo8sb2/OH09+ic9sHTzdLm1ZTjw5fy/vLL79z9lM3Q6ujA18/8wOz11seRxfed/crV3d70/OLU9fzI8dfd3fHV8urtyPzn4Mfe6vbAlJ3U9pTn/dbd79Ln1unryZedxcvT3ZX08eLjy9zF5vLx9+zi8ufA6tzn8dLW7+HX1JLp1pTdzvDVlP3Pl5Lp0JTV88+X99D08sDgwfzHkM6W3ZzM/MWRwuiVkNKX4e7C1Zzs58vn0vDozYvF8s3g85fd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[60]='ktbwyOLHl+rn0pfhlNaWnZH93sfSwNSS8c3L6u3N1ueX9pacwOHx55Ppy+rNw/zylNL84tzClZWW0tXq4cOX8t7ilMDdzu2S7cyUx/3K8sjxzO/p9Mfdkt7sy53u9ZfNls3u1Z3F8+fy8fLqwOKXkufQlpX0we/PzsLxxdHL7ffQ6/zik+jwku7A1uqUzO7I1OnckpP28+/c6fHVlM7UleHL3M3Q/d7ykfb86ubz1Pfu9/Pq09HxyNLG9sDT1/Hv08zTnZXj/MXQ6fDn1OvV6eD26OqV8/Gd3OHz6sD38pLS8+3N5vaUxcDB753owfzN7vPLze72l9XOxtby/Pbe19HJl/Lzw/KU4sfvlNHX08jc69bX4dDwnJbS3vHh1+2S/cyVkpPp8Orr0ZWS'
+if lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef~=jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde then else end
+if jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde~=OJKLMNOPQRSTUVWXYZab then else end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[61]='j9Ddnf788d2Lxu3ixcPt4unV/Orc6Pfn0vzz5+/V8s3Q9u+cwc2Wz+vD8tWL5daVxvaWnO3X083n1+/p4cvT7+jx7urny5fI0vGXkpXt1Orix+3y7PaUzeLH9sXG9ZXi9dHo3eHR3Z3D0fOUwOvx79L91sXT18uS0Pbx5/PW1tWLwPDI3PeW3fLz1eeV7Nb349KVyOnI/OrA55SS0cntzePS3tWL9ZTQ8vzU8uzH8J3l1vby4cryze78/Jzw9pT3xsfwlYvm3en11uiS6PXu4pLQ7ufNzJbd/veUyJzI/O/wwNyS8vCV587i1vfvycv39dDUlZPA1d2T4/zX0Pfxzc3I/Nfwx97Q4c7U4uL21pLG/NbI4cz84uDy1JXU45eV1ObU6ovl/M3jz/HA'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[62]='8v3UlNPL1MiQy97A3cjx94/WlJ3wwZfNwOneks7o/J3s6ujN79aXwObx75zcx9Pi8MHo1Zfn7cDv19PnwdaU8ovF9+/xzNadwc7W4uDG8Jz+wPDq5sHWnNzp7efs8fHH1PXtkpPH6On90e/q49KW3eXO1ufU6u3A19fvnJXG9sDnyZX33PX85/L18sjt0ujVlebu8pX07veSw+jXwMX8ncXI8cXlw9bv0OPUwJHxlcjs6vLI9dLVnd716J2P0PHyls/tx9HM6NfF1uid18nt3dLs1ZT8wPDFk/aU75fClcWRxfbV7MHvneDzlc3nw/HA8cvT8uDC3uHs6N6c0ubW4vzA8JySyPLn3cPW5+bBy93GwPzq9c7t1dPJlMCLx/fdk/bL5/3Qlt3TzJfN'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[63]='08zU9+XIlsjhyvHn8dbVlNTs1tDw8u7Qj9bU0J3xl+/89t7n8sX2xcD96Pfp0dTVlsvLyMDylunpyPH318vWnc7p3unly8vAlNLL0ObF85z2x/ec5cP8xdTt0+Ll0JXi8MCVlJfhlMjAwPbIkMrW15H81uf8wfGd6PXoyNHNl+KTxvPnkNbW4ZDD1vGd9fGS9vf8ksDH8cDOwZbp3dGX59Txl+fm8pTV083xx539y+qUztbn1PP84ujC1NXU4vzqw8PtyPD38ef+95bd0vDozeL11JXQ8/L3/PLo8fPO1tCUz5aUxvP8zevM78/DzOjQ4PDW3dzl8tDg9/zx3urW3Yvz75zTzfKV8PPx99Ty8cDD0JXN1MfU0NTHlOf1zcvQj8nVz8HXl8DF1/Pn'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[64]='nM7Lxdz9l/fQ6/Gdj83t5871/MD+wpTy3OnW6eXDlt2V9dbxzvHo0O7ylp3w9e7A0uaVyODA1p3n1ujd0MCX8dTv8NfwwfLNnMr24v7H/J3zzNby4PeX4d7tlpWS0NPQnMnt8tLG1Z3Gwcvd3uPL3ZXllp3S8/OUw9fTx+PWy8308pXVkMr159TAl/HN0pXV0uj3lcby8pXQwt2S4PzV3dzm7dDnytTi5sDt997n1PKVxpTnzuvewOjz7cfrzujy0OnW99PK1s3d0OjN3ciU0JTWy9Dex+jFzuXt4pPx7++Ww+3A68PVlP3W8pXn1tyUzvaXndfN1JLgxtSUzvOX8cPQ08jO9tTN8vCXx+DwlJ3o9+734PHu0Oz1ldXnz+3Qzc3uxeXM1JWQzpaU'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[65]='nfbuyJX885zO9pXQk8Hd58XIlPeUw/zQ5cr3nO3N1ZLA8Jec3uLt4pfz1PLm9+jX88jW8t3V88jx18vdlfzV6eHQ3ciX9Zfq59Lu4o/O1JX8wd3q6MbxyJXv8ufQ6JTywdDU6pf1lZXzyvD37MftkubA993p0fz38dfT4t7t0+/RytT3w9fU8pP3lsj+wZfp6dfznZXG95WVwPzQi+uXyPXRy92R9e3i9dDo3fzHlcDe8u2Sks/z6f3I7s3i8O/vkMyU6vbwl/Hrzejnj9fT583X8MCX9pXn0MXy1f3D6N309vHdw8zT797q98+S0e7Izu3W8ZDM88/Bw+7Nls/zyND03NDS6fPvlNHWwOnXy8jdze/qzu/w9/788Nfo/NT31P2Wz9LA7cDjytWd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[66]='wcvv59Dz/PeQ0u3n0Obt55zDlOeT8Ojx7POUzZDL0/fc/ZWV4PHone3R75SV6pTy0PfyzevW8M309Zf369GV5+7ClcCR8JfNw8rV55DX1s3expfv9PXzndzC0/KSzZbP5vCV4pPw6OKP0PaV8PHy6uzB853s9ZfV7MD21f3Jl/Ly/dXvl8fuktPRlefc7ZSSwdfW9+LylNDr19PH6cjo6dzm1sD8xu+dnfHvneLyy+qcyfzIi/DUwNfO7ueUyO6S9cvt6vbA1c/S7ZfqkfXu6pTM6J3898viwOiXneLH8MWUzsvq3sLox8Dny83l0eiS7PfuzYvglZLs6Nzq7c3uwJXj893S6PHI487oxfL278jxzO2dzsb1zYvj1OL29u+V49fT3dTm7c388ZXI'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[67]='3Pz10PXKy9XhzZXi5sKX5/TA8OLOwt7V8P3T5/PQlPfs6u7A0cOXnOHN/JX09e3V7c/v54vr7eLoxfX3k+CWz9zH3sD2x/fIl+iUx9Dm1OfSx+jv1P2V1dzl88/rz5Td19HVnejAl5LlzN73wOXo98PQ8JXs7cvF0vGXzZP93JWUyOj39PGV4vXV8ffO8fHi0sfL5/DC1NDg9ujNlerUlefR1cjv1tPy4vH8yJXGlt2Rxt2U19aWkpPA9s3Bzu3d8Mf88Zfgl5LzzNzVnMOUktTs9eqV/e3q1OnozZXz1ZXO95SSls3W59PQ8Orny5X3483o8dfLl+eX6O3Il/3W9+z3/PGUw8udktGV99ThlufA6tWd/vfyzeHX7cDdyPGSkcfd55X0lO/ixtzV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[68]='3sX2wPTw6M2V9dTqkM7W6sDnlt3+wcvd78jLnevXlpSLxfDFnMzozdzA1sfOwNWd7Onx0Ivp/JzpzZfHncXwnZPv8Pfe4O3HwdLV593X1pzs4pSdwPTLzezr1Orlz5T319b8983N8+/9zOjVl8Dw4pzD75KX6vPI89b378PX7+fw9fHI0Oj3yPLA8vKQw/Hv5cvewND81sfc6vHNl8f3ld7v95zOwfzqktLxxZfq8Mfn0e6SxcmU4pPylcDRye3H1Obxx93P8pXmwOjI6cve1c3K1emS0fPpxc3uzYvr7feT69bH1Of8xdzgl8iP0NbFnfCXndzgldXQ9vz30O/xx9HX3M3c9fHH3OPWx+7B3JLyx97H/vLW8uPQ98iT9NPQ6MDTncbClfLR0Zbq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[69]='i+bU4sPM8cWd8tTIi8f1x/T8y5L2/dWVzdbx1c7gy+/u9tTi0MDvlMXQ/PfjydTIwPLLwJXBlt3hw+33nfbc6ubAl+rjyfzn4PLy0MXM7dDswfOd3cPVnM7tlOrFzdbv3vT88pPHlN3U6fzI3dfoyO/R1MXh1/HI0uby8sDp1eqU1t7Q/v3LyN3Q0/ePw9TQlezx4v7A95Ts5padk/OXzdLtl5zNzfHA0u2VlOXQ3PfGxtTAk+z33ZLR85LQx/yci/LUwIvj1tWc0dPAlfzz59PQlNDo/MvA0uLx1ezql9fz1tyUnfzzkvz21sfDyvKV0Oz17+/M3tfO55bq8vOXnZbN6OeX4fHqksPzlcbG7ceUy5WV4sfW1ZLJ/Mjc9tWd78rV59DH7erX0Pzy'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[70]='7czU1ZPi7urs9NzA8sf1x4vl7dDTy5TNwMDczezo7e+QzNac68uVlYvi8pT90pfd8vLWx5fzlcDpyvzqk/LLkpfF/JLBzfGd0uLLneDA1JLc7Pzh48yWnf3S3MWX9dbV7OmU59z08+/hzZfQi+DL8unP/MjS6fOV4vbVnezA/JKT9svNlMyW6eXS1ef8wpbq78zo3fTC6M3hzO3d1OnvlOXX7pXG9fOV6PDt95Pv8d2Q0tbqxdfTkpzW95SR9suS8MboyJPs85yL8/Pq68PvlZHG9cjQ4Ojy78vv78PV8Med95XNxdftwPHR6OHQ8fzp4dKX55X91sDOwsvVltDTxeDG3vHAxfGS09bt55DW1u/m/dTAks7v3cXLlNXwx5f3ltHczdTnlOrT0tPA'
+do l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL=OJKLMNOPQRSTUVWXYZab or 34 end
+do PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde or 962 end
+if lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef~=jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde then else end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[71]='58zo15DQ8Ped9ujF6MHu9/L37d2S0fHH4MHclZDQlcXTztbI7OH8wNzrlO+T/NTNkcDc4unLy/fy8svd/dD8yPXL3tXpzMvN0OiV0Ojy793e4ujVk/PWx9Ls9cf1zNbVw8PL0JHy7tDFytSV/cPywOvN8veX6ZfQ6dfo4dTm8ZKS1ujikMPonfbz78js/PzAxcOXwO7z1ufg88vIxdDy59Dq7cWc0O3d/MHe3fD2/JKL9ej3lefo1dLn8uKT9+7I0MGX1ezy893N0d7plsrUlenD7d2cyeid/PHvnMbw75Lg/dTy0unwwJ391MjNzujv4vfxyMXW7dXp1pTF68iX4ovsy8XS4+jxlNfc1ZDW/Onw8u+d5vHo0NHLl+qV6ZWS8czy6pHG3urs8e2d'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[72]='9c7onc7B0+r+9ujy08zL0Jfplc3S6tSSkMuXndHX3sWVx96VncXyzePM8ciU0MuSl+vV79789sDD19TVi+mXx5bR1JTswt7d4vLWx+3SlN2V6d7h6MeWktzB3PfG9vHv7dfo4ezy7Z3ex/DywPLo6efM6NDzyJTi9dbd6tTA3JT9yZfp3urU6t7l7tWT6fHqi8Xzz/D1/MjA7e/n18PylPPQ1cjj0pfn3MKV59L0y+rTze3I9MHo6pDQ8tXh0d3Pj8nL58793pXoxvaUnfPylcHD7sDnycvyl8fc55X9lufix9TNnNbox93S1PeS18vQwc/uwN7B85Te89SVj8zWkpDS08X08vLF8sGWnZPBy/eSyvXvzsDx6sDm1pXcwe7y5czy0JbL1ZTcxu6U'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[73]='nMjL7+Dz1uHUxffvzvPV78bx6Mfp1vHv187W1/z91Mj91/DizvbyxZzI7uLn0O7ynMjVlJfgy9CT/NXp/cnL6tz8y8fA7POdzvWWlfTF85Lg8JTd48r8kvDB7urS6peVi+rt787G/PeT7cvnzujoxZXH7fLoxu/I19Ho99731efzyvbF9seV5+DF892L8OjH19fw4fzC3efixvPpl/T88sDh/MDRz+jA6cOX4ZzP/NeUysvI0vDvksDz/PfA9vzy4dbTndLA7dXcxvzN9sXw1enV95T919Tn6MLyxZP21Z3cx9b33cr2wIv36MXhyNbX3PTy9+vJ8d3cxfHv683ox5P38s3oxsvqwczzndL38+fRw+jpnMjvktTB/Mf+wPKVltDvnNzC7Z3Gx5T3'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[74]='/MfV6tLB7pT8wPLi5vfonND11sjXyZfni+z80MDq78id8JeV6dGV55LQ9dDD15fhzdLTzejC3JWS1fCV48iX5/z97+nQ7NbqwObo8tTzlOqSy9zAwO3eld7q08iL6N2S9dfc6tzty8jGwpbP5dHT99L01ZLsx9Pq5saWksHP792dxvLFktaWlf7y/Jz88tT3nfLvlZXp8MfSxpTii+zyleDG8fLg/ZeV3OGV4vD93OKV45ec/MDvlcDs8Nfpze3V0vzw5+72093SwPXFzsL8nM3M3t2V5ujdj9CXzd73y+/F1vfP1Pf89+/Q7dXBzejA7dDT3ZzX8MDm8Zac8MDy8pfB6OfByJfxzdHulMDyl+nS6JTQ0cjW4pbR1PLw9tXq/dDLyJbN7+fswZXQ'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[75]='4dfL8pXxlpXO6e7Q/cOW6Zfm09Di8Nad7czL4pTK9dXi/PHN4v3TyPD2/MjDw+jF4cj8wM3RleLzzpfN/dXz6ZX03NWdxvbi7ObTxenV/N2S0e6Ui+Dt0JTL7fKR9tOS5cnowOvW8tXdzNzQi+no95TK9vLQ5svqkM7t8s7n8cDn0cvQ9vb8ld7m1MD1ycvq0dHowJfl8ciT5vHq5seU3fXR7vfl192c/PeVyPLAy+/O4/HQ4PzW8dfI6MWQzZTdi+Poleb2y+f8wPHH1OiX1/Tz1un1ycvVnNDV6pfi8pXd0vHQ3MHznfbz1PKRwu/dzcvVnMbH75XU/NaS7Mf84e797fLxycvQ3cyXyM7o8OnsxvCSxvXo4pDW3p2T69bA09bW19TglMfQ6fX3'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[76]='3OOX4pbI/JLoxvydl8KU4pPhl5KT6NaS48jy9/bzy/eX7ZXI7v3onOvNl/fj1uj37OvckunX3uHo/ZfV4PDt1fHP78+Xx9bX3cOV8sHM7fKL5ZfpnfHokt3L78/t0cvQle/26pzI1ZXvz5Tn9P2VldznlN3xztbN3ufV7/HQ1tCczNSSzczclNz03Oed8O+S9cPo8vXQ7cWPyvbVkNLW4fXW0+L0xujiktX21ZP2/Orc4/zx6Mb26tT01PfS5fKV79DV78XN7pXi99WS8sLoxf7H3MCV8JfFwOnW8tTt3eeUw+/plMzU8u7A1sDA9ZXQxvfvlNzj/J3c4tXI3sKW6fzG/PHs8O3A6c6Xx9TC3unRye3H4sHVnePS7eqL7/zh7OvW1eLC7Z3hzJTF'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[77]='zujT3fXO1pKR/Pznw8z8kvPPl9fA/PzilcDv6fPWlufO4Mvd4cnzlOnK8cjN0JXV58iXyPXS8eLU6tPqzvbLzc791uHw/NSSi8D8lejH1uGU0pfHks2U0N718+ryxtPv0uHo6ZH1lM3nzJTq7OOX0P72l+GU0Zac0dD26u7H8PHs8/H30OvcxdPJlcDpz+/plebxku/XlPfcwdOdzvPo0JXo7tXi8ejAxdHy4sDp9pT10tWU7crVncXD6One/e3N7vX8kunSlefA4e3d4cze18HI8+fvw/HH4cryyO73y92X9N7I0ujo0JXq3p3O6+jH4dHLxdTnl82X9O3I6dbw6uHMlZLBzPHn7vPulJfH1MjQxvDH3OXzkvPS0/LO9fHN6dD21e/N6OrRyvHF'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[78]='6db3ne3J1PLy8u7QnffLkp3w75SczZXQk8LTx+fQ1t3wwtXn0MD2xcPI8uKU1/OVj8+V6pP888iQyZbIk/aXlfHW3NXNy97v7sDu59zH9dWV6svd3vCV5/7z8dDe6+3v0u2W55bN85LU5/zHi8fvktD0893GxvCdk/3WktPJ8+/S9vHF1O3c1dzG05LQ/e3y9dD355LI8ufO6ZTQ0uzxze3D85z08+/di8D2xfXOl8Xg8e/n6PfxwNzm/Mj09e/d9Mb1zdTB1c+cyO7Nlcb81eDx7sXrw/KSk/eU4pfq78/U/PaV3v3e1f7Cy83t0MvQ0unW6ujH8tXvye+SncGU4pTDlOLw9cvn3dHukuXD1OfnyMvq9PP80OL31NX2wJbnzuqXyPTy852czZXV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[79]='3dbulc7AlOKVxvbI69HolY/Ly5LQ/e3ykcDL4tLt1cjXyZfy7cze99LqlN3c7d2Ul+vVlf7H3Mj2xpX3lcbW4eDz1efX0t2UnMrxx5zIleLc8fOVkcb8kt793JLv0JbnlfX86ZXA6Orp1vDV3P3L3fby1vLtz/OV59Do15fB3pLs6vzx3Oz3kpzQ8PHwwvLA59ft4v3D7efxyZfhwdb1x8PXl52W0O7y4vaX3d7F9erG8++c9dfV5+XI1JLQxtPA6MGXncbG0/edxpXVl+CUzfb31OqL6Nbv7sfwldDl7uqT6fPpl+j2yOfW6PH91u7qncfzz4vt6MXly9zAk8bu6v79lpWS0PzAlffL0NTi7efNzpfh7cr3lJXt7ufU7ejp0ub8x5LR7er9yfOd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[80]='lcHUwNzp3t2Vwt7hl/2XyJHH/PHowJTV0Pz88ZPGlM3lzfPnkND1nZHB3efdzujFlej8wNHLlcDzzMvQ9MKU59DjlZX0/dOSnfPo6Y/Dl5X8wPOUl8L84ezA7uKX4tbQ8sDu95PAleLty5fVwMHT1ZzV/MiL55bn5sLulezm1t30wu/q09HWnezC/NfU8svq49LTzZPml/KSyvzvzdb1neb90/KLwcvHwPHu6uD89+nux+jQ19bL8pfh/Mf11u7Nzc2V6uHM7539zu/PleuX6s70793S8OjvlcXz7/3R1uLgx5XIlsnW8dfN1JST9e7A5sGWlePL6NWRwMvi886Ux/bGlpTjyJadxsbt9/XP7cWX6/z3zuHoksHX8tDs7ZTQwdfL6s7i1MXexvaU'
+pcall(function()end)
+for _=4,5 do end
+while false do break end
+while false do break end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[81]='k/KX1fPW8fLuwpWV18jtnZDK/Nf+8fznw9X1993N8eeQyvXQlffLxdzh7pXzz/zX3uuX0Pz37tWW0PHdxsbx6u3R7pXdye2Sl/b819D0l8jU9O3A7vPV6ZzL1JX8wu+V9dbe99Tp/Pfd0tXPwObT99HS6PHjz5Tn4daVlJXl6OLQ4fHq7MHznN3My5LU6NzN/PPWnd3V8uKR8e7F88vtko/LlM2TwujI8PHo4uzHl/GXxvXdi/2VwM7x8c2L7ZXVzsHc6uPQ85Tj19OdkfWV99fD1sjc4Nb3zu/y4pDR7+nFw9TN3uaV8pPr7ur1zfHy0MDdyJPG88jowPHNi8DczfPIl+eR9tbXl8f88fXOlfLu95fqwOPylJDK893A5+6Sk+XW4dPLlOeT89SU'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[82]='9cnWwPb8/J3y9pfdxcyVwOnPl9DT0u7qwdD81e7wlpWXx93I0sfcxfzC3ZXcxfXQw9Duzfb2/JXS8u7q09H80Iv36NCVxfXn9vXx8sDwy+r2xvD3ltX16o/L05LS9u+c5cvWnejH1MiSydbhnf3ukvHP7urexujXi+Lvz/T91JKL55eVltHVne/X7uLx0PHH3MfWwP3Q95Xw9vLqlM2WyNLo893115X37Mfe1+XQlOrG9e3ylsntzcDB/J2cyJXqk/z2yOfK/NfuxvXvxsXxzdzH1cj0/dTA5cPx1eXI1pzhzfPPnM388uDF8N3O59T34cPW8tTv9e/l15XN59Lckovz6JL9yZTIlsr8neXX993yx/Dx0OLtnfPV8e/l0u2S0vP8x5HF8JyUy9PF'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[83]='0O/20PD28veW0Mvd3c3okpLWl+LA8vzvkfCX1dfW3sXBy5XqxsDe1/DC08Ds4O3I1PXo0Ojxlpz2/Zecl+z2yPLy6Nfs6JSdks2U3ZbO7pTlzpWV3cPU1YvB792L6cvynf2X5/HX7tX0wNTikszo6vHN7uePydbi6cvuleXW7cfowtackfaX0JHG8sDR0d2Ui8fw94/P/PfzzOjA3vz84enW7sXD1ffd7sDe98PM/OfSxvLV3dHowNHQ8+nxyNXn0Ovdnd3Sy8eWzu7Nk/SU6pLOy/LgwOjA0MLL0Nz01JLA6ffpxsbtkpP36OfBzpfpzsDuyPzH7uLswe2d9c3yyJfBl+f9zejQ7deX4sHRy/eSze6V88/xktzj/NXQ7cvv78Py0O/D8e/cwdbA'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[84]='9veXx+fS09CdwPLywPTyxdDrlZTBzJSS49fozZPl1ZyWyPLq3POU0NTB0+/r0t7hzvOU1YvA1NDdyvzqwP3uwPPK95XA5uid8dX1ks7C8dCT6POc9vXx6uz03cjr0dPIlsuWlO736M3r1/DFxsKXks7ll8CX5svFlM6UkuXD7dXh0dPVnMzW6e7C8sDz0dXd59f83ZzL08jvzZfI3On86vL31ur0xfHdlNfe6efR1c/+wZXy8PbT1eL28+ed/dznk8DLkvTH/Jzi9+3nw8rLxeHW3NWUzN3v9vXVlNPM7vLsx+jI5dbL8pH37e/2wNPd1Oj2lPXXy/f1yJfhwdbTzdTny++L8Oid0cr17/XIy8Xi8+7I0cvT6pTQ85LFzpTN0sbowNz08539yvDp'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[85]='j8jW8pTS1ZLe4vHHw8iV4ovH0/ecy5Tn3ujoyPXM8tDx1vyS8MDVktfW853vzN7V7OnW8cXP8s3u89Tq9PDvlI/S8ciU0dPqlenLktLp/M3e6Pzv8MfW0PTA8dCPw9bV7OX8ndTq3OfA6t7d6PPzkvDz1M3rzZTiwcjW3enO6O+L4O7A69GVzevL1OrXztbv7Mbu4t7m3MiXwu7FwMXwyO7A3efDyJf37Ojw4eD1lNDhyZXIk+jU1dPM75zz1fWdzu/zyO3Ky+fS6tXv0dGXksPX7pTs8Zad6Mby4u788cjv1fPnk8fL75Hw1umRwPeVlNLy58Dj85SV4fHy4Pfvz8b91JX88+6U9PPVnJzS8cD+wJTV/P3VnZXm6JXy8NbFl8HtkvzH9eKX7PDp'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[86]='09HU8pPy7eKc197Xlcbc8t3Dl+rd197p8vLV59zo8pX2wujVw9Dw95Hw1pXw99bIi/T84evLy93+9/Ppwc3UyIvm8+r+9/zXk+X83eb36OGXxtbh3vCUnZP3y/foxvOdw87UwO3Q3efu8e6S4MaVyOfX3uKP0d7pi/TVnNDj85Xe4Oj3lsiU0Oj3y/eT8+jV0sfT3cHW78jA4OiVzcrW95DXy531yvHdl8CXldfO1c/T0ZfFl+b84uHM8tXjyvLy3saUxefX1sjwwvzI3O2VlJPqy5LB1pbPl+eXnOPW7+nywO/I3vHvz87pl+fi/dbpl/Py55zI7cDA6svAlevT587w1ZLA6Nz3k+GUzZTPl82RwPHv1ODVndHWy8eV6vfdk+H88dzB88jU7/zA'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[87]='6c2W7+zH6J2SzcuSxsbo1+XPl5yQ1pXN3v3Wnd7hlp3U5t3p3db20PLGlPLc696S4dDcyOz9l9Xe5vPP3cOVlZf01d3w8O6UncHt8pft3tX10PDN8dLulZDRlcXGx/Di6c3WwOz17d3x0pfi3PTWxfXQlZXj1973i8Ht9+vXl5XnzJbqi+HznPTAl83D1+jq3saW59LH/PLR0dWU8vfx8uz2l5Lhye3y0cyVlOvI1u/91vDd5vXozZbL7sWRxfOV/vLu1dfW1JXv1u6V0Obc5/T88urQ9N7N4cyXndLA8Orsx/Ly4dLW4ej81t3vy9PV4MX1zejG1sjzw5XI5dfonY/J7fLDzPPv79LT597w7dWTwe/ni/HtnY/Ql8fA4vzH4dbU8tzv9cWUyvHI'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[88]='8vzWnM7gl5KX6Zf31PTo6pXr3JXrzdWS7MfU0M708ffs4JSdj8rWzcD9lNXS4Jecw82U6pzJ1JKX6vDAlsPx0N7l8ufu8OjX4vPt78DwlOKc1/fp4MHu0Nzx7pT2wfPI/PbcxevD8+mWyvzQls3L8pXH8eLAwN7X3O3t5/XX05308sud7OvL58Dq8efDzZTH0Pz8nZDM6MWSyPyS8sfW6cHQ8sXd1tTV3sD16pTI88/r0uiVzuaW6dLBldDc/PfP9sHWyMPWl5KX95TixcrL1ejyl9XS7/HN9czowI/N7+fG9pTAj9KW55LM7uftzZTql8LvyJDPlp3Qx9SS7sf3ndTh/OqL7e7IkfeU0P3N6OfvzN7n48ztyJPCleLT0dzVlMOXwM7v9d3SwfGd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[89]='0uXo6s3S7eKPzfzA0MD19+Dw7e/O9fHF58vU6sHS08jG8++U89bxktTmlpzl1tzq1Pz10ND9l83ixu2Szuj24uzjl+nA9Mvii8LUwPLy8+/O5+/q0MHo183Ml5L1ycvF5vzx797F9pWQ0ejI0MHTxYvC7tCUw9bF6c/o55PF8veRwN3pwPOVxfLGy53ex5fx0un3787G8ciS0O2d4sDcwOXI7dCT9tPQ0On15+bH8Ped8u7VzsfW1+LylN3Q8O/I9vOU8sXLl83U4tTAj8ny8uLH6N3h0dPy1PbyzZbMlM3swu3V5vbtxdLC/NeL8NaSksnU1e731vHAxffIl+ry0ODw6Mjmx/Pp187V797p1Z310Ojy6Pfy98XV9pTAx/zhw87W8tDG1ND88fzX'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[90]='/Mft4uHM6NfQwvHQzsHz55zJ7sDt0PeU/P3tkpPo8OLgwO339v3LndTG3Or90dSV4vz33dLnl8Dd0PHH1OnT55P01sDDzdSUkNfVnZfj1pXmxu3A3Ojtzfz27sD90O7izcjLx+HWy++T6dzNlsjyyJfy8d3A4++S4sfz75zN75KT8vzA0uno193N1sDu8vzN49GU0Oj3/MjuwO+V0dX899Lx8+/sx5XV59DWx+j37pLy98vVxvLV5+L89ufG85fvi+LL6pXG6N2T6t3vzsLTkubC1s3iwN7p0sfdlOnL1ciS1tbNlNbLx+nN6JzwwPfq68j8yIvt1efi9ZTN1PzzkuPJ7+fB1ped7dDuxe/Il/HO8tby1Ojz6u/R/OnO7/XA69DL6s7B7fL2wt7Q'
+if jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde then jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde=51 end
+do local l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL=273 end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[91]='lcLW6pf275TO/PHQ59HWzcHD1urz192V68ztxcDG1efT0t7h/MX159Lw6OrlzMvI8dbx6uLxl/L9y9PN3dGVlO/M8tDGwJfy9vKW6c3I1vfSwdbqxvCU95LS7cjS4vLi5dLL0JX1y/fhz+jX7MKX99LC7ffGwJTV1O3t1enM8tCV9PzplcL89+7F95TwwOji0MHV78XS08iSztTn7sbL1e3Qlere9fzq48n818PX09DcwcvF59CWkuPS1ZzG9fLy0cyWnIvA95zp0Nbn0vDo9+DylJ31yvHvxsfuksPI1PL8wZbnxdLW1cXQ8sjA6d3pwOOXnZ3F9cDB0u3Q/vaU9/791u/FyvGd7On20OHJ8s38wNbA89aV8o/R1tDiwpXy7vbV6Z3A3e+W0dPI'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[92]='zvDuyNDgy5Ls6tTn3cjx0Oz1/PfFzpTNk+aX1/DA/Nfx1t7F0dfzldfR3ufsxtXq9PzUkt7n7+/GwPzdk+ju8pH2092L5dWV7OX8nezClcDu95bvwOrLwI/O7dD+8Ojx4cnu1ezgl5LS9/Od5vDu0PDH6NDO6dPIlNaX19TH6N2W0dzF08/v6d3K1MD29+/pksztzf793sD90pTd/cOXx+nN1un9yNTAi+zw6ufDlp3e6N3q8MDtktzClNCV9tXp8dDwnP7BlM3ix/KS5vPz6sXS1NDj0JX3kfOXnZX895XN0u/nxvby98b17pT90u/I1Ofx0MHL7dDr1+jN8dGV8sbCl+LU7ZXI0PWW55DV8Mfhz5adxsaX6sHW09X8/PyS6PaXyJ389c2V6d7x'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[93]='08PW1+3X8PH+xvecnfby8vD2lNCSyvLVwOje1eHQ7tXs5/Gd0sb3nMPSls/U9u2SxsHeyM3P/MeL7/DIj9eX4Z3H7cj28Zf358z86vLAl5yV/ZXVzuf875Xl/PeW0O7Q6cjL7+PJ1ufN0ZWVnMiU0JfBl+rextac78zd5+fK1NXO6NySkNft8t7r7cDB1fXvwcnzktPIl+fO9JTvk+Lx8uHWlN2PzJfN8Pbtx9Lq1u/mxfPvxvDWxfDG893Q8fOc/PXx95TM8dDc4vOVzcjvz5Hw7sXo9ZbP783xwOzr1MDtzNTi0Ojw787o1OrQ6d3d18vu6tzA7ceL7Pzyi/T8kpbIl+rm8fGS8czx59Dn6OfT0ZfVkfOUnenD6MWdwfLA482WlZXH3PLrzNPn'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[94]='lcLuxfTG3tfA4JadnNHx58XQ9d3y8pfIw9Lt99TzlpTRyvWSxdfxyMb38dXRzfPn7dfcxfLG7sDDy+3AwMfczYvm08DTydbV4sbWxdfO6MXewN7n3cP8597x/MfA4/KV0vbvyNLr8erjyvXd3OjyzeHI1OKR8+/Pl+Xo0OvQlffO9+jQ5dDo5/7G8fLB15TQ8dbTktPJ75yV9fGS7dDV58PJl/H91ujA9MbV6pzWy8jj0OjqzvXt1e3L3c/Qwcud3MbwwNfPl83dw8vqwdLt94vHl8f29pfy8Mf3lM7n8vf88NXni/SU3dHN1pL28u+SxsaXzZXi7siRx+3dwOfLndPD75yWzZed19D2ks7GlNDuwpWUi+aX1/3R78jg/NXp3Pbv6tHV9ZLA7/Ln'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[95]='nNDe0N7p752X4Jbd9PzUktPMy+rryvDpw8r2yNHX3JSL6dOd49GXxdzw7sDS85ac3uz2wNTG98iL4JXNlMvdnZXyy8CQ1/zQ5sDo1ZHB7er9y+/dk/L8lfzz/J3o9ZfV3PCUktDw7ure8JTnzunVz+3S6JXmwsvV3dHTx+b9y/fXz+3qkfft9+7C1Mjuwdzi3dCV1c7zl5LO55fX4MDx8pzJ1pWRxfzhj83o99L17+rT19bH8MDo4uvOy8CLxfXq5sfx54vglNXO8NbnncaU95LM853XyJXQ59GV9+XJ8pT8x9Pv8sKUkvTy8eeL9pTi08vc8ujG6NXtzNTq88z84efQ8OHo9pTV4vDt3cPP6NWT9NPAwc7t1Yvs1JLy/NTQ88zzlOz91vL0x92S'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[96]='j8r3lZXq8ueTwO+UzdX28pDQy8jmxvKS9PXW1f3R6Oro8NaVzdDo8vbC8e/v0e3AkfGX3cPMlpXDyvXF18/81+z3y53A6vKVxvOXxd7BlNXGxvHy586Wlf3R3MjuxfDF0v3exfHI8+nU8fyc3vLtwPDA8ury9/HywdXyku3Jlt3l0u/n3sDVnZH18fKV85Tv89CU8pfmy9X+9+/v6MCW3dL96MDdw+j3/vGX6vT1l52LxpfH8cj8neHD1ZLt0NXn0PLt98bB1Pfd1vXn7dbuzcXN75Ly9/LnksvtzZPo7sX88MvQk+DU1cDplOfc6ffI3sLx8sXQlfeRwtzN1PXzncHX8M3tyPGd19bTwNPMl5Xix9bA3sLznMb2l5XU6+3qk8aVkv3IlOfc6vLA'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[97]='0c6Wnfb9y5LX0ZT3j9X1x8PQ9s3UwujAk8eUkvT97ZLc6dzQ3dbtxdD9y8DU8/LV7dHu6pDR7efc8NWUltbWkujB8Z30xvCV4PLx6tzH0+fx1+jx19CXwJfp1seLx+jI68j8wM7HlfeW1vPP0vPWwO7C3eqLxtTFzsLu6uvQ09DO4vHQzuGV5/XMl8Xu9vHH6c/xndPP8vKL7e3ileqU7+nW8PfnzPLInMr1587A8cfi99bHl+uUnezp9pTR0d7AxsCVku72l53dw/zN8vbywJ31lfeWzNbp59GV8tTs1enS/ZTv/vCU4ovp3ueV6O/v1Mb174vt3seT4Jf3kfaUwO3Ql/Lo8ZTilsn8zebB0/Lw9vHNxdDtx/XR3sCQ0PzV/sbczcPP7uLs8Jfd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[98]='xc3zkuvW852c0Mvv7dCXnODwlZSL6NzF7c38ks73lPfm9+iVk+OX1evXlpSPzZaS69DtkpHC7cXA88vyxvf855Po9fKT8pXi3PH819fJlJ3Ux9ack/Tc0NTn88+Sw9Ty7db1wPXS1urUx5f379KV4vbG9c3g8ZTy/Pzy8sDo8Mfs6u73wOfy8v7F8uLQ69bVwPPL8vb28vL09/OS4Pfv6uXMl+L90NWS8PLowIvy/M3wwvzV19Dv3dLn/NXU5tbXksrLncHMlur89Zfp8czL1ZLW083c/NXd0PGU6tzH3NDgwpfh8cuWnc7H8dXhzfHA6Mfu4u/R0++c1/WS6cuVkpbI8pX0xpbvj9fy6tzzlO/F1/zQktfTyOjH852T6pfy0dbu4uHDlPeV9ejH'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[99]='08+W6vTH/PGX4pXywdDtzc7pl8fQ6fDF18+XxdLw1OKWye7y4MX19/D38tWU0PfpxseVlfzBl8jtytT30MHWnfHS1MWX6ZfX3PXt95LSlOeQydbXks/ylZH2ldXmxpTdlMnylfXI75Tg/Zfq4dDT0NfX1siX697n19Hc99zj1vLNzZWV3u3c4vLBl53pyJWSw8nylfLH85z08Ojn0sLuwPHS6MiL5fLQ682XnPLA78/U9NyS3OvxkvbG7pLg8vGdl/Pu6uHW082S0vzhnfaUkp3A7d3jze7q1PKWnZbIl+/s89XnlenUlOvJ1sjQ9OjvkcHy4sbGy+rOxpTnwcrW6t7s1ZXNydTI7sKXxfzC6OeLwZfN/MLx1cDr1pXX0dyS89ft8uz37sjQ9ujn'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[100]='k/zy6vXQ8ufr1svy9cPozd7y7ufxyO3iwOrT6tL07s2R88uSwMCX4pbIlZXSwvLilej819731ufFzPzXw8vL9+jH1urt0pWV9PHo55zJ/JWT5tWUktDozfHM7tCV48vI/cnL0JH3lMWQy5fn9dHt8pLO1JT1yJSd7PWX59zn1vLD0O6VnNHx9+zq1ZzQ/e3V4Pbo3Yvo9tCTwOjy89fL987r3t329pfQk/aVlZXs1ZLcwdPd0uKXzZLV/NCPy5fX9dLtwPHQ3enswtPV1O3L1fXR3sDNzNXql+/13fHS6PHv1vbnkcfUlejA1d3+9cvA0czxyJfh7+/uwpWV18PWx+PM1Orm8ejN186Xnc793tDQ6e7i8dHTkvPK8c2d8vzV5cP879To1ZSTwPzq'
+do jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde=98 end
+do lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef or 8 end
+if lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef then lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=94 end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[101]='/MfW18PL6N3S7eicwMHxnd3I/PfA45Ti4sfo4ZTQy/KT89bnkcX20OLA3vLhw/yS68OUxf7yy5LQx/Ddkfz199Dr8sCc1svF18jL1fLy6N2UzMvn5vLU4tDi1ZLjyOjh8dDW6fHV8JyLx+3I7dLv6tPXl8D+x9zFi+H83cPS7+/Dztby1OiUwOfR8++XwMvywOr10OnN6PGTwPz3nNCXnNfOlefh1/HI083uxejG6NCT4Jad1OuUxe3K8sj91/Hqls/y0MDwlcDm9sv3w9D8nenI1d2V/dac1OuX1fHD1JTU5e2d5cve1dzx7sWQw/zQkfLv7/zC1tec0PLi1MbT7/TB3MXAwt7d49HWnZDIl8eU0ujpxdKX75DI6J3XzO/P7cyXnJ3GlO/c/PXn'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[102]='xc2UwPLH092L6vbA8cvu8sXJlN3A8svV5dLvnePK85SP1pfQk+PvyN7n8cDS8fLy/vLo3eXV8d2LwdzA8vH8yJfp8ern0tWc4vzWyMbHleKP1tTQ686WkpHH8MXs8vzI7PDV59zr/J3l1pfQ0dbW95Xi7+rD1t3dksnW9+LB3uHhzNad4sfd6dzz88+L9+7n3dbWx5HG/JXi9+jNj8vL95fl88jDw+3infz8yJXG1pLw8O3nlsnU8pDI7eLg8/zxlfKU8vD1l5Ll0pf378r875XB75LTz5eS0sfy9/bxl+LmwZSd3vaU5/z208XdzZfn8cOX6dLrl5ydwPbNncKV1dz1l9DuxfHI3vGWlefNleqPztaSxvz80PLB3eqR9Zbn4MbL5/3R/OfDw/L3'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[103]='6ciX9/bC3sWR8JXyk+iU4uzBl8eVweidwObW75Pm3uf9w+jd/MfWkvPK8+ns6tzIxvHx0NTz7tCW0pTd783tyOXI7+n2xpaUi+rc1cDl85Le4Ojx7OKX6tzh75yXwOjX18zUzc7i1M3j0Pfn3dbe953y7dXm9tPq9cvt8t3Oy9XQ9O+V8dHdz5TI8ZKc1vLQ3MfclM3R05KPzpedi+PykpDI7sDg9tbilcLyyM3W6Micw/Pd7sX878PW9urrzfLI0Mb11eHNlcDt0fKS3MDW1+zB/NDXyZaSxcno1d3Q8fLXz+jX/c3V3ebA3eqVxtbN1OWV4pLLlOfewJbI0vLWnND88N2V85bvnfOV6uzG95KL5/zV7cvtx+XO6NDmwpXixsHuktLC1d3zy5Xq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[104]='j9Dy8u7B85KczZbP1OjulM7o7pX0x/GSw9HW4tT0/PHA45X3lfGW78XD/OeT/PDvw8uV6uPQ3efNyNT38saX15bQlffU6fbNksrwyNTtl52V6e7NkMPuyJXglffzz+3qlfXUyM7B/OeTx97V9cuXyNT2lpXU6ejxzvXUksHJ6JLw9fPq7sHenM71l9fu8/zV08zc8uzilu+VxujpwcuX9/b90+rz1vDx/czoyJXt1t3tzNXqk/DuyNzt6PHpz5SS7PfWwJLO793U9N6Sj8zx6u3Il+HtzMvV/vbt0JX1lcXcwdPy78rLyN7B1sj+9fHn/vLu8sHX8OmS1vzA0OP88d7H1unU8fzx8sfe1eXW/J3ixvfIl/Lo5/PW1sDv15XVwOLWwI/IlpKU0pfh'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[105]='6dHT0PLC85TQ5dbd3vP899fR/NXc99bi0cnUzfDwy53RyvLy5vPW6fbwlsiX8O3v/sbdnYv26Pf+/NTqw8+V6t7q3JLex+jy0PLvnPbB3veV6ZTF0uP83dDG/O/Q9fLQl8LUwN7m1sXhyOjVw9be4uvO1unc9/LQ4saX1YvA6PLS6O3I6dDwnM7A3NWV45WU0c7t4vL3l+fDzZbp7sHU1fDBleqXwt7Vi+mUx5Xt3urrzujq0ub88e/W893h1/Pd3umU5+nX9d3Xzu3F/MXzlPPS8fKPyvWd3MKU3eLC1MDe85bI/cjvkpPG3sWV9JTVk+Hx4o/K9cD0wu7Flenv6p321MXF0u3d0OWU0NzylN38xfOd/dLozdDnlZLA9/Od587oxez11s2PyO/n'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[106]='lM386pfGy5KL4+6Si/fVkpX01MWSzPHd6cyVkvb3y53z19bi1O/8xdPJluro9+7NnMjo0OD1lfLo/cvvnfDtnYvolJ3n0vzikcLc5+LHlcXUwfHVl+mVlfPP8pXs8ujI3c3L0O78/PLhy5Tq3c3xxcHDy+rw9fHy9P3V6Zfm3ND0wfHAi/Ho4cbF9feX/PeSzcrV3dD3ldXB0tyUi8bx55fB7ceLx/bA3Pfy4pfhldXA8Mvq8crVnO7A8+/Sxu/d68nv3Z396PLA9/PPlf3Lzd3N7fL0x8vQzuaU9+z11enX1/zq18Po6unX8pT0wdPH3PLylZTR7dD2/Mvi7vHy1eXV8ufA6vPd8vPt79zqlJLhw8vF883uktHIy83O6ujynMnxyJP03tCX4sv3'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[107]='0PTWkp39l9DOx+73ktfv6t7v9pLry+2d1MfUkunXy53t1suS/cr11ZzQl8jS9Zfi9PLuxdTH6OrhztXd9c7t59fO6NWW1fXd1PTx1cDA8Nfe6e3i78/859L89+fswPeS9cvu94/M6J3Xy9WU4c7W3Z3C1veT7/HQ/PXV5/T93umd85fH89DexezrleLv0PeS89ftnZX11JXz0dPi0PLU6v3PlM39zMvF88vt1f3O1p3S/e6S5vf8zZLOlpzxyvfnzujTksXN1cicyJXI3uje6tTG8cfN1u7Q3vDW1dT9792X9NTij9ft4tPW8JXe9PPd78rVlOz9l/KS1fLy3une1+XO75Tg9ZTA3Of81cHR75XjzdbvzsHWleLBl+ePzpTV7On8zfHV8eKU0O+V'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[108]='wMHz6efNlpSL6Zfvksnox/7x6O+PzfLnlNCX6tLry8XF0vOck+rw3cD81MjS55bp3PTT6sXS1teL85bqzvXo0O7yl93+9dXvwcrx4sb26N2TwtOdk/btndPS3vLpw+/qzu/zlN7ylcXvzPLnw8jtzZP01MXp0d7X3vXxndzv9fLOxfz3/sbdle/N8c3m85SS7dLx4tTp/NWSy96V5cve3ejB6NfU4tT3xcmV8ufW/JX90d7n79Dy99LA8ND+wPHFxseVlP3X8J3+8vzHlefU95P16MXs5uiSk/PW95XqlpLX1fDF6cPvkt3X1s2Q0t7x1Mbw8ZP01MXOxu6U69DyyO3S/PH0/PHV3uvdndD3y83x1vHH9seU5+fJ/OHDytbqktKUxdTo0+f10ZTQ'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[109]='0sf13d7llufhyvz3lMvTyMDqy5L91ujn0cPWnPL38sCP0NPd9PfUlM3P88iWw5X3k+X855Pw792X/e+V7dDx0OD1l93A4Jbp4cn89/Dzl+H11vzi5vboxc7xl8DO9vyc4c7UxdDr3uHF1fDq19Ly6ufSlPfQ9paVl8GWyOXQ9s3O8u6V4MLL8uvOy+f88ZXVlent3cXM7Z3vzpfIk+/88d7jlpXSx+id9cPx4tTt7cfuwt3I68rUzebA7sDz1vDA1MDdndzz1uGT7PLN3PWVyPXSler2we3F4cvT8p3w6JzA5vzyksOV0JHA1ef+xvDX7ObU0Ozm78je/PDpi+WVyJPA9pSP1vLI0c/v5+/J7ZLm85ed0sDo98Dm1JXjzfH3lfDWzZXAl9WL/Mud'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[110]='8v3L4sD81sDU8u+Vj8nv78PK/JX29tbHzvTy94v1/Orny9WUkMn81/PX0+qT5++SlsyUku3N893UwJbv89fcyJPpl8CV8tXvwOuX6cHO1JTgwN3nzdfy99fQ/NXs9O3V7PzU1fLH1ZyRwtPIktHV6tHI1pzO9tXI3MD83fDG/J3A8NTV8MKUzezr3ZT0/PXN0c2U8pLDy/fxzN7p883t7+XM/Ofm/d7V7vzVz9Ls9fL9ztSSj8PW1dLn7cfzzO7y0uzz6pTV8Pfz1/XN8POWnY/X08jn0ZT33uXVkvHW09390dOdl/bd5+/JlMiTx/Dyl+/w1/PV8OKQ0cvF69Dy95LDlunx1veVlsn8ndLF9eLXzNSV/P2XneHX8tDp0eicnf3eyOPN/N3c8e3q'
+do PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI or 528 end
+do lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=88 end
+if OJKLMNOPQRSTUVWXYZab~=jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde then else end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[111]='/vzw4Yv1l5zU95fhncbw7/7yy83c9pbq183twP3Q1uLjyvbnwMaV0OLF95SPztSV1MLT0P7H6N2S1ffvnM3W4tLz/NX2wd7xk+3e7+7H793Gx92c787V6vPM7cDc7d2V0dCW6pPm/JWcyvGdi8GUx5LR6PHe45XVnMOXx5fi8s2XxpaS08PWyI/RlZTcwtbvwcrwlfHM3uf+xpackNHW753y7sDjw5bnleLo0JDX7+fdze/vleryxdzs8pX+9fzHi/by0MbA/M39ye3dkNLT9879lpX1ze7I1MLL1ZLQ8MDe7/eUlsr3lfXKy8CdxfDFi/Te1eD96N2L9PHv58mW6uHXldXuwpbnzu/z3c79l5Lwwu+Vkff8neXX/JWL6ujAls3U98PQ7sXc4pXN'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[112]='zuz13cDwl8Xw9vzn5sb1nfLC7+rgwpTn19Dw6unIy82Vx/L3kceXx5TI/PHe9Jfi5dLWyPHQ/J3n0PeU89Dz783N8+n+wejn7sGX8uPDl8Dc/NSVl+r33eHX78+R9vKS3sD175bJl+rR0svH3Onyld3J8pKcy93q48zy0J338erU55Tv3PLo1fLC6OrAx5Td4PPznNzwy+KSyPHylcX8x8XIlM3s7Mvd3c7VldDm85TAwtbF3OnLzcDll+rT0PDIlent5+HJ6MDQ9/KVle/8x8Dj8sXS6ejy7dbVlJfy6JLnyJTHzvTU4tzzy8eV9+jV48jW8vDAlPfc5ejN3vCWnY/D7cfu9cvN5cuU5+/L1tDu/PDixvP8nMHN8s3ewPLq4vbe4c7z1PLo99by'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[113]='4Pb8yJXF9erc8fLA/MDW6fLA85WRwPbN4cve4tHDy83n0ZadwP3e1ZfwlpXowPLqltf8lZfF85X8wfyVlebektzq9eL9zJedi/LxnfHI/J3zyPzx4dCW79L8/NX89t6cnM2UxcXIl+nQ9O3I0O/854vry+fQwu/dxvDU0NfN1erF1+jd1Mby4s3V9e/B0PDI/cjVlZDOlpzs8NTQ0OmU6s3J1MXy9tSS4PaVyMD2lJ2Qz5eV1OvT0PTClN3u8JbP49LVnNLA9cWL4e3N0PbT6o/M3M3hzfzA1MDdyO/S8dDB0PfPxvCX6e/V8NX10t7d78zy5+Dw1ZKS0dbp7vP8nfXK9ZLQ4/zx/cyU1dLl8dXy9ZTF5crUkuXL09Dy8O/I886W553x6JyRxvfd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[114]='1OvdlZP9lZKX7/ycw8jv54/X8sCSye6V5sDe6pTOlu/FzJeV3vWU0OHJ8vfA4pXQnMn83Yvt08Cd95fNlMz8wOD91uqR8JTdnNHt0M737d3y/ejF4sf2ktHN8dDwwZfV7vbclNzm/MfS6ejX3dHe6v7A7efxzPzx48rW9/796Nf+95TF48nyze3L3MXwwPLA3vOUne3N6PLe6ZSd5dXw4vHN7sDA45XVzvPu587G/NDs8fzyk/SUwJXjl+nr0PDx59H88v3Xlu/Q6NTy4c380Ozn1JX0wt7Q49HzncbC6O/0xuji0OXzld3S08iL8fOd0OfWyJX9lJ38xpWUzdL8yPXD7urNyvXdl/Honez9lpLB0NP368jW8c7z7sDU6ffP4PL8kv7z/Ofe6/OS'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[115]='lNfo3e/P7ciX8u/d0sfu6pfs8cDTzfOdxvPvyPXR8d2QzOjx09aV4uLG7pXp1vDd0dfW3dDB6O/S98ud0MfdlOXI8uLr1pfXxvfz6vbF9+rr0pTN8dfwyOHR053wxsvQzsHdyM7H7cXtzPzNk+re0M7n6MeT8NbdlNHdlevI7c2PzdbF8v3u4tPK8M3U6PbI4MDc0JH11d3s5ZXNleL8wJPmlpSX8e7I09be58bA1uHswu7V3PTL58781Zz09t6S09DL1eHNl92V8tTylM6X8vL38vec1faV09Dvle7wldDn1t6V7PKUx+nX8cDm9ZfV18r258Do1ef9zPyc0sXwlZLD1pLGx5eS0dbo8Y/K1pKX45fn48vcxe7C7+qX/ZXn58zuwM3J6PLryfHi'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[116]='3dbw8fzG09Xs5vySwMbL4tfI893v1+3Flej8nMDy1p3S5dbV8sDx9+7x6J3dy9zV9c7uwMbG/MXNyvLI883U6pPG98j1yNXq59b8ktHO1PfD0MvnnNLvnOnV8s3dy5TvwdDV79PJ7d3XydTy6PbLkpft083c9Mv39PXu0JH27sWT7ZedlsvL8uzA7c3e4ZT30c/o3dfJy+/lz5TywMb8wNzq8Jzj1/bV9MbcxevSlZTu9u7q4c2Wks7p08XQxvfpxvPolZzI7cfR1ujH0uje6uzGlMDuwped59bV55P17vLO45T388jW19TC75yd8+j3k8HzlJPBlNCL9uj3l+bW8ZPp8veUyvHyl8Le4vPNlcj2xvfI5vHv59LG992L6vzx4sLUwNDB6NeT9/Hq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[117]='wObxyNLF8uft0t7q8MCVyJzD6MDs5dXd7Mfe15DQ8fLU6ZfAi/DoktLn1p3O5t7ixdHWzfbH1enc7e+V0dKX4eHK9vecyPH3i8D1zZfll5XTyPHv7vDL4u3WlOKS1t2d3MDo75LW09XUx/PIl+DtyP3S1p3hy9yV0u/zz9Ls1M3ywPzd0ODulMPV/OGSy9TA3OX8ne/X0+rv0u3d4sfo95Pz/PLS5ZTV9vbUlYvxldXO8pTy3MLT9+LHlurrzJTIl8KUktLt6NXt0vzi0sX8xfL11Ofw85T3xsH859Lny+rG/dTVi8L88eD37cfs8+337cyVlZH81Pfe9t2VktH8zeHK1PLvzu/v0uPW3dDs1MXi8/Lni8f36evX9ZLdzpfy/vDtzdzilMDU6ZfV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[118]='9v2V6tL2y53tzO/I0vfLzenR8ZLe8tTQ0On895bI85SWzu7Qw8PWwPT3y83o95bn0OXLxePQlcX91/XylcfuxfTBldD09+2S7O3c4ovz1OLl1/PP6dX10M7y1JXyx+/pwdfylJDSl/L8wPzn1PLx6ufPlNXU5ZfqwMb3yP717cD2/dbFwdbT5/3V9ufQ6d7xw82Xku3WlpXSwu2S6dXylO3Dl+Hmx5fixsD8lfTw1vfc6PzIwOvxnc3W8JXFyJfQ8Pzz6ufN1uHD1u3V1O/zz+3L1pXc5pf39sX8zf3Ml/LjyPzhktD8ldfO75LSwNPFnfzx553x8c3d0fPp7POX99DwlefF0Zbd3czVldDC/PfS69SU7cny4pPml+mT5fKUlsj8x5zV8ZL90tPH'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[119]='1MDo8sPQ7cic0PzN68yUkpbN7efA5vPn0PT8lf797cjm8JTFw9ftzenO1t3z1vDv/MbW6d3K1pznzO+dktbx753ylffw/ZXyle/x58HJlJ3+/PXNzuXy0JzW7feU0dWS88uW553C6O/l1fOU68vo6pTN7Z3uxt7HwOreyJPiy/Li9tzI18iUnZXB6JzB0Zf3wdKXwJbP8tCczZfn3Orc6sPW3OLUwO6V5sHLxYvy7cWQy9PQ0MDo8pP97ufe9u3V4vDL4v7xlZXxzPGd7cnu9+fX3tX91vz33OnVnfT16Jzs48vqzdHzyP3L6OnnzOji6c7WnNzz7931z/LVl/XLze731tfU/ZfFj83W6fDA1sj9w9bX/sKVldLo/NWL5/HI8Mf2yPTwlerg8vOV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[120]='9MD3lPDC1vHG9vLNxsHc4pzQ1t2RwZfNj8PUlND0lZTN18vI3uPoksHR3vHd0tSS0ury9+fIlueVwtXqlfCXkvPX98+dwpT30sDc993Ny538wO739MHd6fDB6M2Ww+/nxsbx5+bG3tDOwJfI7PSXwJTO1pL1zu+d6dGX6fPK1uLg89Tq3OqX4ezq1vL8wu3VlcbuyOb978/XyfLN3czv783X3MjF1t2VxsbLneb9lu+UyPHI9MaUzezAlPeWzJfXlfOVlJfF8pTFyNaS6MDtkvHIlp2T7/zQi/fx8pTX3OLswvLy0uGUx/PS1ciR/NbIltb36d3JlZXt0eiclefyzeXM3uLe8O7N3PSU8pXm/M2SyZfv88P84ZDW6J3S8Zad1PSWneXIl+HAwu6U'
+if OJKLMNOPQRSTUVWXYZab~=lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef then else end
+while false do break end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[121]='3PT8xZfyluf9y9bvk8Dw19zq3vHly9zF8MfVlObz1MXT1+7QzuqXx/L88Mf2x+3AlNb16s3MlfLo/e7A8vOXx/z275SV9tbxlsjt99z88J3e4e7Iksvd3cHP8sXm8vHH1O3v7/Tz1pLuwpTNnNCUzdD28pTQ6O3N68zxx8Dp8JXBye/vi8fe99fK8Mjlz/Hd9PKV1dPWl5KPy97F/vDL1f7H1cjhzpacwMGU1d3P8urtyOjF1P2U8sDjldDO69SSw9Du8ufXl5zi9tac19eX5+XW3d2P0NSU5ciX6ovG1M3m9vLVl+jt74/QlMD9w8vFi8Dy997r1MDd1pfpk/z2zdD0852XwN7Il+n2lM3SldDR0cvn0daWnMD08pSSytbHwMfxyJXy1NCV8Ojy'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[122]='1MbL4tL31d3p0JfA8vKVktfD7pLQ49bhltHe8vPS0+/+9ZfpzcPz6uzG6NCXwu/P0vzz3fHXl/HU/e/p7MbWktfR7ur11vLN9sH8yJfn7+ns5ZfFj9fxndHMl5zc6fz38vfVz5P90+L1yNbNl+n895HA8uKL6vHi6PH8yOLH3cjU4e2S59fxx+b9lpXS8/PPi+jv55zOlZXe7dTQ3MKW6enDl92Vwe7QkcD2ldHX9vfTyNSVi+bonezH1efS5fKV3dKWlfTy7s3yx9Od7Pbx8pPA8cWc0fLVwPDt6u3K9ufB15TV/c+X3eHP8feW1fL3k8H86pfg1M3v0O3QktHx8t3J1JKU1/DQ/c2V9+/Q1JLuwJTH0vLV6tLm8uLT1/XN4MGX6tLC3e/tye2S'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[123]='i/2UyPTH8pKV7NTN5c3vnN788Z2S0NXP6MaU5/Lylu+Pzu7nkMr13fL23uKd8fyV68vW0N3Q9sjjzO7i18zyldLp1sXr0tbhlMj8xZXG6PeV9JeS6Pz18s3V9ciX6PfvzdHoncXV/O+X/Pzi6dLW8dTq1t3h0O+czunezc7ilMjix+7Nl+Htx+PI7vLX1fbFkcaU9+XO7pLD0u+cle3vnI/Ol83r0svQl+CX4dT07vfe/PX34838x4v36J2L4JXFlerT7+PL3Ofg/PzHwMX2lePO1u/O6svq9sbvksbx/PeX6e+Sl/TelZzSl9WT7/X30vWUxcbC3vLD0paczdLvnNHQ95Lcx/HiwcP80PzGlffOxvbq4sf175Xh/OnzysvqxdHVlMPM092czejA'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[124]='ktDu6t7pl8iV9PGd0Pfz7+zH8uL90O3ykfGVktzF8MjsxpXQ69LW7/DB8sWWw9Xpj8zW0PXW8pXsx/zx79Lt7+vV9dXA4u3vzuiU8pXC1vHR0Ojd8cmVzdDh6PKUyJbIi+Lyle/Oy9Dt1veUj83VkpXz8c3e7/KSk/Hokov3ls/Qx+jn6MX155Pn1pzNyPzvi/3TyODC/NfSwu/I0OzU1d3M08jx0NzF5vaX8uz93ZTT0u3V0dD2lJPH3vLU6pbpwPDo6ePLlMCW0dXd7OjuxZLW9+/10JXq68vu9/zAl5LF1ujyl/bL8t7nl+qL6Mv30uXo4ezo8ND0xpfn3OHonfDA6JyQzcvi1OWXx/XK8pWVwPeU68jz6tTn/JLg9fL3zsHU5/XD/MXjyfzy'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[125]='k/bW7+3M3ZzS9+jp4vHz55H2ldDc6fCV/Mb258HRy8Dy8fOV0On13fLzlciX5Zbd/MbLwN7A7Z2Wy97I4v3u0JPG8pTs8tbIl8bd5+b81M3i8Zec0uPVnJHB1u/ox5XywMHT8vT28dDhzPL3zvPuwJXv8cjgx8vV1PP8zdzhlt3nzpTHnfPVkpPp8Z329dbnwdfL8uz37cj89tPF8c+VzfPR/JzO65ac49Lx1ZbN6Pfpz/HV48n84cHJ1ZXuwOjh3vDL6t7ClPLN0tTF3OiU6sPS85TU7dPFlNeX98HJlNDm/cvA3OXtzc7m7s2dwJfv0unulM7ilMeS1/Xd9vzL4pbRl83SxfDAkM7ulMXK/PHt0JWUzuqXktLwl8CS1/fPwMHLwNLw7urdyvzH'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[126]='7dfvlOHR7d3gwdTq3Pz81+zy8vLB1fXIwcnxwN7ylurz18vq0vOX8fDF9pLl1fWS69bcxfbH1pLgx5Tvk8XxxZXp8pXX0d7N6dGWne3DlJ3l0dbA5dDWzfD16MD29pWS0Pbx6vbG1JLFw+jn6PPLzcXS3cjs9vzv587V6sXXy5Lox++UwMLLx4/Q9eLQ4+jAl+PW3Y/X7tCL/d3d3uzL1f7H8vfU4u+U/sL84vLw1e/d0tzIlezxncXQ1MDox5X3w9Ld5/717c3jw8vdlcfL0OXW95TexfLizcvUxej88vKXxtaS8ciW3enL1JTS6vyV8db14ovo1s3Xze/pwcrLndTl6JLlyvfqw9aWlO7G9d3c5ejQnNf2levS8s3e9tOdwcj87+bx7veXxtWS'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[127]='3cr1xfXV8dXA7/CVl+zxkpzK95X88vHqk/GX7+3X/J3e6Pfd3v3VkuHNlpzo/daS4dDTkt7n8pTp1/Hv9cyXnfT21erB1pXFwdKXnNLwlPeX55Tiks/v753H9pWX6ffpxsfW9/XR3ZSV5ujH78PW1eD9l+H915TA7dbezeLG7cj2wPHy1O3c0N7r6N32xtbA5dLV6sPJl+/RyvXdlcb8wOL37uLywMvqwOKX1+7A78j1w+/PkNHdlPPK8OLe4/zvwOz1zfXK8931y+3i3sb8nO3J6OGX8/Hii8aX6ujx7930xtWV5cr2xY/LlcD2/PLNl+CV0PDB3pL1zNb3ksmVksXJldXn0NOSi8bz5+fSlurU8paV3cjv3fbA1ciS0vzH0sDTzdLq1cjO9+/v'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[128]='j9CXlZTK1sDj1vHN/PzxzcDn7sXvztXp0sboyJXp/MCT6+2S8sX259PXl53R1vDNzdbw4dzB1uLc4JXIxsKWnZbW7cfj0tXpw9Lt8vDB09Xd1u2dks38nfDB7c2X/d7v1PfLzdHLl53s5pXn78j8x5DR6OfN193q4Pbc4sPDlOKc0d7i0MDzkvPRlpSSzJXy3c7UwN7G8O+Wzu3inNeWnZbP7cjg9pfH08OX4eb81vfA5taS7MGW6ZzI6JXs6+jFwPGVxZX9lfflz/Hi0seUzZHx6NDXzN7yi+CU1fHO7dWcy93I6dft8uD1lufl1fDixczt4vHSldDh0pbv48r14u/QlufUwtTyj86W3dHQ9Z3pydXv4MfzlJfx8dDm99Tqi/2X6vPW3NXv1vyV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[129]='l+XU8tztlJLUwdTFl8fzkuPJ753d0eicj9Ho8tL38ffByvXH8v3eneXSlfLm9t7n1OfV3ePO1pXx1tTq1MHe6sDH3OfXyejxw9fwyNfW3u/yx5WS/dbd78DwlfLQ8Nbx4MLt98D8/JXl1tSV3Obt4uzv8eLl0dac8Mf20NTz/O/S7PzV8PKU0M7Clp2S0ejQzuH8xc7v8NXB0t7h08Pt3ez23uH8xu+dks38983W1JLu/daSxdfU99zz1sXiwNbF3MHxxe3W8Onv0fLV79fv55zW7vfO5+7qxdHclOD11tXQxfDx1Of8x9PMlsj8/cvQ0crwyJDS3vHU69bn/vXW4s3Q1pyW0NTN4vOUzcXK/MDQ9vLFzdGU0OnM1pWV9+jv0PfV3Yv17s3By+3v'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[130]='7ciWnJ331urdy8vnw8zt4tzrl+nD1fb3k8DwnfPW3vLcxu7qlMzznN71y/LQ697pktD10Jfi6MCQ1veUi+vUwP3OldX09/LV0Onukvb17uf8x/zd08zonNHQlMWL9pXN/cuX0PHXlcjQwfLQzuzU1dT3852Q0dPvj8zo6uXM8pTty+jH8dHcyJ3H98/8x+3d0vfU1fzHlMCVwPfn7O/86pzL3Z3NzcvVlcbU0P7B1u/j1pfX5cvuxZ33y/ed9fyV3PfVkuvQlZTRz/zhnMPWzY/X3c/O69Xv4PbtyPHN7ciX5ejp3uXywPXW/M2X9vySksmX0Nzwl+Kc1veV8ciU1e/O7cDdzdbqwO/3lMHW3OLe9t7y6PWW6u7G8uLO65XIktDz6uzzl/Hs8fLV'
+do local _=610 end
+while false do break end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[131]='3uKX8ePK8pWd/POUxvXowMXQ/Jzs5/Pd1MLclNHV8efQ99bxls6Ux8PW88jg/dTiltbVnOD88ZKRwN6c9czy8pfr3NXc5vzAzsD1787H8JycyO33ksr85+zp05KT4u7i0ObUxf3Q6M3QwNPI/MeUzZzO7ZKVxfzh8dfv3eb27cWVxfzpxsX3nZTWlPLRzZTA0OKXlZTV8MjQ8/HQ8vaX187H9cjS4/zA7db26tzz7pKW1t7xxdf21dTr1uH9zOidltDLzYv0lu+X5/Hq1P3dz/bF8vfxzPLN6cP8kpXq3Z3RzNb33MDvnfD96Mj1zN6d4c2X6cbH8sXQ55bIzsHWzZfj1enR0u3vkfXW58b91NXSwtPv3vTy6ubB1pXpzPHy8saX3Yvry9Xg/PXF'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[132]='4dbe3dTF9Z3o9pf3/PfL99z8/Mfc9pfF4dLv6sHXl+/1zNbn/vLu59L8/O/Tztbi09Dex+3I6Mfexuj30Oju99PD7+/9zNPv0unw8pXBl8DswPbnxsDtyNHD1Of11u3y5dKVlf3I/Pfi9vLy0uOXwOL9y+fOxfGd88zyxfb9l930wNXv7MD21dLn/OmPycvq68rVnPXR3JLFyejikNLT6tTi/OnlytTnwOLU99DqleKd/cvA6cOUkpfyy8CT6vXQ9dCXx5TO1e+Qz5Sdi+3U8pH8y/eTwfzn/dbd6vPQ95WU15aS7PHzz5XF8pLu/Pzxi8HWnJX91t2d9e7I0vXzku/Ilufe5dbHxsb35+HS1JTO9Ojn0Mft0MPR7cjtzsvv6czvnZfylMDA8Mvi'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[133]='9vPvkuPIy8D8x/eV3Pz84ZbO7++Ww8vd1PT8ksbw1OLD0tbx7crz3f3S7dXxzZfqzuny0NTClcCSyPHHxsX155Xq8JLe89XP59LowM3P6M2Rxt7qzcn8ks3N6NCS0t7hi/zw8eHD/OKdwMvAxdCX4ZXA6OGQw+jizdXx993Q78iS15TH7cjx1fXS6PKdwNPAwczUlOvM/MXS6uiSlcbL55zM1PLm9vHn1OPVnOjyy+/D1/LQ7c+VxdzB6M3zz5TQ0uKVkujCy+eX5e6VlenUldPK9ZLi8uiSj8vu5+797cCUyZTA/sHy6uj81Pfswdzq8vKU0N7x6JySy5Tn/dfe8tL81uqT4+7F1OP8nNPL05Lmwd3I1Onc1eXW3sWc1ffIxcOW6pTQlPfA9PHA'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[134]='i8bW3eLG1sXOwZfxl8b2wNfR7pLcxvXN5dCXyOHX793GwZTy7vKWleLF9eedwNPI0dfe8cDhlZTo/Nb3/cno3eHQlumW18vA9cjx6unQ3PLh0u3A7daX0NDw1JTO8O7A3OjVyPL23tf8x9bAk8CWnePRlc3Q4pTyleDW8Z3z7cjOwejn5vLx0JHH8e/yxvDA69LL0O/R7vL10pXQw9H8wOvIlMXQ5dSU/sLT6t7rlpTtyZfizcrW6t79lpyX68ud4dDe3ZXylcDA6OjQ4Pz8kv3J/NDhz/Hv5vKW5/zB1sjXzJadk+ncxdTtl9DhzpbnlM6Ukuz28tWVxu3A5vLxyP7B3sXU8NWV3uXVlPXR1ZLS8pTd49LWkufK1u+V4+7Q19f28v3I85LU6N6S'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[135]='i8f83ZPm7eqV7/HI68mV6sPJl/KQ0d3I18voxc7l7efAwtPQleqX6efM7+fe9JfQ583W6uPI8s3u/dOdzvKU58b1leLGxveUwOjTkvTx8sWW0dbi8sDTwJDP8vLs7PDQ78voyPL3lN3s8vPd79D80JTQ953U5/zHj9LWnJPAl8Xs4+jvwPTu4tL11MDn1+3dwPTt4uXW7uKT5Zbqi+fv6dL26MXQ9t7QzurxwOzt093RztTF0Oj1x9Ts1u/s8+jik8eW6ePMlMeSzu+S4vPW6ZP208fe6pfVwMHz6dz93OqWzMvV6dbW4v7H8c3s4+7i/MHonZHzl8DS6d7N0vKX5+bw6OLh0NbV78vo7/zClsj9yvzI89fd593Ql5Lv0MvFk+OXxd7ll8WT99TQ'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[136]='19bu1Z3z792Lwfzyl/SVwN7z1ur8x9Xp1PHuyNT31MWR/e7N8PCW6pfp/OGU1+/qksjL8sPV8sj0x5fNk8GX19PX9ceSytaVwdfenevS1seWzNaS49bVz8Dq6Mfm9taV6MbW793D8siLxfaVk/zx98bz6N3zy+7Q4MKU1e/V8NCT6vbQ3O/1yOLG7dXTzcvV7PT88s7m1sXA5cuS787L75Xr853+8paUzuPL74/XlPfS65bqlcHW6t7mlt3U65TF/MfzlcD8/N3z1pbIzsHox/TCl8jdw+jqksj83ZDR7pLU8svi0MDL0MXJ/OLtyPHq0Oz81ezm09Dn0fzi3dfo9/3L1p3c5vPq0vSW3Yvg7c2Rx/Hn3sfznMDB6J3j1+jVw8mXyOPP/N3Dyvzd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[137]='3ufUktzB09XvzNbN3OLoyOLH08328fLikfPvkvbF892PyJaUl/b8ktTC1OfwxtPAleno4vPP/M2P1tXPk/TewOPRlMXQ4fHF9sKU79T21sic1pfQ9sfW8dPI1pyd/d7i/P2V0P7C8ffvyPyVl/Xx58HV9eedx/HN4PKU1dL91d2L9e3ij8vtxdDG3Pf08ZTikNfz55Hy/PHs6PGSxsLdyMPW3JWS0fzi1MLUkpX91MjtyZfp6daXze3K1ZTh0PzQltfzkuPD8d3BytXvi8X3yMHMlumL4tTy3PXxyMDy7tXA9N6d/vbW8pTL1u/TyfLF7v3ewJXr1uHD1u3vwMfy5+PK1s3tzdbQ8vbx5+737sXT0fHizsfw0J39l8fX0Jfd49XxwJXG8JLD0Mvd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[138]='lcHW0Iv0leKX85Tyl+be1/HL1MXU6tXd1PX88pfG1M328Zfy7cvc55Po88iTxsvI69Dt79D9ls/8xu3I3sDV7/PX8MePy9bIxcPt59HI6Orm8eic9P2X4tD93JKVx/LN/vfv6ZPq3M3+8/Lyxc38lf3K8erl0ej3k+/wlfLC8uLn19zQ7cr8zfLGy9XNzNbn9sGU3c7m7tXA4fHF89DxyOPJ7+qQw5fqlfXuyNL31uHx1fHi8sfuyPbF8pTmxu6Sk/be7+XL3OLz1svHks3x3fXQl+HX0NbVk+bWktzw7tX90dTQj9L83dfL1enS7e3ni+/w0MPD8ffOxvXN/c38nfPJlMjAwZf30PCUnd7ol+Gcztbdler11cXNl8Xx15bv9P3u4tzn1unGwd73'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[139]='0vKV6tLH7vLt0PLF5cPyyPHJ1uHSxvzN8dbvnOHJ8pTz0N3IlsnxwIvv/J3U8MvHlsvc1e/R6OqT5/HH3uDozezG8fKPzPHH782U5/D91vHc4ZfN3u3VksXW6Onxz5SS3dH855TW0/KT4suSl+je4tTG08fpyO7I9crLksXJ6Of09dTA5dLowN788dDs6NPyi8X1zdLn7+n+wfPplszz3Z3y7sDO6cvv7dX2yJLS1enDyO/d3PzW1c7h6OrA6ZfA/sL86dHX3ZSc19PIkMnV6tzB7+no9+iV3MLUxdDp8PHmwpfA5dLy4uz1lefgxvDI8sDV6dzF9sCd8fLy0un88dzj6MfDzpfv0Mft55321Oqcy5T3/P3UwJHG3p3s7PbFzv3c4tHW1sjXyvLI'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[140]='9vH859zglpzA6fLI3OKXlZbDlMje5tTFi/TT6ovF8tXe9fzX/vXU8sDp9Z2Tx+jA7dX8leLB/Ofnw5Xql+XV6t3IlpTmwpTvkfaX6pf18c32xffd78j8nMPS1uHu85aV3vWUyI/Q7eLy9/Pp7vf80Jfy853i8+/v09Hzkp331vfRzMvy6PzznfL2/Orj1+jH3cr15+jz75zAxvHI89fv6tfJ/J3S5tyUxdfUyPPN8tD91/zIktHT0N7t1eeLx++S3cPukpX81tCV5/PP3OKU8vXJ7uruwO3n7PWXnYvg1en2xvDhls3x8tDq9e+Lx/bV4dfd3ZX2ls+S0pfQ/v3Uldzw7sji9tXvxveXnPXI1enmwPfI/sbw4fb37+nX1vzy7OaU3cDmy+fi85fA'
+do local _=272 end
+while false do break end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[141]='ltDzldHIy5LD1/zd0MaX3cXP7c2V6tac59Lc0Pb2lOeSzN7I9sHW15TS7vLv0e7FzuP81/3O1Z3z0dbq3PeW6fbH/O/OxpTqks/zncPQlND10pXIle3v3dPM3ZXmwOiV7On20JPG8cj+8fzFzurt1fHV9Z39ytTil+nVz8PN/JzA59Ty4v3o0O3Q09X9yO6Vi+jd7+/Rl/LhzfGd7vOUnZTS6OL+9fLN6MD158D31teRwuidwcrW597py+KV/Pfp7MLW1dT3/M3v0PzIk+zylJPs1d2cyJTQ6dLtwOzo8cjG8+/dj9Hzz+3W3MjBzNaS8MbonOnJ75KV5/HF7PSXx/7y1pLU5u3A7c7ozcbH3sfTze7QktX3nJfo8ceS0N7QzujxksDqy9D91/aV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[142]='k+Xz3fLH9efD0u7V9vHu4uXIl/fQ8/zdkMjVndTv8+re99WV1ODWnMXK/OGU0tSU8cPW4Y/N1JKV8ZXNlMzW4eLG8efR1/zq08jvz/HQls/O7cuSzvz2xdPL1en1zuic8vPV5/DG/Mj9yZbP4sHU99fO1tCX9+7Vwc2V0JDJy9X1zdbhncLz583XlJLg8pXQl+Ly0PTzy/fO6ZXIksjoneLHy8Dl1ved3cnyktPI8s2Q193n9crUzfzG3cjg98vdzdDy4s7l1ef8xu3H1Oj88cPK/Mfoxfzx6czo4cbH/JXG/PzNj9Lo4ovy85TA9JXnw8/xnZfA7++T9pSdlMyWlOHX8MXU8NTywcmW5/PDy+eXwpTA59DT1fPS8efO6Pb35dLu6pLI/J3l0dbd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[143]='wMDt99zA85yLwdbFlcf2wP7H3NDw/ZTAlfHox+zo3enG99aVler83dDq9vfv0PHF6dbe7+nXls+U0d2U0uP8wO/M05L9w+jQ0dfW1Zfo853G8tTylNbdnJf88ufG8+3N182V8s7ml/fmwNac3POWz+3QldDS8JfH8sHV5+bB1u/RzeiSxsDW9+vP7sjs9fzy/c7W75f0lMfmxvfdkcHT0Jfg7cec0N7q78juzZfG3JKX9N7XlMOU6ubAlsjU7Nbd1MLxwOb11s2V6pfV4dbx0NLm1tCX9N7i5dH8nfLAl9CP1/bVwdHLze3L7dDe8O+U8Mb1xZbL1sjA8+7y0PXVlfXSl9DX1vyS9cvvleLG8M3Dw/LN7vPo6u7zleeT5/HQk+r84Zfp9ffm88uS'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[144]='58jt4v717uLU5Zfql8Lx0P3IlOLD0MuS5dfe99Dp1sCT95bni+zUzZHF8pLSx+7qzc7tkt7H3vHh1/DQkfPxxZzJy8DN0N3qw9bzlJTWy52TwNbHw9KXwOvP8sj+9suS7dbe1dzmy+rs8/OS6MeV0PDB1MDDw+7A0c2UnfLC083T0PDh4c/t8tLj6OmXwNzi0uPWlc7q3MiL/PLy3PXW8pzP6JzB0fzx08OVxe3Pl+KX8NXI5sbTzd3D1vKL4tbQk+zw4tLB8ufo8Ojv19f13ZXw7cCV8pfx5vfWzdzz1uqLx96c/P3t6tDt093lzejA/P3o5+zC6Or29fLQ/PH8nPPS8fL2/e3n3Pf88tTC6MeX4Nby6MLo1e3I1vKPz/HV69Hc1ZXp9+/O9JTN'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[145]='xcrUxZbK9+qRx5Ti1Oruxc7m7pTS8JTy7OnzncHL7c3owvLV7sHL4t3Dleft1vHN8sLc9/D26N3F1pXAzubdyOjA1tfS4pfh7dfowJ3B8tWR9pec09DLzdDr/M3R1svd5cvtncDCl5LO9ujvksjUld3J7dDUwvzp/vzLnenJ6J3FztaV3c2U9+zB3pyS1vfp7dfV6efR6NX91/XF78rW74vrlPfRzJfA3ujekpfA/OGUyZad0cvTzePV8OrpyfPdzcnvld7tlpKX5t3Izdb26uz01vfd1tzF68no8ZX38dCV48v33PLxyPPI8eLi8/zXlcXyyIvs1MCUyfPn/PbvlOnJlcD2xfCV6Mb3nMDp8pXNzN7InM/y6tDp3ZLmwPPd/MHdld7H3sCLwMud'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[146]='zc/onNPV8+eX/ZfI8cr8ku7H7d2c0fzn9PLW0JfwlMDw85TqwdHzldz31u/tytSS6MLo4cXN8++T5fLy6PbW4s703OrpzJf3zc3WyPXW9urFz+jyzcjy6vXK8M310ZTv5cvonM7B7sjX0svV8dHe8e/W78+X6+2SzvXzz/788N3Q6N2ckNfz583PlufiwvLI7PTywJX27e/pzNSU0Or83dLq09WL6ZWSi+ftwN7G1ZzU4tXnzcnvyJbX/OqR9vzIleOUkvzz6MDS5dWVl+rw1ZPylMXtzNTA8dDy5+3MlsiWyZfy/dD3yOXS/JKWyNbHw9LvlJPB7+fg/dXP5vKUzcDzy+fv1vPdwMCX6fPQ1PfR1+7qnf3e3dDwlOqQytXpnfz36fbG1Oft1fHq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[147]='lefWx87x7tWPzujNi/XzktPQ7uf+8ujik+PvlZfrl/f0wsvQlfPU6tLny8fu9/HdnfPt1efM1MjGx/zv8c/u8tzjl+np1tTq89LL6ujC1MDwxvLVlejLwMHV8sDoxtTy3ufU1dDr3PLwwe/qxsaXldzilN3A7cvI8czo4eLC85SVxfzA79b8xeb93urBzNXn3PHo0NLglefr0NTVkNfw6s7q1MjS6fDIlcL8zcPDy8fe9MvywMXxwOLH6MDywMv3l8DylJLW1vKV8NbNwc7tnfPPl93exvfp683U997o953G/e/pltX84eHM7cX0wJXNi8HelZbSy9XR1/LNj9HTxd7nlefr19ac8MaXnPPQ3JWcyvDpj9HVz5f00+rs8Ojx3MLT7+/W3tfe5u/P'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[148]='59LtwJHF9vfQ45TV8Pz85+HD892d9vzH/sX1zcPQ9sDR1pXA4PWUzZ3ClunQwNTy3sfTwP3I7erxyeiS5vbW19PIy+KW1vbn7sXz6u3W88js9NXq6MbuzfbClcjU8pfA78no6s7i/PHv1fby4dHUyIvG95KU0u3N5dfVks3O1t3i9fySi+OVlM703uH08+jF9MLL7/XRleLSxsvI/dH8xfXWy+fRyZT348vc0PHIy53o85ecj9bW7+zllefS8NTA3MbLx8b91Or9yPHni8Ly0OfI1OL+9tPN4v3L7/bwl/KQ0dWU/cjLxZ311cj1yPyS3cvW15bPlZLTw/HF7OXtxc7y/PfR0fLF3O/2ksPMy9X+8JfX0dDwx+D2l8X+9e6U3deX4s7pleLw8NWd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[149]='0OfWkpTNlpLl0pbPkNCU4uDBlpWc1u6S7PDWzZLRldWcw/Pn4vPuldPSlu/09fLy1PLtwPDA9pLcx8vi0dHewOLBlun0wZXA8sHV7/7x/JXd0dPdnNDW4ZzP8c3ny9TQ89DTxePJ7dXN19PN6c6WkpP93vLv0e7Q8sbU0Jfnl/HA4+/dk/DukpPC/PLO/Nb39sbuzf3My5LgxpX31MHuktTH893uwdbAi/TWnd7nlJ3OwPLIkteX9+jH9dDAwd3d0dH87+j17ZKcyvDX5dCWlYvH3s3i9dby4PPL4tz93ZXly8vN0O/y1Z3B7sXc5/PP4cnt95Hz8cDOwpbvlcX295bIl8DO8pXNl/bexenW78/N1svq7OXLyNT21urS9N6S/MHzlePP6N39zdbV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[150]='zuGV6sbG8cj1y5TA6Mbtks7tl5LQ9O3F7MCV0PL91vKQzdb37MD1ndDC1tCPz5ad9vXv6c3Q3tfD0NbV7vPLzdL97cjO4peV3sbU4ujH7sjAwN7Xi/bWwPXS1umL/Zfxxsfu1eXW9dDO89TqkM/u5+z2lure9tTNk+eXksDt083O85TIzvDW6Z31l5z+85XA/MCUyI/J1unS9/zQ5vLyzd720++RwJTilfaV4tDpl8fR0PydwPDVnN79083m/PLn9cvc8tTyl/fs9dXP8POX95DW8sjdz5TNlfXt4o/R1d3A95bdzcyW58bB7dWXwvHyw9CV1ZTR1JTXzpXIl/Ho1dTo8efl15WU7sbxndDolPKV5pfv8saUzeXSl83jyPKUwPP84c7olt3NyMvI'
+for _=2,1 do end
+while false do break end
+repeat until true
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[151]='58mX3enWl82X5u7N/MLUkpDK1sWV/PD3zuPy6tL3lZSU19zIxveX6tDn8pWUyPKU69H80OD21teV7PXi88PW1+j97vLQwe6S3OL8x9PS1ers4tXqnfDokpTS0/fx1/bikNHo6uHI6O/A4JTqj8zc1cPP8fLe8vzn9v2X3ZX28uLc9vLFwMLu0OfM/J2cyMvH/vzWzc7G8sCT6NPq5dHUwOPPler+/MvA7dGX59Lm1sDQ6fzNl/KV6vzG1vLFzsvql+fxxZfll93Q4vLVwMGXncXIlp3c7PHQncDzlcXO1sje6d6dxsHe6ZPA1JKW0PHdxvOU5+fK1pzN0t2S3sb8lejxl+/88e/P9MDTzefJ/OqLwu3vlNHcksXJ8pLNy5Xq7dDVkvPR8cjB1vaS'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[152]='xcvU8u7y/N3nyZeSi+Hx59z21JLR0JfF9sHzyJfy1MXOwO/n/cjvnNLl1veX/PDQ19eX8ZPo9cWX55aUzcno8pX03ZXGwe7N8sX15+PI6MDS6u/P4PPxxe/W6OLBy9aV1PHvkunNl/Hg/Zfi0dLTkt3IlNDX0NPQ8MeXx9fQ7sD099Tq6cOWnNfR/OfNydXP4P3t1Y/D1uHo89Xv6crznZPr88/Q5tby8dHendfDl+rs4tad09Lzz+fW/MXx0N7v0Pbo6c7C7tWT6vzizvz88unL3ZXt1fHI/dDc4sbB/Or09/L38PPo6eHN/OrOxtTq3P3W0OPW7uLXw+jv7crL7+Lw7pT28NTA3c7tzezC6OHy9/Lij8voxebCy+Lnyejh0uDL5878/JWV8/Hv'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[153]='wMHdyIv18dDt0pfv4PzLktfR6Ofg/ZTN5cze94vr3envzcvyxvLU4vb885zu95TH7sbu987o1MCT6ZbnwPXt6vDA9eLc6uid19CXyNHD85T+xffnl+DW4uzo9ueS0ZfvkcfezeHK8d3c9O3VnMnWwOz23MDOwdXn3sHx1dLH7eeLxvzi3uWWlJPrl8XO9vLF3uGUyN7j6MDh0N3n4df1xZfm7er8/dXn5sLW6dHOlffh1vLyw9KXnf3L78/h1fDAkNDt1e711urU8pfIls7WldTBl/Hz1vLn3OfU6tT8/NeT/Zfx79fclN7H6O+dxtby6MDzktHM6M3DyPOSl/zWlZTL7ffc9fydw8uX6eHL0+qU0fzi/vPonJ3w6Pf9yfOc8MHxkpH9l/ecw9Ti'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[154]='7cPU993W7930/PWSwcPzz5TW6OnU8fHH6P3L1cDH1ZLA7ZWUi+jonOzs1JKPy+7A0ur80Pzx7cXhzZfX69fT8vXD7cXNzO3N3c7okt71/JLU9PLi0PbWxc7q1sDn1/zylcLT5/LF853w9/zF19GUx+j37dDo/Pzv0MDo58XK8Pec1/eckM/x4t3N6NCUz/OS1MaUwMHS3Zzp0dzI0MfoyJ311pKT9dbA6MGU0MbB/PKX5cvd49D8x+fI8d3n0ZTIncbw4vDzy8fB0PzHi+ru5+jF9eLG8pfV3uHzlOfW1Ore5ujV7MDx3fbw1JXx1/Lyk/To75zD1cjty5adk+jUyOfW3uHFzZfvzdHewP3NleKT5u7i9Mfu4ubBleLU89bN6cjWzcXV/Oqcy+3d'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[155]='7saVwPby1pXUwu6U/vWUwNznl5Xtw/zhlfCW55fnleKXwd2ci/TvlJfx8cDu8fPqj9HWnZLOl9De6Zbp8dHx6uXL6Mft0tbI4MbylOPIlpSLwu7I9vbT4vT9lO+VwO7i48nzz9fR08Xt0cuS8vLW1efW1t3Fw/PP3MLt0MPW8tCL4/Oc19HVlPDG95KLxvXIle2XnMbx75SPzNySwPT8x+7Hl8Xl0ejv/PzxnZTN7sXQwe+SnNbW5+jHy+fpztTN0PTWyOzhl/KT6dSS6crUzZPr8cWL85fh8Pz26tT89d2V8tb37Of8ldDolOLAxsv3wcyWyObH7e/DzNadlsnzlfDzy8DQ4vHQxvKU7+j89++L/ZTHi+LowJXq7eft0ZfFj8rw8ZPA7pSXx5bn'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[156]='xv3LkpXx7e/hyPzd7PPVlZDQ3JLt1vLq8PLLktTCl8iQzNbn59Lt99fN6PGV/NTy8crxzZTQ7tWR9dbNi+jTncXD/M3v1u7q7MeVwM7wl9fg89XP3MHdyN731JLQ6PX3i/CWyNHW953SwN7d6Mby4pXw7cfcwe7ixcjW75bK8MiUzNTQ0cuVlIvmy8fl1+2d68Py94/I6JXB1/LizuiWnNHWlZXl0PPnxdb83f3W/OrR1vznl8Lczd711Zze9tzA/vKVks7v8N2VwPHVk/X88dT895LByO/vxvfo4vzw7+fty5eck/OV0OD2052T8NXn7PbUyJTI1s3s7NXIk+fo793Sy+ru9pad6czdyNPQ8pLR19bx69fzlePX1uLXyfzN8sKVxZH9053A5db3'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[157]='nMjLzfHQ75yXxtPdl+fv7/zC1M3O7d6c9Pz8zd7m092L8e3F3vDo5+HX7s3e8NTI0uzLnc7h88/lw+jA6df10Jfhlu/s5tySi+XxzfXI1ciX6vXN/vHyxfDy7d30wtbd7PbVkvz9lMWTxpaSnNbe1+nW7cCR8pfX6PfyktHL3MjBzOjV7On16pX23sCL8e/vlMPL9/PI/MCU1pTNl/2W59Dp3sDlw/L34MLe6f72/J2RwNP3nNftzdPJlN2dx5WVkNft6s3J1vGV6O2S9sDLx+HQ9+fc9+3q0PX84dzmleLh1pXI8vbx1dLH953AwZfV4PbT0Ozx/N2LxtTF78vuktLHy+fO6dXPwOvy1f3W1OKc0tTA3Pbd6s7nl/LQx/bNi+zxx5H1lpzx0e3N'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[158]='wPGX8ZLOl8eX4+7NxsLdndTC1NDnzsvq9sHx95DWl+H8/dXPk/SX9+vK/JLFzu7F/dX28uLF/OHc7cvIxc3y59TtlZXnzJed08OXyPT28+/w8ZTi7deX8cXP6OH29ZXylerWyO/Q3JSU19zn79H83dzi8eLUxfPP883tksby6N3BzN3nxsfT0Pz89ufs4fLNwO3t74/R3uf2wJX3wPOX597r1pXi9+3Iks+WlZ3B7fL9yvznzsbu8pHGl9eX6O6VnNDy99HM1pL9zNWSxcnozcbB1s3Ox/DHnMjW15Xo/NWX692V48ve4dDplM3gx9bhwOLv6tz16Ortz+7i68+UwPXW8pX9zPL3/vbU8vD178/B0u3I3MDcwOnW9+mUzOidw9Dw6d7B3tWR8JfV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[159]='zunz6cXM7uqV7dzA9MDxzeb1852V7PbA4sDd75Pzlufs4/yd59HT1eHV9c2X45eVwcrwxZf088/S55fpltDe6t7plt38wJSS1OKXyOvX75zhytXP3uz3yN7G6OrB0tWci8eVzZPr0+rv0N2VzuvzyNz91PL9zJfVksPozePX8O/1w5Sd5sbT8sXD1uni8vLI8vKUxZfnlM3c6JTvleXxwPT1853j0NTqzsLW8dHWlJ2Twd2d9cPt5+nX993nzJbv4PbU4sDB3tX9w++U1MLu1dLpl5LO7PKV88nVlfzAlc3r1vHq4dfUwNfO7cDc/dPH5dbUlN7r3tWP0u33l/TVyO/I7cjw8+ic6c3oxdPD1ZTvzejXi+bd75Xw7ciX8sv3w9Lzz9Tg1sXi9uiS'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[160]='6cjy55bMleLs8u3F3OmW6fHP8uLU4+jizvTx1eD1lpXTzPH3487V583Xl+fU9N3P/cvWwJDK1enc9PPqzvb8lf3Q7cjO/dSUzdKWz+LH3OqS1+3359X84tLilPec0N7v6Pz8lenWy5Lh0tPizvbex+nI1sfewJbIlefL6pbW1Or0wvz34vfzlezy8cDDzpSd78OUnfbH9cWUze3y7Obt75PrlMDs8Nbql+v83c7m6Nf0x+jx6MeU8s7o8+f2wdbp/saU4pbW3urFy9zF68nox5DL6OLO95WU7c3V5/bF993i8fzh/dXzkpP28Z3lyPKV9dH8leHJlufi8ejXxcOXnO78/N3A9ZfI4c+VxcXM3JWPw/Ln0OnclZTMlPfc6vXi1PKUwOD93PeS0tbX'
+do local OJKLMNOPQRSTUVWXYZab=967 end
+repeat until true
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[161]='7c3Vz+jz88/28e/vl+re0JHB7cDc693p1MfUkpPllPfjzuid9sHoxfPK8MXFzNTQkfCV8uDHlMjzw9TV4c6UneD38dCL9tSS3u3L8sD28Z2Twcud7vbywNL375TpzN3Ik8by8pXG3p3nytXIwc7W8vzG1ZTA9Ojd6P3o4pf9y8Xc9JaV69bezdfL1MDh0fLq/MfU8s3Jl9Dlz+/q09bu5/L17sX+x++Snffy8pTQy/Lix8vn7Onz55bO7c3h1/Xd/PCU1dTq1tX2wujp/sLWneLC7urXyPKU08iXx8PL6PHlzZXV9cmWz/TAlunm9vLF8sLVlezr8pXgxu+dlf2WyOL885z2wpTd7c7oxeL3/J3j15finfPU9/LC3ZTF0NXn4vaW6dHQ3Mjd0O7F'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[162]='89bukub97s3mwPPd8sbvyO79lOrGx/zxl+benMHR7s3t0PzF3Ofx6tL1y93e4fOU5vXU58HNlO/x0cvd49bL9+zrl5WX6tOS1OWWyIv08sDFyvzx4cjo3ZfnlN3O4pTQ19CVlNzr1emW0NzAkcDw6d3I7siV9O/p4MXwnJXA0+eT9t7y18zo4pX21siP0vPp3vX8yPDF9pT9yejv3uvelebwl+nu9daV7df36t717uLS69Ti7vP8lfHQ9ceR9fyc3Oj88ovH1uf+9u3y0vSWyN3W8c3A4fLNxsD86pPn1ZLO9tPIwdX81d7H/OfF0O3I8dHy9+HOy8j08pXQnceX4fTy6Onux9zql/PU6t7yleKLwe+U3vzyldDCy9CV/e3n7PCX1ZXp8vfe6d2d'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[163]='0PDuzZHC7uLmwpXI0ujuzZLJl8WS0pXn0vbektHR3sDQ5u7V7db80P7w6MXs7PLyi/CXx4/Q7veSzMvN8sLt1dzplNXpzfzi4dHx9+3X6MCSyvDd9MfolZXH3tDB0NbN8vzwnNzG6PHtzu/I9v3T99DGy+KSye3F1Ofx7+Dy88jXy9PA/vL815bV8sCQ1uid/dCUzenX083n0tWVwMKXzfLH9+rQ4JbI0MDv7+zo3OqT9+jhk8fWnMPPl+nc7PzvleDLko/L1efQ4e+U49eX1fT96MiL8vHyxdfe4vXD1uru9tbN6deX8vLB7cjA6++dkcHTx9Tl7pKT8e+U7v3czdTz/OKSz+6V7P2VzZX28s3OwdTn/v3TyOLw6MXvyO+c4vPtktfW7+no95bd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[164]='lcfz6t72lNCX55WU3cnuks3R8erh1tTA1PHo6u791ZyT8+3F0v3V3eLC1p2dwJTvk/Xo1ez8/MiL9u/Pj9Lzz97B1JKc1/fp79fo1ezs1MWd/Zfx59aUzeL89fLj0dXd9cPy4vL81urR0d7378rw58XJlc3rzJTNlsvW55TS8eeL5fHA88yV1ZXw6MfTy+idi+jx0Nzj793Bye3iwMKU1cXSls/Dw/zvl+j8wN7m3p3hyvXyl8fT3dTi1s390Zfq69DV6c7A/OHQxfDHle3o6uzt1vHd0ejv9vPz7/L36JXQ9uji7vLxxc7p8O/R0O3Fi+2X0NTt1cjl0Ojd7OPvkuPI1p3tzpfN7sbz55HA1MX89cvv19X1x9TH1NXXzpWU3uWVkvT23Ofj0u7F'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[165]='5vfondDG3sWL6PWd3PPLyPPQ1ZKX6cvHzuLxnZP88urowtz33MCWlZfH9cDgwvzpl/TL99PM892Ww+6V6cn81Zfx6Jzi/d7Xkcbe1fTA1tXQ9MvHl+GU0PHSl+/jye+ci/bUxZfH8cfe8ZfpwPfu6tDB0/fN0pXy4cPW6ufRleqX6PKS6cvTxdDn1t3p0pWUj9L83dDo7Z3m9+/q0sDu4pXi6J2V6Jbn3OaW78XJ8+fhy++cxcze783P/PLsx+ic/MfykpPs9sXuwpfi3vOU59zo8uKdwvOV1OCUne7B3sXzyMvH7Or25+L3lNDe5+/P6dLt99HQ7d2VwOjH3umX6pHC8efUwPed786V4t7py8DU6vyVi/zy59fX8ciL9PHy89KW6t7h8efA9fLV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[166]='4cPLks72853cwdbQncX8x87G8tXXw9bq0sbw7+D21JT10tzij8r80NzzldDX0O3v5dbWkuPN7pXQx5fX5c38x5TRlNDewdzNw8ntyMDp8Of0wdySksrUyNHLlNXBy++UleLWxZDP8ufcxvbi9vfWzdDA9+nj19zy79HWkpTM7Z3s9e/d08OUku3P/MDs/Pb3nNf2yPLC1ZzQx+jxlsvW7+fX6OmL6JXq8cuWz5XGlMXDzujykNbox+jA9d3S8MvdlNfuyMHS3NXw9+jnzuWUxcPW/Orextbp/c/o9/HXy83S5vz3zvzW4eHX8MDwx8vVkNL8x8DjlcXS69Xpl+vUktHD85T8x/Pv78jL8tzw1erU69PV0OLVktfOlN2X6/zh3OLzlebC1pySyZSS'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[167]='wOve3dDF/PHR0dbNwOzW4t7Hl/fQ4+7Q8MLT8unW6MDB1suS68/83c3Oy+r+xu/d/PKV4unQ9siSyfHyksjLyMXW7+fBz5XAwObvz9Dy1p3r0N7h18nt8uvOlZSV9Ojyk8fVlZfv9s31ze7y08uV8uDz8ZLwx+2d6c/u8vDB3pWd8vLNnMOUzeb37pLS6paS0vOWlN79lPfh1/H3wPzz6Zfh6N2d89XI19HL4vbBl9X+/cvV4MD1xfXWy/fU85fA7MDL4uzA9s3F1+3Q79KU0N7HlfL10dbv79LexenI1cjuwu+U58yV4u/R1p3t1+/p6dXw3dfI6OHowtXv/vPtzezp1uHc9paU68vclIvy1OKUyZTqkMvoxdLm3s38wNz30v3vlMDHlpXlzO+U'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[168]='18/tyJPjl8fA59TN8czeleLw7pLSwfzH6db295fx/OLQ7PzilsmU6sDA8pXDy9zq7dX21f3S7dCT692d3u3o4ZXG1sjc5fHy48/88dzjlPLc8tb3xcnWkpzR/J388NSVi/GXnZDJlO/s8fzhksvTzdTh6O/c9tbiwOHyxezm8sXe8NbNl+3clePV8+nl1/Di8MbwyMDr3p2UyvWdnNbx0Mbx6JXA6Oidw9LVkunPl+Lj0u7VkNfvkuHX6OfQ5/zA/sHWwMXL7++czO/p9vGX6sDs8eLA9fzN1O3one3I1d3t0N2d5dfz3fPS8d3Sx/LFl+bT6vXLy9DA8JaVlfeX8eXOy8X2xffd/dKUku7HlMjpw+jni+vendLo1emd85T359aXx4/O1c/S49bV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[169]='78nulPD11NWX9fzn3uzW79zq3MXu8tbd8P3u6ovi1eqR/Zf3w8/zldDH1vfB0Pfqk/bLxeLBy8fO5fzQ4MDL59HQ9uqTxvbFltGU4pfy6Mjv1tz3ksvUzcPM05Llyvzq7cuWlcPL1ZSQyPLNl+no3ZzOlcDj1tPqkcbo7/7AlOL8x5Sd682U8sDj893GxtPv0uKVxe3X9cfU6JXFlNbL3eLB6N3wx/Di6cztwO3L3OKcyfHN7vKXku71/Oqc0ZacktHvncD31sCPzpfxkMOXzejyy8eSw/HV0PT8wJzLl53w/PXAwMf2lfzG3Z3U8JT31ODokvTx6N2Pw+jdwcmUkvby7dWV8JfQnffW8fXIlMWT6PeS19D85+PV/M3u8++U68rz3ZLRy52L6tbX'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[170]='0PHyxdD23uLs45Xi/MHLx/PJ/N2LwZbdxsb8xfHQlNWL8vLn7MeV0ODC1ZKX9fyc1OrzyJXj8dX2/Zfq3OPVkvXM3cjR1feVk/fuwJTX1JTjyMvQ0vDtwMXO1NXg8tbv8vbylPLy78/89tT358vW8fT31ZLXytacw8+U3YvGy8iT9t7I/P3u6pPjlM3Q/daVi/Xo98XW6JKdx9zN1OGVzfzy8ueT6fzF09aV59DH08ec0pfX0v3Vz5fy7eKT99TA3PLUldDj78jOx9zy8PPx1eLB7fLc6NXn8c/vyNDA1teQ1/OVwc3U0Ivr1PfS55bP3OqXnP3R7eLh15eV0O2V4pfB1M2T6e7I4MDzndLm6OfuwO+dk8bT9+7z1u/SwvL3k+mX15ft08eU0t3I'
+if l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL~=lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef then else end
+do lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=40 end
+do local jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde=259 end
+do l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL=77 end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[171]='xdHU1enX8+fo8ZXnwdDuxd7zl/fS6vLyi/PuzdTq8e+X4Zfhl/Lo8tLgl9DN1tWV48Po4ufJ6NDnw+/Ii8Do75XoldXx0taVk/LU9+bGy/fex5TF3vKX78b31vHhw+7F7ciV59DAldXQ4+7ywPPvldDp1efjy9yV4sKUzdPW/PHNw9WU4dKU8pTD6JWT5+iS9cPy6uvSls/r1fec48yX8d7r1s3wwPL37v3o4e/D6NXQ8vLV4vGUyMXP6NeW0u3Vl/z20Ob885SPyZWS3MHx7/XQl82dwujI/cvvlY/N7cfzzPzXwOjw8Y/N6O+Uw+2d5vzywPDA/N3N1u73k/Xz593P7c2dxpaV3dbt8sDGlN2VwpXI/PHx5+L38ur08fPn5dbuwM3L08Dc9dSV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[172]='lNHxnd7G3JLU4NXIzc3o3d7y6NCS0fz308ju6tzmy9Cd8+7Nkf3vnI/Plufh1/KSk+rW6ZbM3ZztzOiV/dLxxZLW0+fc/dTn0dfxwOfPl+qd8ZfVwPDulJzJ7c3z0O+Sl/3ewMXSlufO95fn3OLt1Yvq1e/mx+7q1OeX4dfV8ufr0dSV8cPU0NTH95Lu9pfdlejole/X1tCL9NzV9Mbtnf3X78jl0PfqxsKVxdLF9+fu/dzi4dHowODH1ZLe9/LVi+bx4vHDl9fQ55fF58r13dPN8vLuwtXv5deV1Y/V8pLs6u+SzdCU8sDt08jnzZTA6c3ox/71/NeQyvLIl8fc0OfV8cDO7e3N/dCX6tDH3d3m85fH9dXzld7C7dCT9ujQ3u3u4pTO7fLxw5fy'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[173]='ncbL1dDzlNX8xt7Q0MfezdHI1vHr0fyS1PeV9+bwlOqV8Nbp4MDxkpDN75XU4tWV/deU5/DA85yU0ujA1P3d6u3W1pyV5+7AzuL88ov27cfx0PHQzuro1/Ty6OrdyvDv19D1kpPG1uHu8eiV78iUne7G3NXr0vHd0vDW3Zfs8cWT6O7q8vOV95fg1vLd1/zp89fU99zylNXG9fPnltf375Ph6OHs8ZfqleuXwOb3lJLx0pXQ9MH8ndDllZTwx/PqlNeX4pDI1sXe7PXvw8zW3cbF8urA9/zdleuW6ZbD8dDTyejd58z81fTGlpLs7/Oc0Ojy8uD3lOLx1pbd89bo59Trl+fowvLikszu9+7C3JL90NzV3MLt0JP81tXe6fKU18jywMbx6NeWz5Tv'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[174]='wOqV8t7m75Lz15fNksmXncbF/NDi9/OU68mX3efLlPL+8+3I3uHu9+HK1JTy8+jh4dbo55Xtl+qS0Pzq5c/vnOnJ7cD9z5X3leWX1fbz/Nf+wJTAwcOV0Jfi6JLiwPDi/vX8xevSlMfTz5SdxcjUxcXM1sfe45TQw9Dvld3L753swJXAl+mV5/TH1enNw5Tvk+3U8vPS/JXdyvWd0OnwneL9y93w9uj3zdLcxdDi8urjytTy09Dv6dTq8ciQzJfA4dDxwPD91tf8wdXq4MGU1ejx/OLm85T349L8xYvG7++R/PLqxdHU0Ojyl+fGxt3d78nW3ZfG1ufr1/PI9sf83fz91ef2x9bi79aVxcDA3Z31w+iV6PH89/3N/JXU65aUnMuX8uL37d3rzZfH'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[175]='8cjuktHK9ueX6dSV8Mb8wNT18s3G8JfdwMGV8ufX0+/S45Xq78rW6evPldCcyZSS59X2yNTz8+nux9ac3vzzyJX27tCX49bX0MaX9+D23ZWT6JXikcbL9+nRlMDAx/Xql+Xo59fLy9Xs7e/d0vbt0NTwlcjw98vQ8PeU8sHR3vH28vLq0ufo6tTi/Nfixt731O3L3dzm8sDe7NTVk/eWyP3OlZT88O7q9ciVldzG8vedxffPzc38x5HG7d2X9tWd6Pz17/z1y9DUxfWSzuvo3ZDJ1MXc5u+V3vzL1d7o953lzPPqwOj8yNzv8cXl0NXvwcjU6tz085yWzJXn9v3UzZfm7cjo8OjNj8jx9+fR8cjrw/zN9PDtkp338+/O6vDI6MboyOfM1Pfs9PPv'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[176]='zcuX8fbAleLGxu+U3vP81ZTW3uLB1vHylNXz6pfx7urO8taV49HU99Tw1MDewPzpzuHvlJTN7dXlzpbd/vCU59HSy5KL8+jA6dLU0JbRlOfewvHV7OLulezpy/fQwpfHl+/84s3O1uLy/d7Vi+XyyJf3y8ju9dTq9sHzyNzi7cWP0dzIj8yXzcDp7tDw9vzx/MLzz/Ty1uHvyPHF9vHukovt3Mj+x+jH79Dy8s7p8erGwZTA/dbx993Dl52dwJXixsX16tT21ZSL6e7N1MHu0MDp1enO8O2d9v2XwO7F/NDexfbQ49GVlefK9dXz0t7n/dHulJPq7vfn1/HA3sD298PNl+riwvHAlcfTx5fi1e/AxfHQ3sD3lODzl53zzpfy78vW0NDA3d3A4u/n'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[177]='69bzyPLx7eLc/ZWU5dDw4ZPH8urOwu3A9PWX0N7ml8Cd9dTIl/bvnOHPl+qU15XqwOL87+zz1ciXx+2dk+GXlfXN75Tp0pXij9HWnOzgl8Xc9NSU6cPV5/Txl+rc9fLy9PXxx9Dn78iL5tPd9P3UxdDrlcDA8Jf34sLt1e7wlp3d0JTF4PWUwMD0/OeT9tbh9PXo1ZLJl/fvzMvInNLTwO7A8efO9cvq0Mbt9+3M8d2SyOjQxdHo0O3Ly8X91fzV89HxndzC3Pec0JbvwOuWz87ylOrl1tPF1MXw8f7385TDzNzV6cyW7+zy8tXS5vzV0cPy9/PK1cjUx+3VkcHeyJDL3uGL5fzv7dCX4d723MX09uj31OHu0P3Qy8XN0PCckteVlPTz/Jzyxfzh'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[178]='0MHdktDn7dD91ffn1MKWyJzS7pL+wtbv6PaU1dz9053ywNWSk8b86f3RlOKQz5T3zuvL0O3D8Z3tytTq7v2X6cbHy+fd0pTF3OjxwOz03Of0/e3i8c3LwPT88+r+9+7IwObo4ePW6MfywPzXlfWX6pzJ6O+V8+3q4c7V6fXJ75zzyvHVj838nP3Q/NXO6t7A1MLLkpP21vGV9u6SncHWxc7m7d3Q9ZTn0OOVxfT1y+r11+iV3O/w8sbx8dCV4JfixsCW3f7H/JLlzpfy4MbUlfTylMX2wvPvleL83ZzR/On89pfH0OiUnefK98+Wze+S48jo8ZbX9s2U0POV6c3zyJfz7s3S9tXPw9bx3Z3B7Z2dx9z3lsjW79fL3uLo8/zI0cny59fI6OfdyPKU'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[179]='0OP818XQ7tXS6u3ii/SW3ejGl8je6ejQ/sfzyPD81p3owJTA/vPtnenD1erR0O7n8dfuyIvx6Orn0dTV3PeV4tTG0+/2/cvd0sDt6ubC6OHowpWVncDe6tDn1M3X0ejvzsft8uHR7uf8wPDAktbx59Dm/Ory85Xn6c7u98737uqV5dad8vLW4pbWy53gx+jd9sbxx+HK1ur+x/bNzune59PV8uKczN7Xksvo8ejA/PGV45acwOOXne3K/M2V9OjplcbUxd7H7veL9vHI4cjVyJPyl/He6d3IncLt78HQ1vH8wJfx/c2X18XR093FytSU5c/zlOLA9efy9t6V7MbV3ZPF9pTRzPyS3PDVz/XM1tfvyZTv68PUkvLB6MDl0NySwc3W95foldXT1u7F'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[180]='zc7u1ejBlZX11vzV883o15391sje4NTynM3WwOXS1Orr1sv35dbyleb93sePyejyzurv6sbw1ZXU/PzI59bcwM3R3PeL45ec/dLe18bC75Xs95adk/Hu0Ivi7sXcx9yU09fWze3N7tXU/dTIkcbVyOLA1Orv0PXd58/tzdDg1enFyvXN9sb36Z3G3M3e9u7Q3vfUyPHX7cXo9vHd1OmXx+fI1c/jztbnzvXulf3M8dDe4pfI0ujVnJPyleeWycvF7vLx4pPi8ZLgxpfF3c/tx9z0lNDd0vOSkNHW8s7y1pzr1+jVkcXy1ezrl8X9yJTdj8yW3ZDM6NWVwPHy0ujylejB8siRxvHNk+jc0PLy7d3UwPLN8vHx4tzx8+nA4tbA7Oz1wObF8ufu99TA'
+for _=1,1 do end
+if lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef~=PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI then else end
+pcall(function()end)
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[181]='8MHWwJPG8Nfxw/zp4cj88c7zlcX29+735cn81+vNl8fA8vGS68vdkt3Q3JSTwtzFzsDw55bQ1ciX6ZXAj9D3nO3M1p3swPeU7MDe5+XXlJLx1/KSwOnoyJXB7erswZad7sfWle3I/JyL8ZT38sHylPb88+rpzpac79XzlMDh7cDh19zFi+Lv3eHQ3Z3v1vDVwOrukpfG09Dz1fCdkNbW6fL1y+qWztXP3ufulfXX1uGL6O3Alcbwx+DA08WX7d7FzvPu8ujGl+n10cvV3OjLwMDnl/Hs6NadxcPV6sbH/MDG/NT33OnT8uzr1vLly5bPw83zlO7G8+nOxu337Ojwx/7A75yQzfzN3czx5+vM7pThye7ikMzt4tzj8pXdy9zN59HozZfA8tDS95fN'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[182]='6MXyzdHQlffex/DdzuzwlfL93sjDw+/v1OnuxdD17tDyxtPHwc7W0J3x8tXty+jh79fx783N8vL8wd7qzsbx0NHV9feQ1t7d8dHuyJf96OeXwdOS3PzVku/K1t3A4pfXlNfW4sHL752QztTn8vLVleL16PeX9POc7vzwxefN1unSwpfy/Pbo3ZTV8+nryJTvi+PW6tfOlc2R9pf309bulPTw7uLS5vzi58no1f7z/PL2wtOS7Mbdz9T28s3ywPbI4vLz74/K1e+d8svi3PTolfPK1und0POV0u/18pPp9e/j0NyS3u2XlZfq8MXjyvX34dX28p3x8tWWy97h/PPU1e7A1uqT7Pycl/X8wODy6MD28tT35v3T95LP7dXU55fA0uXu59zF9tXA8fz3'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[183]='zdD3kvDG1pKT7NTn0vL8yM789s3m8Jed8PPWx+zp/NXvyPPn0sDw6unQ3u/SwO/n1PPo4cPRls/G9+jv7dbxneLClfLjztbq6Pby0Nz91JXwwMvV3sbTx9Lz8cD899TiltDyzZP1lJLlyZfx9sLuyN7qlOrr0PzilsiXlZzM6On2wZaSzurc9+jH9pLe49ac3c7o8e726NfT0d3vkfDt5/XW8fKXxvPn4P3T4sPQ753D0tPnw9fU1dHDlO/e9/PP0O/2yJzO75XGx+3i0uvLx/byl8XQ5tbn7One7+z11un88NXP3crwlZzI7s3c9ZfQzciWz+Ly6JXiwJXq0PfU9+XO1ung8vKU49Hx5+bC1NWV9ZfXleGUwOnWlZXOwPeVnMmXnP791vfU8/HV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[184]='5vXylfbB0/eP0fHv78/xku/J7ZKS0tb3wdf8xd7q1uHN19Tq8MDt0JXt1NWL8JWU9MD1wNzC/JXryvbI19Lo1dHNlM3+xt7x9PaVlZPl6Onn0PX30uCX6e3IlJLQwPHd/dX2wOfLlNCX6PPI7c+Wkov38+/vy9zI0czu0M7s8M3ixfbi59aX8dfK8sDR1fCSl/Ty9+jC3ueT69PnkcGXyPPDlOL1y96cw83o3Zfwy+rp0e73i8Ly0O/Q8+eW0ZTii8fTkpfp8ZLG8Jfy0saU6t3Ol+KTwJfv7O/194v8y+L+8++d3uCX3eXR3p3U6u+d8v3d6vby6MiV5e2S7vHtkvXO1sCSyvPnktLx8pbSlNDgx/Dq88PW6uvV8vLixu7V7OrvleXO1OrxyO7i'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[185]='zdLdyOXX78jswPLNzvHyxdDnlpTp1fbF48iX79znlPeX6O7V187UzfXS3sCT6+3qwOjtx5bW3JLu95fN1PLUleDBy++LxvKV4sfVksPOlt3z0N7X7PXW997F/J3Nye730uCUktz08eKV6NTQ7sfeyOXV/MXvzJfF88/x3cDo9efA4tWdk/Tx5/bB09Dw/ZeS18nznZfl75zQ9PH349aXnJfg1OeT7PHI49D3lcXN75SPyvDNlteXku7B/PeT4Zf3ncX2lenQ3M309tzq9dHxxf3X1JTs7PfPi8bu4v3Q0+eT45fIzdf3nMDG892U0vKUk8LcldHM0+LBzPycwPbo18D96JzS6dXp0c3UyOLB6J391u3d4dbule737ff90vySkcbwx+PI1c+X9Nzi'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[186]='9sLUyOLH1e/Axvfv0OKXkt70l93swO/n7MXz58Dw1tD+wJfAl+Lz75bK1Z3s4JfFwMCVlZTXy/fs/cvF58+VyOj81ZzS6cvi4df1xdzp9+fA4ejQxcvc4tHX8JKL9dbX7c/v7+XW8tWX9ZT3i+bzlfDz6MXU5pTA5dDVkv3Q/MjD0NWSk+fzz/TF/OLG8Oidk/fWndfM8fLl0eiSk+ne0JzQ9pXA5+jvlfPtx8HR8+/s7ZfqncfxxfHS85TvzPzx58zL9+jBlp2UzZfincLT7+XW3d31zO+S4dL83ePK/OGP1u73ksn855TR/M2dwt7h/cnyyIvHl5KX5uiSi8eX9/PQ3emWyZTF3PT80Ob27dWT7/b3zdHT0PLGy93XzpTy/czt3dTi7+fp0u3V'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[187]='0PbL0NPIy/ft1pTA682U583L3MjuwvKU5sX36sby1PLN0NzF3uX8xfb37e/j0eiV89L8yOfX1unu85TI3cmW5+711tXUx9TNncfTx/XRls/u9tXn58nvlfHR3encxfbA7vPy8tDCy8jNzdaSzcPu8pPyls+X4u3y4c7UwPTwlOr+9tbV3OmW79PK1sjA9MvnzuDuxfXS/JLS8ZeS9dD2kuzB1vfd1/binM7ozd7o8sWX6u6V48r899TCy53l1/fI6PbyyJ3Al53ByNWU3OvW6fHP/J3sxtOd19HznNz08tDh1suSlNGUzeHK8N3u99WU7dX16s7s/MXD1pXi8sL84uXLy+qXwsvdwMfU4u781JLg95fi9vX88uvM3pKP1vDy4sbw8fXW8ceL4u2d'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[188]='1OKWz/HR6MfU6O3A/PzyksDG1ZTe5vHNzuno3e/J1u/0xpTd3sXx55bM7Z3n1uj37Ont3evM7tWL99adi/byxf73y++T/PKSlefz5+j93c/UwMviwOXo0O7z8uLp0N3q3OfVz/XS1vf1zOjX6MbezcPQ3t3O5ej38MLt3ZLW3JKQ1/zh48iW3dPM1sjRzOjQ89HVktzq6Jzi8+jy4cuX4Zfi1emX9pfX89DvncDwlpSRwvPIwdb3yMXD8eLRzpbP1PaW6fz3/M2X6O+d08vL787r1MDF1/ec4vfx5+fK9cWV6dzykcGX6pzL3tDi/dzIzcnUlfb175LdyvzykMyW3fLG/NXz0Mvyk+OX1ePW7e/Q9Nb3k8eU8u/W6NDp1tSS7cze8ZzXl9fNyJXn'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[189]='l+Hv753ClMXA6tOdkNb26uHK98+P0t7AlebLyN7glZKX6e7N79fLndHW/OHlyNTi7ODtktDA75XA/dWUlsvdnOzB/JyXwe7Izsfo6ZTM0/KWyZXA/vfUxcD88sXO7/zv7sHxx+nMy8jDzu/dltCVyJTM8++Sz+3n69f358Dx78jU9N73/vXW6tzil/LG9/zAk8Lv6f3J7sDGwPDv3dDw6sbA/NeX5Zbv5dDw9/bCy5LDzu+dwOPt3Y/L7c3Q7cvNnNbz6uD26MiL8NTn3vLt6pXB7+fu/NT33cjW8dzw1uLD0u3I9dfL3d71lZXU7ZXn7PT8xeD9lerO9NbH4MHz7/TA6PHG9ZX38c6VlZX0y53p15ad0sD15/T91c+X5fOd3uiU0Oj8y+/D0JXI'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[190]='9sf1wJDK9er0wsvQwdLywPTB7dWSyO3Il8buyNLwy8Xu9fKVj87v3d3MlcCXxtznleuXxfT9l/GR9e/n9PfLwJflldWL8svq9dX26ovolcj89/zy4dfTxYvq6MDG/Pzd89Lo8fDx7uL1192d187tx87F9pKXx+/PnNHTyN7i75XuxfKUwdHywND3lpSRxvHn7sLvnNPRlcjG88vA/cuX55zX8ufGwN3p3MGWlOvW0/fS6tXpl8fz6f7Bl8CSyZfi9Pf88ZPjl/fNydXp083VnJfBlune58vV69DyxY/Xlt3z0cvV9sHex4/X9Z3z0ZX30MfU59D2y+Le5+jQnNKWz+XS6OLsx/DhxcztwJzIy+Ly/Zbv0OXVz9D0y53r0fPIl+/zz9z9053mxujx'
+do l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL=66 end
+do local _=950 end
+repeat until true
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[191]='6dHUlJLW3eqX4vyc7OPL1enNleL09t7Q3cjone/W1e/ly5ed483ulJPy6Jzm8e+c4PzWx/bAlffs4eiVwOPU59zn8dWWyPLA782UwPXM8vfz1vKV3dHe1/3L3sWT9ZXF3Obe3fD37sjGwZWSltfVyPD9l92X9PPq8c3Wndzq88iW0O7IwdaU4vHRl9CTxfLI187vlZ3H3ertzN3P9dHcyJfmlOL9y+3N3dfo59zBy8eT/ZfA09Lyzezj892QzfGSnMPV3ZTN8uri/PGd9MHekt7g1erA58vQ/vLx6vXS/PeX9vLq3dCX3ZPB1sXo8u+V79eUktz81pLd0fzyl/3tzefN6NeL55fiw8/819PV8OfU6ZX33sLyyNfQ3MDcwO/Iw8nWnOb1/Jzs9fHA'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[192]='8dHu5/3M8uqPyO+d7MeU5+LA1Or9y93d3OH83dfX/OLrzZTV8cno1/T9l+KU0Nbq6c2XnP3W0+Kc1fPnl/ftyIv93pLR0NbFlsnt55HC3sXrz+7N3PaU1ebz1MDz0fHvleP8nfzA/NX08ujpkcfvleHN85zp0dSVzcjo4unI8d3OxtXd89HVndLm/J2S1tPF3sbL4t7G1pzz1/D34PzWkv3N8fL895bn9cze8tPXy82Lx/Lq5cvcwN3J/PKc0dac59Dxx8D2lJ3gxtac8seUyJTX6NCX4uiS5cPL99TA1vKP19Ti5vXyktzwy9DU8/LAktfd7/3Dl8Dy8O3N0ubLyPHLl9XNyJaV0v3czdL23ZXywNTA8MbV3ZXnlumT4fOUwO2X4fT23PLj0PfP'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[193]='48uWnODGlpLt0svn69HtyPHR08Dhw5Tyw8r2ldL08eqS1fPqncbW1ZXl7dDy8tTN8vbzlOHS1JKL6/KVl+WU4sHK1JXUxfPP8cPvz+vR1unzztTi3sfox9TA7Z2LxpTyk+mWnZHC0938wPLN1PWXlZLQ8ND+98vv4vLv6pX17sDjzdTizsKU0JX11e+X8OidkNDulIvq7vfewPDn0Pb895TN8uKXwsud4daWkpzX093yxfaS3ujx75XA1Or1zNbdnMzt3c7o1ZXlzO3IkNeX15TM6PLSxffv69fUyM3W7sjNzpWVzdbV3dT96NWXwfLyzvz8ktPJ8ZLRyPHdwOvL6pfql9XA5ZSSnNGX8vD8953TzMvqzu3c99LG3vfQ9MvF0Mfo0NfM7pWT9Oji'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[194]='k+jw8dTmlMDD0e+d7vbt3ejz7feczJfdi8GVyJ3H7eLU9dWd8vfuyMDH1siUzNPN9dLWkvXD1p3oxtSS0MLLko/Ny+fswu6VleLznJbN1e+U1vOU5sDV3eXQ3MXXzNbvj8jWnebA1tDh0e7I8sLezejwlZLx197x6MD84cbAl5XS6fHd8vCWkuz17cfn19bp3sbvlOHI6MDO6vDpj9fU0OzGlZLe5dSU6crx0OfN1tDzy93p/PeWksDh79388fHi3uvdlPXX9pTgwZfH8cPv6fLB8sjQ6peSncf8wNDB3pXF1fbA3sDcyIvmlpKL98vF4Mbe4eL23ved8fzFlevUwNTo3uGL69Xd4dHU94v2893j193q79Le9/Dx7cfo9t7Ik+3o4dLo9vKL7/Hi'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[195]='4sfokujC3OLtyNTi0uH8x8HQ7e/S7/zNl+ro3ZzL1Z3Q5+7IxsD155HG1sjX0dTAwPfvz/zA9vL+x/Li9cuU9/3D/PLOxpTI1OfxkpXj8uLw8svi1OXz6vXJ6MeV5vLQkNXx95HH1PKV4pfFk/bWxfbHl+/e7NbAw8yV8tz27sDswZTv4dLt7/zB1ZLx1/CSkfXv3cDq7dDn0JXqleDowMXQ3d3m9tT3wPft4pfwy9DvzNbA0uiU987v85Xt0O7VwMKXwOb37veL4taS0OzLzf3S1sXy9vOcl+mX1+zr3uLl0dbV6PDulZLX3sXp19bdi+CV4tL2l83rye7i08z8zc7A8M3X1vLF8vPW6uHK1u/jyfKS08nU9+HXy83A7NTQ1PT81cHM3pX1yPPp'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[196]='lMmW6dzB8tWL/e/q/vXxzdDH9s2S19bd7cvVlMbBlPLl0fz34sLclezq7ufyxpbdi+PyxYvzlMWc0pbv3PCWkpLD8vLBzPLil/Tox8HPlcDT0tbxlNDWkvLB8+rO5eiSj8j8zcDiy/fs9dTQnfPz3c3V/MCL4fHn0sHtkpfB1NWUw+2d3PTVkpHF8sCQ0e+d8sf81+fRlfLR0N2S78uU4u3K1ZLA48vnl/GXwM7r7ZLBzZfv/dKXyJX378/t15XN88PV6ZfqlZT9zJXn0dHenJfp3ufhyvLVl+OW6pP3/Pfe9JfqnMzL8v791ZXm9Zfvxdfx1ZPs9pTex9bQ79fc9+L11uf+95TIl+GVyObz8sCWw/Li3PbznfT38d3TyJXn9dHLne3Rl+fz0O33'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[197]='0Pf85+PO1sfh0t7x48rw3e7A083A7NWckMzzlenJl+/pzu+dwOHzlfPD8e+S0JfH0dH8lZ3H75LUxtzy68uV98Dg7fLt0tbA5cP8nZfH9c2V6Pb36MbT78PW9pXx1fLQ0ubo3cDGy8jA7Zac5cjyzebzl53e6ujx9sHewPz17ciR8++U6df28vHQ1JKV6pbq5c/yyOXMl5Ll0N2S/vbznZPs8OHc85THzvPx6ub11e/c5/L3ktCX6p3yl9CV59Tq0uHtkvD81vL1y9zAzuv88ZzW8pTS6N7y0cyX8f3LlpTryPzpzvTo99zz8e/pzJfpwPXvyP3Xl+LS5cvFwPOX1+vMlp2T4fHH48zW8dzC1sf28JbI/vPvlPL1792RwtTI0OXU4uXP/NfX0tPq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[198]='ktCXxZLN7s3s9vznwMbxwPTC6PGL6ZfiwdHykpHG/MCX6PeVw8PW6Y/W6NDc9N7Q7Ojt0PzC7tXAwO3V68iXlYvj1JTtyvL3j82X98HD1MjdyMvN1Pfx7+nW7urowNzV7dX13e/J6JL+8OjdnfXolebw1uHBzdWS882W6ZX3y5LOxvCdlfz13ZzNl5yTxujh6cOXxZHG05KL7/Hdkf3c0NHSl/fT0ZX3/vfz78XX9+fFzPzi3OeW7+DC1e/A7POVwcr88pfGleLA6u3dlsnU9+/WleqRx5Ti7ML8x97H8MeV9vOd0cPV78b3/O/B0t7F7sDe99Th6PLdztbA79f2zc7p6Of2wfLy3uDt4t7A89310dP3/PPL0JX1lM3Gx++c49H8xdz27cfc6+3V'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[199]='6P3e597y1veQzPOU5c7W4Yv11NXA6tzA78yUzZbR6OrQxtTN0vWWnJPC8d3Q65f3wMDTyNHLlMWdwPbnkfXxx97o6Jzm8Ojn/PGWz/Lx7+qd8O3q4vXx8tTq7eKX7/DhzumU59Dl1pzA4NWcw9DzlN3L7eLO6fDqzczonObx7c2d9+3N6MLc0Ivy6OqL55XIlMuX4uPW3tCd8fPP3MLc0Ivx853w8ZfFk+n8kt7r6J38xffIj9D2xZzS1tfrzejxls38wJP1l+rm9dbn8cyU4tL23M2UzfHnncDc5+fJ8+qR8ZbdkcLU0P3W753Tze3IltaWncXQ6MfOxvHylert6vXN1umT8O3d087W0OnW/JLU55fh0OjWx8XJldDdyJec08jy4unJ6PGdx5Tv'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[200]='3Pby59Lwl/LRy5XI9v3TkvDHy93FzfHd0vzwnej23uKT99SV/PXV7/XR1ciV49TFwcPWwN7205LowpecktLL7+731unm9dbp9MXznYvl7pWdwN7hl+buyPzA8sjFw9Xpi+nwnJLJ8erS8u3QnMnuwNzy1ZXr0pbp9sHWkvD81JXt19adwMKW6cDClpLuxt2c3ObdnNLnlNXA6fXHl+rwkpDW7sjc5ZaSj9DeyMHJ/N3O6Jbp3vbule3Nl/fmwPDF3Mfd6pX0lPLc8ujN0PfxneHW3sX89e+U3urvyNzi6MWV/PeV7cuX6uHW1OLe/PL3nNHz58bB7dXgwujn0vTV3eHW3u/2/PeUwc7W59TB093+8Zac4PbclMbH1MjD0PDiktfxx4v2ldWRwPyS'
+pcall(function()end)
+do jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde=l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL or 393 end
+if lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef then OJKLMNOPQRSTUVWXYZab=76 end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[201]='08vvkpzQ8sjdyNXn7c/o4YvBy8CU0d3PwdfUkpDMy+eW15WVkMPokt71lPfs9/OUk+3o8eXP6OKP0pfQ3ODv6cHW8Z2LweicxcOX8p3w1pLl1+2S8vKV1e/N1pXs6/HF/sLzlc3LlZXjyPPdj9Xx59PN1t3vzdXp7OjU0MDx8ZL29ujQwOCX1evR7e/2wPzFzc3L99D1/OqLx5fiksPWyP7HlN3S99b37Or20OvN7uL289bh7PDoxeXNl9WLwZTii/XWzcb91s3xye+d0uGXzd7y1uHs89ac79fd55LJls+WyJfq/Pzw18PQ8d3e99bxl8HT0NDolOrUxtPq0sf88ZPGldCL7Pz3ncDU58Dp3siT7e7q5dHe4tLHldDA9e7Q/P2WyNTB1enxw8vQ'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[202]='3PLx4ubz6O+V5fLNj9fW0JLMy5L90ZXy0vXV55XnlMXN0MvqwO/36pPGlO/gwd7yzvXx8sDy1JSRx5fp0OGXxefL6Pfi8/PdwcOX4fPJ6Nfm8Zbvl8bT4s72/Jzyxu3Q3une4vb93ufl1/bQ4cnv753G8tXs95Ti79DV6vT1l9CT5ZXn3uPx4ovz6O/A7/zH782U95fB6Of+xfDn68PulO/I/NDA6fzy3vbLyNfM85WRwtPnwdf84tDj8dD90pfx3sX8yPPV8JzA89bn19X1983L6M3s85fX/cr1nd3S1pLl0fzqkfCWyOz0l9Xw9dSU8vPW6t7i1tWQyPLVnNbU1ZPA8d2czZfh0P2VktzH78iU0d7V58nL4u3X853e99Xq78PU99PS7+nc/PPP'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[203]='wPPx6sDH8tCc1vOV9MDU8sHL1tXp192U69X1nezG1unly+7A5c/8ks707tXS7PaSxc/z6pbL1MDcwPyS8daU1d7m1ZLS9Zad/dHy58XO7Z309fLi0OiX6pLX3vLA88vn5vb88uXK1t3BzJfV8sXz3dLi7tDewNPy4vbVyNHX8J3B1/zX4vb81evJlZWV8NbH/P3ektTg78/c/MuS8MHu5+727sCR/ZTNwdfcyPDyl9CTxtTi4dH84sDl/O+Wyvzv/vzy8vbH7dWUyNbIl/fuyIv3y8ecz+jp9dDt4o/R7pLXyJfX8P3oxZPq082SyveUk+mX6eHL08DmwOjp3O/8x/bwy8fUxtbnxsHL55fC7d3G8O6SwOKWz/zw6MWTxvLAwPTzndLG7e/1yNWd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[204]='7P3o4eDA9pTe6ejq4crw75bN8sjs7PLQ3u/3lM3Q8efw8MvQ6cyWkuPPl/eVwN7v/Mbtxf797erO5fHF/MHd7+zx7dDFyPz3l/GX997y853U9fPP0vf8kunIlOLwxvDV7Pb8x9Lz6OnA9e+dwdf2lM3S3erQ5pWS/dDTxcXMy53wwO/dwMbv78b36PHs5tbd9cvVlJbR8vKV4MuS0uv8zd7g1Pf90vzqzumX1Yv1lpXU6dbyl+vL9/7H0+rox9z37c7tze/Q6NDcx/PpzuaU3e3S093j0tSU0O3t6sDA8N3+xfHV0urU4uLB3tDux5fq79bW8s727tX0wNb3lfzyxZLW1vf10cvF8vPxxd7H3JKSyfzFj9bt0M7ry9DOx/Di0cPVktDyl+/u8JX3'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[205]='49Hx3cbF8dDRy9PN5cyW55DQ6JyV8ZTq0uCU0O/J6Nfm8/znzur20NDo1u/SwujiltfW0ND11JXyxt7Xle/8x+/X993Q7PzQ9MDc9+HK8cXcxu3nk+rcxcbB7ZLU99XvxcP8xYvB3p2d9+jvi8Dz3efK/N2T6+jF0ufvkpfn1Pft0dbxwOrT4v738uLD0NWS48+Xle3L6PLc6tTA3uvWksHQy/LD1u7QnfXz7+7H1c/A55aV5vbxyMb21enz0PXHls3vko/O793A8pTA6cP84dPR3sfFzPPP3uDLx9PXlpXe6tzNnM2XyJLOlefXyvHVxvbxyPzBlurT0pac4dfvlf3P6OLnw/PI1PXy0OXQ9vfnw/LylNfwlcDz1urr1vbn3OqVxfHW/O/G8+7A'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[206]='0Ojwne716PeP1fed0MLy94vplc3U8JbIxsfo9+/K8JXGweiSwOb86sHS3JSX4NXpzuWU3Zfo1efu/cvI7dKV8tzhluqcy5Xq9vbLkpzJy83S9+ic68ze8pH1y9Dc8ZXq0c3v5+LC1MCS15XQ4MDL7+/K8ff2x5Ti0v3olcDr3sDvytSU/vH8yMPLldDd0PDh4dLo6e/D79311tbI6Pz13ZTW7cXx0ZTqi+P86eDG7sCUyJTF78ju95TX3vLe6d7xl/2Vkv7G1s2W0NbiwdD83ZLV95zFz+j31OXLx97j75z2/cvNl+vW4ejC3JLQxfXqj8PVleHW9cj119bX/vHv55f21M2Rwe2SncLWzc788cjA6JTnl+jw1dD3l/Ldy+jI4MfvlOL175Tgx/Xq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[207]='wMLL6s7w7ffpyNbq7sbV6cPPlMfjz+/P69LoxfD91sXX0NXp0sDW8ubA8pWUzPHd/dHt4pDQlNXFzMvy0OzUlNLx8s2X4/LV18yUkubw7+/r0NPFzsX1wO791PLU45TynNHW4vPX1vGQ1vDy18OX1Yvp/OH+xu6U3OjTkuXX3OKU0PHQ7PHo4tHPlZX88suS9PbezZfr7tXGwd7y1Ortxezm3MDs/d7v4MH86pPh7vfUwZWUi+3vlM7G8On90ZXVj9bylfPS/JXiwu3q8sb86Zfx8tWXxvfI7sLuxdz37Z2Sw5fyxsLzkpf37ZL9yPOS18jWnZ388Ofs9u/q0PTu0MPS/MfcwN7i9dDtndHW/PHS8NWci+eX8t3R1ef0xfLyl8fLxZPj7ued88vV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[208]='3uz3lc7p3e/A/NbFltX2587pl+HBzJfA3dDo0JHxlPfS4vPni+jxnenM1veTwfL3k/aWnenX3u/tyZTNnfDVlPXL1t2R8ZXNkM/t6ujGldCU1tzV6cjV78DBl8jmwdbv5sbW7+XL1OfU4JSd0OjL5+PR1ZKP0Jfi7sDw6e3W8efB15fX0Ob8ze71lJ3GwdXv49aWkpXA3s3BzejXlMnx1ej36MjtyMvQ583t0J39y+fDyfLQ0Oj3lOPIlpTdw+3vwdfW1fb3l9Dtw/GSwOOU0MbB1uLlzZSd0vT8x+nL1e/O8+iVj9Lo1eXR8pXz0cvQ/v3tku7285X+9pfQktGWnd7ol/fO8pbpnMuWlZLN8cXT1++d7vWW6vL96JLixvyc7dD80NzC8fLu8ejv'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[209]='4c7Vks7g6MWL6+2S7vDL8p3xl+L08OjA08zL98D08e/A55Sd9sCWz/D93MDw9fHIzvTo3ezz1tWT6vbnl8bwnOLy/Mfewu7VnfDU4vPQleqW0dPHzsf8yOzA3vHU6/zNl/3T6pbXlOePytXpzcr13ejxls/z1/Dq9vbt8t3X1enQ8O3Vl+jL1fbzlpLvzpWVzsGWks7l1s3xw5Xn/dLT8vL93tXQ6N3pl+mXyMDx8++Qw+/n79fVz+3Ilt2U1++SkfLznZHA9vfQx9Xq0uvWx8PQ0+r10t7pwMb1ndDH95Xw8vzF7vz24uPS/NfS6vzdlcbT79zr1uLs4e3Al/To19zC3t3Fy+/d7dfc1eXS8pLdw5XI3vzWwOzx7fedx+3i49fWnNTm8fLs8u+S'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[210]='09b295389Z3c9fLq883W75fy7+rS9PLA68mWnMPX8N3S6NbpkMrwkpDXy8XpzpaU0sfW99z03JXj0dP30OrwktL2/PeSyJTd8MCVwJP91MiX5pfvlcGVlNDtldXo/cvnl+jy8tfX3OL28JTHltX16u/W7pSL7PXN1PfW3efPlt3B0NWS18jy0OPX8ffS8JWS9dHe8pzW8vKU0e/qlMyVwOb8/MCP193dlNXz3ZDL7pTw8e7F9cPW98XL3tfd1fDp7vWVlPbyy8ecy97F/sfv3dHR0+ft0JXFw8OXncDglNXB0t7v0PzW18PJ7vfDyfzxk/Htxf3R8ufS8ZT3k+KV95PC7ufQ9NT358/8ktL88sDu8NWdi+noxZDN7cjQ/POU3uz2kvTBlffAxfHQ'
+do lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde or 46 end
+do local jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde=35 end
+pcall(function()end)
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[211]='1MfU1fPR1uLS6tbF4vbW0N3S7efA59adl/Ty0PLxlNDmwNWd3uzwxd7y852QzfPq082X6e/MlurO6vXi6MLWnOnQlMjD1pTi9vDU0OfD7pLTzpaU6cnt6s78/O/RyejhnfLvz87mlufOwpX3kM/8zYvi1JTd1vaVwdHLyODG/PGT69Tn5vL86tHR3Z3o8+jV5vbW55396NDBzpfV5sXxzebCleLXz5bn7sbdlOHL3erd0pfpwOru4u/D1ZTm9vPd18zTyNPL792R9svn0uXtktHM1sfN0Zfp9dD3kub81c+cyZTi88Px0JHC3c/dyZTv59Ht797o9cfO5ZXNw8iVyO/W9930wNbyw9KXxZLI8Z3U6O7y0Mboks7m/NXR19zFkcHc4vPX1urX0e3q'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[212]='zsD15+bA8dDd1fby4sDt6tPW3sjd197q1PPvne3L1ZyU1+jvnfLW5+XS75XXz+/I3P3U6tD11uHU89SS7MDL95DJ8pT9yvCSi/fL3dzqlpX1zped3PHv6tzwy+/xz+/p18zuzeD90+rp0d6SlMzxncXJ6Nfr1pTn6dX36fLG9ure9JaV/dfy8sHW8Pfx1/PI0PTekov88Z2d9pbP/vXo1dDq/NXB15WVj8zLndDq6MXO9JTy/sbz58711Z3A9vLAl/fvnPzClpzo85bdncLt3ezhlcDs9dTN4sHT59fL7sDN0PXI7OnTyM7j1uLNyZbP0OLyktTlls/+8vzA58yXwMDq8tDc99aS1O/wnZPH9efRyJTA183uyNz21tDQ8Ojdksjv3cXXy5Lrz5ad'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[213]='8Mfe1Zfh7dXRyfPInNKVzcDq6M2U0vOczuj86sbClumV7Pfn7ObU98711tX1y+6UlfSXnMDm8pWT9PHi/vf88s7A/NX2wPb30PLykvTz85XB0O3q3PbVyNLq0/LtydTF88+U59Do1u+cye7q487twND27+qP0ujx59Ho8pTR78iX49SS69CXx/Lz6NDo/PLV0MaW3ez91MX+9e2S7dHWncDh6Mj+9e3N/sfolY/K85L90u6VltHe7/LA6OfQ9fyc5cvd3cXQlfLixpTA/cyWnNHNlJ3G8+3AnffvlZzX7cXe4NTnlNeXzZXm7vfU697F0OnWyNLs1JWT65WS/c2W5+nM1sjN1fDi0PaU9/XQ75XpztTq9cPykp3yl5yT8++VnfPoks78/OKczJbp'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[214]='xvDuxZXC3u/u/ZT3nMzc4ujC6PLv1fXQkM/t54v37cXAwu3nltDT79fX6OeTwPeczsfdlZTDlpzO8e3i0sHoxZ3A3pXDydbH69CX6f7wlNDU/PDv9MbW6ZTX08D+xvHHwP2Vxc7A9Z2L45edzdfW783K1d3mxfXdncLx55XqlM2UzejV79Lx3eLC3t3gwcvH3OnUkuPM3u/vyO7IlcHx99Dz/N3dyvby1Ort6vHQlerl1/HNk8CX4uPR3ZXSxvbF4vDL3c721PfR1tWc7cz81/bylurB1fXI0sby4ovG3efs6u+S3MbylIv08dDUxvDp0Ojw8pf18ZLowvGSkfeX553Bl+H10tzVlND81ZPA8M3lzZbq3OvoyOvQ3JTUxvGSk8b26tD91Zz0xsvd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[215]='59Lu6pXp8vfTyPzn0PGU3dfO7pL+8pad/sX3lZXA6Ony/Zfn0dHe3fDG7dWS0fLF0POXnPbx75LdzdbHwc7o8dLm8vfU5tTAk+P88Yvq1Z3U6fX36c2Uzdzm1Pfy8Zfdxc7vz9TB7cDg8vOV086UkpPl7c3s6Pzqle3T6pHw1p3nzpfq0PzW8ovH6PHu/NacwcvektDGlMj90pbdk+rU4v7H85TUxfH39cnuwO/W7pLO4NTq7vWVxdLv85XowOjXnNLLyJDW6OLvw/Hv7vHx3ZH378jz1pfI/sGVxZ3C/PL28ujI3PKW6pXC7vKL4fyV4dGWlP7A88+Rx8vnksve6pbQ8PLQ/cvqwPfzz/XQ9pTG8Zac/sfdlM3J1pXnzOiV0sf8xdLr7vLw95Xy'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[216]='l+jo15LQ08fw85X3lMmX4sPW8JzU9pf3l+z11ZPy/O/Q6ZbPw8rw5+Dzy53s7PWd1OeV6uPD7+rDztTQj8Po3dLHlufvy9zA3vbt4pfg7+rxyZTI8dKU6ufI7vf89u/n/dfx1ZPr3Ofp1/DAwPeUzdzG3ZLO6dyV5saU3d791Z3uwtXIi+KV8ov31un10NSSncHox8DxlMDdysvq1MXwkub2y/eLx/PnwMLeyPb91u+V693vlffVyM7F8+fTyvOS4cjW9+73/MfNyvDV19bu95TO1JXywcvA6dGXlZHA/MiWzfPqk8fo0ND8/J38wcvH89bcxZPq8OKVxped8dfT9+zo9e/oxpbn9vbW6YvqlfLTz/zn1Or84tHN7ZLGxt3P7vOV6tfX6NXO8u3d'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[217]='7sDt7/3R/PLRzJaVxdfy1cbw1p3pztbAnfaV5/T11p3XyNXIktGVzYvHl5WPyOjy9vfL8vXPlMDU4vLi18vuwNT0l8DS7ZfQ88OVlZDSy8CL6dTI69Dt5+fSy83D1pfFkf3c0JzQy+/hy9Xn7PaWlM711PLS6PzH8cjU0NPOl8X1z/Pd58vokuDwlMfA5e+V9v2V8t7jlZXlzdbV8Pb83cPO7tXT0Pbi58/8x5fG6MXrydXI5vbylJDQ8cf8wtPQ48nt99HJlMjA8vOU7MDdlNDn1uHewe6U/Pbt4u3MlpLNyfOSxdf13dLn/Jz9yJf33OvenOLwl+LA5fL3l+XWwN3J/Jyc0tbN3ujWwJPm7cfTyvbN9vXLkpfs1pXc5ZeV7PDo8vPP/NX9w/yV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[218]='kNbW1ZTO1ZSR9fzV0OWX8f7wy8Dj0JaS7dbv6uzy75Wc19PV8c+X58PX75zO6PzQ48rV6ZDXl9Dc8u3i3O3Vz9HWlOKd8fHQ0vz1kuzC/MDd0pXy/cr3yI/M78/r0PXFl8fWlZf91erS8+jq6c6UwNLo1pXR0vzX8vP83dLmy9Dz0t6SxdDc95bP8tDiwfzy7Obuzd7G1unAwdzFleDo6evIlPeRx9Xv3vfV6dTF8NXmwZadwc3z6vbGl+HBzNXn4sH81dLllpyX9vH36dCVlez03sj2xvKS7vWWlO3Q8OKT5ejFlend3cXW7d2Rx/zn3OPWnOfX7+nG85eSlcHV55bP6JWd8+6VkfXulf3W3p3ByPzx9vLLxdTt1uqT48vH3PDW6t7B78jS8svn'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[219]='wOnU1Yvi/Mf+wO33kMOWz5fy6PKQzsvv9dLonPTC6NXm89TV783L59zz85zFzNbn3cyWlJDM3e+W1pT3/PeUzZTK1sfBz/Od8vHzldTo98jmwO7NlenywOz96Ons/NTF78PLzZXnl92W0Jfp7dfenOXW083h0Pzh1Ojo6sD2l+mc0O3ylsnL1Zfq7eLe9JWV78yXyNDi8++V8JSdkMmX4c7s1efjysvilsztndLHlu/O8JXQ0Ofz55zR85Xl0tTA/sfT75Xi/Mj+x/zhj8uUktDh/MCSztWVi+/w58PM3u+V9tOdzunx7+/I6OmX8Nac7sfyyNPXy8fr0d3nnMjU8sPWy8WUzcvd0sLLx97H8e/c9dbd5sXw0Oz07dDwxu7379bx6s7hl+KU0dzy'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[220]='w9fy58bB1ZLnzJT3l+qVktfQ9vLz0Nzy8cmW6uHX8sjlye7i1MLxkvTG8eLvyvOV1PTV3cHX3PfjyZeVxdfLx5bQ6MiS1svA19He1/T88+nF0pTN6MGUxevQ7+r1z5TV5cjx5/7A8eqTxfed8POVld3L3sjv1fXI0PTenND0lMXe4ZXV5dfzneXV8pSd8+/n9MLV3f7Gl+f8wPGdzueXxdzG09Xe/MvN/dXw8v7H6PLGx8vqkMzL0JzQlu/O4fzh68mWlJDDlMeV9svInMvT787h8c2d8/yVkcHv3dzo1uno8pWU9c/okt3X0/KWzO6Uj9aUx/Tx6NXd1tacj8yV6vTA75Tjz/Hqi+Duktzp3d3jyvbF0sXznenM8eKX6PaV/deUktzBy/LS9Zfh'
+do lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde or 803 end
+for _=5,4 do end
+do l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL=OJKLMNOPQRSTUVWXYZab or 95 end
+for _=3,5 do end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[221]='8sbdlenW8d3O4Nac49X13ebA6MCPytXPl8Du1ZXr8sjy8JfVnNfz6pfglMWcy9Pd68zV5+zF8uKL6dXq0O3LzfHN8+rnz+jA89DezefMlcDS8+jxnNbVz9Tnl5Lsxuic9v3W4ZHz7vfG8u7V7czznOXV85LOxfbQ7vbW1dLi85zTy+6Vk/T80Ozv8JXTyvLi9cvt3e71y8DTzN3v083W4uPK8uf118vvncHoleXW3JWX5ZSS8czv79PP/JKSzNXpkcfdyNzA1MXGx+ic9vHukpXm/OfXyvCd/sKW6ejy892SzdWc7vPv5/7C3tDi9uiS9vOV5+vX8JWVwdTFk8D1zcDx6MWTxvDF0cnt983Sy9XX0Pzh78/o8sD28dDQ9vyVnMzx6pXhl+mL9t7V'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[222]='0dDWnNfQ8urR0PXI0uKU99L088jnyfzH8MaXnNTjldXc7PLilef8ze3M3tD1197d3OqV983LlMXh0ZfnzuqW59Liy92R8e3V0PTele3L3MDD1tXvnND83YvA8ffyxu6UktKUzdHQ8J3jytac3vbo3eLy6PLowPfIwOjT8uzAl+GV6pTFxsfUyP7A7+/rzuid78yV9+nQy9XTye7nl8Lc4vT17ffe5vOSnMyX197B6JXswd3ql+r8x+3W7efU9NTy88OU1ZXrl+nD0NbdkNLy8sDolffQ/e7yi8aU8pPw1vecyZf34v3c6ovH8Or+9dbV3PaXlfL91uHm9ZbnkcDo3ZXr/M2X69TN0OvT1ZPnlMDDw/zn68mU95fH7ZLe6O3I7PDowPbH1vfSxu3A'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[223]='08uXnM3Q/NeL49Tn4sDw5+zylMX1yvaU9vLv3eDGl9CX6PDFlePL8pHz/M3R1vHq0sb8nNDF8NeT6dzyxsfe98XV993w9sv3xsCUx9Tx8+n10pXAlevW3dfJlMD90fKS0dftzenR893c4+/v7PPy1ZTW0++X8packcf3ktDll93Gxpac4cvU8vD2l8fe5/Hq0MLt55Pv8Ofn0dTN7vXL4sDj7s2T7e7V3MXy1efJy++W1+jAxdfo8fXW1c/hyejX1OnonZfA083+95eVwcrw4ZLP8ers/PHF79CUyNTq3uL1zNbh0uvWx5X2ldCU0fzx7OuVlPPXlurD0svAk+Ht6tPV9s30/PWS3MX35+j1/MWV55fnkfaU8ovpls/DyvHnwOvt4uvR1s3zyfzy'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[224]='0POX4Y/N8pTDyejX8sLTx9Tq1t3g8ujX8vfLndPV8NCX/dOd1PCX9+fI/Nfnyfzi8sbd6vXM05KLwO3Ij8uX1cXS7+mX9NbN/vzy4vHI1erzydXp1Ovo6vHQlufj1+3yl/Tvnebw6M38wdXn7vbxzd7i1enmwcvIlNeXyMPR85KW0Jbd1OzwnPbH9pThyNXqk+PWzfzGy/KXx5aU7MLvlOvX9tXs4Jfp3Mf2wP793uqL6Zfn0c7vz4vi1t2TwPKUzufL3fXJ6JXF15TF88vLx9Lq88+VxfLn3PWU1eDB7eLw8NTyl/bowPPK85KL5pXFwMHx8vbG6JX1zNySzuCW74vA75zDye/n9saU8ov28ZLl0N3InfLylPPO7vfU55aSltLL0M7Ay+LU4O7A'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[225]='3uz14t3D8fLA9t7q0vLu8tz03uno8Jbv3OnUxdDq8erNy9Xv6PzU4pTM6MjA6NXnlfT8lZzMlPfgwdPH/v2UwJ323PfO5ZXI68jtksHIy8fx1tWU/cP8x8DB8e/R0tbX7OjT55PG7erg8fzv6Pbz3eXM3M3g8NWdkM2Vkub9l+mX5vPPl/T8xf3R8++L6dPN/MLo4efQ8uLs9N7v3daV8p323enS5pTI08/x597BlMfvyO/qlMnW75Pl1ZXT1u/n3Pb8xePI6JzdyNbx7MGWyMHK95LyxtXP7OXowJTDy+f9yPySktDe1+XQ/N2d8+/d7cOVzYvz7eqV5ejX08zV59Dny/Le7ejp19Hv6Zfx7c2T55adwPXz6cPI8uKWzJfq3cnuwNLw7ZLcx9SS'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[226]='1OjW8cDqy/LG9pTq7OXo4efR3MWU1t7F9dHdlMHN8eL+8/LN79H86Z3C1OKXwpfF9sf1wIvo9d3s5tz318ve55HAy/eR9tPQ0ure3Z3Clefe9OjxwMbLneLB082dwejQ4PPyxcPP/M2X4+jVzu3uwIvilMWW1vbylcbvlenIlt2Qzpfq8MKU5/XS3Z2czu7Ql+ro8u/JlpWL8/HI0sXwlZ3z8tCSzN7A78vtncDjlunnw/KV8dGU6tTAl5ydxtbvwPb81cHL7pLN0O3A6MDo19fLy8iXwPeVi8Du0O3J1pzs8O3F0u3e5/L18pTRw9b318vd6tHW/JWdx/OS88/onMD16PLn19Xd3Mb3kvXD6Or90tzNi+3W6c3Q78/AxsvVkNbt8tT37dX11+jh'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[227]='0ObVksXX09XF0pWS0crzlO7A1t3vzdbvl8GU55bD/NeS0tzA4dL8nezh7vLe5pXn9MLTkpX8y8fh0dTF7PToyM3Q0+/+9+/P/MeU8sD3lZWdxuiSl+rTku7G8dDt0dXn/sfTzYvj/OflzZfy7MXw1dfX3cjO6dbXk+bV5+LF98/2x96dl+KWnJPz1Zzh0tbH08+V597s8JWX4pfi5dLxne/Ry+fcwPeS/vDWnJ397+nF0tzVktfVnOjB1ZX+x9zylcXzz+vSl+LO69Tq9PGUzd3W8OHU6++VxdKV5+3Ly83Rz+jvwdX2yOfW1M3F0pTH69HW1enW8OnQ9NbHwPHx6tzg7dWL9u+dxdDT8u3Q8JLUwO/vkM2WnfzCl+He4vHVlenL593W6MfNzO6U'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[228]='nNLe75Pl/Orj0NbN1MGUkovj1JWL6Ojh19HW0O3I1pL9y5aV59D2xZfy6PfByZbdlM7W19PQ1ND8wNac3c7okv3QlPfw9t7NwMbe8ZDN85LU55fn59DckuvO7ffXz5T3i+Pv75TW8MjowN7iwOzWnNPX7cXAxujh/vfW8p3G88/1y9zFksPy55DM/JX8wN3n0PzwxZP36MD1zN2c3O3d6ZDSl8fs8uiclceX99LA/JKU1vDil+vx0PPK/O/R0t2U1O2X1fPK9+n2xfHFxvXUyPzH1p3zw/yd7cvozZfrlZKcy5TF1PCXncHJ/O/T0NbV8cOXyO3Il/HXztXP0Pbx5+7H6OmU0e2S6czelcD0l+Lzzpac8cPU4tTr6NXQ5fPq3ubx3d7w1vLswfHd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[229]='i+zUlNHS7+fRzJTF09GX5/731d3Q9Nzyl/KW6ujwlO+V7/LF1PTxnZDS/PKT9dTF1Onx1Yvi1JTRyZTi4dHczdPL3Pfyx/eUl+vulM3Jlt3F0dTFlfb8yOfL3JTU8e7q0OzV7/3Q7cXzy+jI3vP8x/XQl83h1fbVkNLzlNfI1M3B0Naczdbelej88OrAwtbFj87W9+fQ1e/S5pTN9ciUnZPC793j19XP4MXx3evQ1OLDytbI3dHtwNDH1sjs4+jN8cjznJXC1sfUx/DN7sf2lOzF/NXD0ejN3OPox5zK9cDox5T33MHclfb28+fnw5Tv4vGW5+zq1MX08svd0MDdnNzllNXFw/OUwOfo7/7C/J3s6dP31PTcyJX89fLo/dyS1838x9To8ufnzNbX'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[230]='3unz3eHW7pXA7/Hy8vbo4u/I8pL+9ZWV8cjz3ePQ/O/l0N3n7Ono6sDx7cDFyvzIlM6Uxc7p1ZXmx9Xdi/Do997j7e/U6vXizuDonPbw1sCdxvCS7sbxx5zMleeL9vPP4dboyNPS083z0ZTvi8bLwOnDl93e6tyV7MD1yJbN7cWTwt3n68PW1dTA6PHs5u3V6cPW1+vQlJLS6N7Fzufv7/3QlZXox8vy/sbwwO3K8+fxy96SkMjW8dPR1NXQ8Nby0OnewPzA7uKL7PzV0sfzkpX1l+re9pfpleLLzZPy6Pfc7ejii8LTxenD1Zzy/PDH7Oz1wM7j7s3pzN3Pj9GU1dHS7erNy5fF182X8ov8/OrNy8vyi/Tc0OvW99329e/d1PDV3c7w7sDowMvi'
+do local OJKLMNOPQRSTUVWXYZab=571 end
+do lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL or 417 end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[231]='k+zL9/PJ88jA4++dk+uX6uPL7ZLU5fzH8vOW6ePJ1uH0x/HH3uqU6pDQ3vHF19zqzdLc1d78/JLe4/PP7PbdyOnS0/L2xt7H0ur36fb27pWSzpSSi+HywOjz7vLv1vfI79CUndLCy9Xt0dbvwPHukuz01sfA6e7i0dLe8c3P8cfA5ZXIlfz8yNPX9+r8wsvA/cjW6tzi1ZLQ5e6VxvDu4sHN1NDc89WV3PbuwIvr85zpzfHVzuOW6s3W1vfOwJbI6POVlOzo/Jze/PPd89Dtnd7mlPfU5vzN3MHuxd7zy8Dj193qktfw3fDylu/FzNyVwcPo4u/LlMWV9O+U7MDV5+731sXnz+jX4dHy1dfRl5z09pTQ0Mbozezl1vHm8+7F0MHd55Pn6PLO4e/n'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[232]='9MLUwOnR8++cw9WV8PDo8v7B1sCWw/zV/sKX18728e+Twu7nleHvlNHSl92L7PL349f1x5fq1uLewtXp7OnvldfS3uHAwO7QlsOX8uDH85LO6pXn/MDx1cD21p3A4+73ltXwkpPqls+WzPHy3v3o9/DBl5zvze7Fk8CW3fXP7efA7cvQ4v3T7+PD8vKT6u3Fl+nenM793Zzh0pfN9Mbzz9HL1pXtw+3i3MLc1ZPn6JzN1vKVi8Hx95Pql+HT1fzX6dbe6sDF9dDyx9Xd89fznZHC/OHj1pbPlenezdDj6PGQzJbpxcr15/72l83U5t7Axc3uzdzA3urR0fzQzujukvz1y82VwNzNxvbL783W9tXmwJfXi/DVlObH0+/T0O3Fw9f2yO/K8J3O95Sd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[233]='ncbenZH21ZTsxfLV/dfe95HC893u9fyVwcjy8vDB75L9y97p8sbvyNLwlJ2V8/Pn5sDyzZDQ8N31y9PVwOrex+XS1M3h0pTyk8GWlNLB09D11feSj8zcxZTIlcjS8tbX0sDTx5XplurG9+/qxsD20MDj1e+U0JTIwP3V79PWlcDjzJXN69be4eDA1ZLx1u3qwOjTnfPQ9pKV49bq0vTU1ebH7dXhw+3y687u5/7G/MfvzpaVkfLxkuXV/Jz2wcvF9dX13dTH9pSdxpTv/vPu6pDPlOrX15eSi+jT75Xiy5Lc7NT34dKXx8XW3ciL6dXn083t0PzHy9CW1+jyzcOUwOzH8efj0vPI09CU0MXW8dWU1/DV4vfWnY/Dl++L8Mud79eWndLp6PHTyfHn'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[234]='4sHTxZXH98j+wtOd0PaXnNzo6MiR8fzA4vaU4pzK9+eL6O+VwPCVzd7F/MXm8OjFleLv58XP8pXzyZfd3OjwyJDPlZXX1fHy9PX86pLL6JzwwdbI3ur3nZXm7eLD1/fI1ObxwODG6OLR0dad3czxkpLNy+/g99XvncHv3dD88fLG85fQ8PXWwMb38+mcydbV8Mbv3ezn1c/p0pTQ0uGUndfDlMX9w/HylsjVleLAldWUyO/qkf2X75Xz8efR1+jH3OnVleDH7uqWzsvA49DtzeHQ8veT85bpk+bUyOPLlcjc6dbN8c/uyOnV8dDhzu+c58PzyOj9y+LQwd2Ul/TcldT208fn19PF/crwnJbO1OLNyJfp58/zyNDB3Zzz1tTilffVz/T23ZXQ6NzV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[235]='9Pz36uDyls/TyNac9PXt997m7cXQxtaVzsDz6fbB/OHN1/DA0MftkvXR3tWQ1ujq1PCV6vzx6NeX9JfxwPWWldfQ98j08fPP4c6VlNLG85Ts8ZaU7MDLyO/X8JXOxvHQi+KU3dHL3cj+8+3N3vXW6d70l83tzJTHlevo5/3JlOrsxvXA5dLcwP7x/NXA6PXVk+nw6ej1y9CV6fDN/vCWnPXRy8eX4/Gd6c7onefNy5KR8O7F3dbe5+PK8eKX9vzFw8iX8fPXy9328u+czcPL1enO1tCXx/Od3dGUkuXO1pL10fyVksmU0M3W8NCVwujQlenWnejy1veUzN7vkfHxzfzBy8D119by7vbW0P3Oy/KX4pfhktDe4v3IlZKLwdWUlf3o6dHPl/KV9fPq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[236]='6PbTyJPllM3D0ZXQnfPo9+nX6OeV5u2dj8Py0Ozwlufc5vLy6838ld7olPLe9svIl/3W1/bC75zox9731PTy6pbN/PKT4e+Ui8LVyM7x8ernyJaV4Mf33fTB3PLwx/Liwcr2xc3Oy9D91vHI0cmU6u7C7ZKVwPXV8vCU3efX8cDU8OjNkcDTyOj96Or10tOS5dHL99fD6J3uwJTv48/88vXJ6Mf1w9bh7sDW0PDF98jw9vL3zvSUyOb81vHu99WVl/bo8tfRlu/wxfb3zv3L8pfp3tfg8MvilNCUyNTil/HDzpTQ0vDuzfTHlMfA5ZTnw8yV4v72053o9dTNj8yV0JTO1Orext7n7Ojt5/3I1JTc4ZWU8c6V0PTw792X5u3y1ML8yNTt0+/AxfPn'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[237]='5dGX3fzH3OKL4ujp3uPxxe7G/JLN0Ojp6PCU95HH88j29tzq1ML88d3S1OLo9vGd0OP8x8bA8e+cydaVi8KU8sXV8ufw99bhktfvlejBl83N1vfPksPW8ebx7eqV48v38c7o3eb3l/HBzJXi4PzU6t7l1JT10Jbqk/2U6vz97pWPzZTNktbx4pPp85XQxfbi18zy6tTx8+/8wfOU7OjdlY/Il/fx1fz3lefzyOnNl9fS6t7dkNf3yJbQl/Lv0tac9sLx9+DBlcDswJbn5sH80PXI6MXgxu3I3sHxks7y7vfByvXv4vDowPPW95XU85Tn8Mbe1ZPn8dXQx9TQ0MLuyOzh8c2T7POc/PLu99zy8Z2Q0Ojx68uV99D36J2WyJfF3dD1zenI7ZLtz/Hi'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[238]='49bLkpfw1MD88MvIk8bW8fPD1er28Zf3l8ftku/P7ffR1vOV3vaUwMPXlM2V5dbQwOuXzdfL1e/t0t7dkfXzyOHX6OHc9ZXq78zx4ufX6PLl0NzqltbT5+HOy/KdwfPd8sDd6tLg78jU4NXd/c2X5+vV85TDz5eV7OGWyNLo7sXA8fLQxsLW4ZDW1c/s5+6S0ufonMDi8sj89dWSk+KU0NPI8cXh0vHAl+LL0PHPlu/UwtTVkMPxkuvNl+eV65SS3MfUzefRldXr1vLi8czo0JP31pWWz/LF1MLzz9PL3NXtzPOU4MLo6s7ry8jO4NbH9cuV6ovn6OHGxvWd7vzz55fG3MCT9Zfv7PLy0P3Jl8eW0dOdi+z1wO/R3OKUz5bvlMryzdTwlt3Sx/yS'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[239]='lfHywOfQ7ceRwcvI3uPVlNfLl53Dw+3A7vfo6YvglpXNzfzy6dXylZXt7Z3c4JTAwMaV1e7B8uKPw5X35dbv6ePOy/fh1ujI/MDu4uXNy/fi8fPPxsX879D88sDn1u+U/dLe4ZDR/Nfox9zN0un28pTX7d3s4ZSSlcHLkubx8e/lz+7q3dfW4fTH1erO9dbvkMPu8vTHlZLswPHNi+3TwNTC8cDwwO7A3O3tkuzileeLwPXQ59KXkovjl+/c/ejxwOvW79Lq7Z3o8O+V7cOX58XX9sjNyvPn8P2UnfPW9ur89vL36PPtyN7rlZST65T33veX6unIl8X8/e7n3untneXIy9Xs8pfil+rU58HP8ZLS9+7F48/t6tT11vePztTq8PbUxePI75TN0u/p'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[240]='3Pz8zdHL7+fxze2d4PDWwN7G1u/X0vLq0cjo8cby1erQ9PzX/PKU3eDy/OrFyPHi4PPy6vTwlfLx0Zadxc/8xej3lN3SwdyS6PXLyOHJ7+mV6e+UzvHuzZP01tXd1tad/MHU4u738cDx1fOdnfOWkuPS/MWV4fzQ5vHt6vD2/MDv1fHFk+bvlZHx7d2T4fHIi8GXx+L2/J3X0fLqk+bVnfzF8urswPDx9dDxzdPDlJKU0O7q/c/yyOHQ95WL9N2d4dbe6sDAl93O6u/v8sCV8uPMlcDSwvKVi+nU5+zzlfLQ4fPp8PaWz5bV8pTQ5fHV6P3vndTG7Z3hzfzF18yV4ov275XdyJbdl/KUnePL3JXlzfydleWUksXNlt3XyvbNl+Xx0JLIlNWQzO7I'
+repeat until true
+if lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef~=OJKLMNOPQRSTUVWXYZab then else end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[241]='8c/o4ubB8erz1+7Q/v2V4vTC8ZKW1/Xyxvzwxdzmlpzgwt7v1OX81evQ9+/Fz5ad18jxnd72lJ3gwPDpxdaV4ovo9uLx1fX30Mfx59zq8O/Bzdb3xvXtku7F9cDR0N7x0vTekpTX7vfuwe+V582V4tfRlZWLwu7Q0vzVnIv3lNX10dXd8MfyxevQ1Z3ewJTd0cvL4u/Rls/c8JWV/dL81dPW7+/8/ZSSzc7owNL11NDhzZaUwcPWyODG8dDS9vzqk+3o99HL093S6uicw9bu8uzj8s3xzejhzvX8zezA1sjU4/Hq79bvlZX9lunS4e+U7OrdnNLr3pLy8NSU3dX3yNzB3OfhzfKU4czc0NDi/MXXyvfqkfXU5+HP8tXiwJfhwOju6vPWl9XzzN73'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[242]='ktDo4tL03sf9y9XnwOHvnN3L3eflytbF9cjW183R6OniwPHHxdfV6vHW7e/ByvPP3ueU1e/K/MWT6fLi69X19/POl8XU4pfVksPozdTil8ec1tbhj9D35/HNlcXjz+ji3sf84cDw1pLQwdzq7vbTyNzll83A9ZTQlsz81dHX/JWR9vzX4MHVktzC0+Ls/dPN8sbw95HF9sjwweiV58PWzcDyy9DQ9/L3xcvd6ZPt1e/F0PLVk/3UldfP8ZL2wdyVlcDxzfXP7sDhyZfi6dbwkovl/JXBy+7IwPzylIvq75LswN7yzuqVyMDAy+fQwZXNzsD85+73/N2Tx++cltaV4sD275Lc9+3yzujektzm3sj2xfLFzdbzldDt1NDU9Pz3/dCX8tPR7+rD1/zi'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[243]='j8+U79zq7+/j0ZXN5sLo6pDI6PfXyNTFzdHcyJH91tfT0N6S3OXonOHN7c3ixfbq1Ozw4vXI/OrvzOjh09D858PI6Pfv0d7Q59fV6Yvhl83rw/Pp/PH81e7C88iXwZbP/PXU5/z23s2L9Oj3/dfywMXN/Ori/Nbqj8iX59zH98+UzJTAxsbL3fT93JXz0tPi19fU0Jfq/JzGwZTy0uzwnM7l1tXcwPDF1PLW6ebGlPeSze/n18z8leXW7ufo8ujHzsHTncPSleLowZTizu3o0OfD8cDU4O3v5c+X1ZXGldDX0dzQ9cuWlMHS7ueWw+jp59D858DG7sDrzJfh0vLU8uzo3pLQwNbqlfOXwP3K9+fR1tT3wdeX0PXLlcjh0ujH6dbW1+LC8eeQ1fWd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[244]='6cvUldPD85ze6pbq0uzw6v7A1pX08/HA0MDL6vby1vfO8e3H7cr854/Sl+mczN7ij8jW6tfS7s3jye3FzcvoyOPN8fLc4ZTvi+LzlOPM3pWQz5fhwPWUx+DCl53TyvbQj9CU7+HOl9De65Tv9vzU1cXQ3efxzZSd9sHU95zWlurA6d7N3Oz20JDV8vf1zJeVxdHznf7w7c2c1fHN1Onox+b8y8Xw9pSS4PLxxcHPl+fO4pTInMzuxejG8cD09dTik+mV8s3Ilp3S4e3N1PfW1dTilNDy8e7iks+X0M73lMfwwu7i8dKWkpDO1JTu8pfxlNLW8eDH1sjz1fbIltaXwPHQ8sjhzPGd6Pz1ndPPlpLowvLFk/HznefPlffxz5TQ4vLtwN7p8+fg8Nb3'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[245]='487v6s7C/OLDzfycw9bLzd7hlpT+wfHN5sHWlfbH9urBy5Xy9vftxZHH8ffvzfOd3O2UyJLX1JXn1vXvxsL8nM7hl93S8tXP89fw6e/R/O/lyPKVwMeW6uzB1ZzUxsuS7c3xnZP89eLUwu3vxvGWyPTA09DS9e3Qzuj26pf36MCL89bx7PPukt7HlPfTw9TIlcLtx9zplNCL/dPqxsbv3ZPB/JXQ7PDq0umU98PI8cjTz+333OHo6dfW3NX89vzH78uWlNT1753O9e6Vi+CX1c7ll5Ll0ujx1OjoyJXh8sidwu/n18nWndD03uLvyfPn19DznPT9lpX29fPvwdKX15zX75Xhy9WV/MeUwJXw7cj0xujH58zVlcbC1ZLd0tbd58nLncDC6PfFzpXI'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[246]='/PHykvXJlpLe5dbQ3OjylevM7vLSxfzdi8DT75TX85zvyO7F8MX18vzG9eLOwuiVj8mXnd7iy8jQ4taV1MGXwOPI8fLG8/LA7sXxwJXA/MDe/dT3ncDc9+D21M3dw9bi3PHx3fPWlMXz1/HQzdbu55HC6NDS8fyd59DWwMb2y83nw+3QlM3t8pX9l53ywd3I09Hx75Pv8Z3i8ZXylM38xfbG3sD08Oj36cPonf72l8fi9vOU0sf1yJXp3tWLx8vy4v3o4pbL3pzrz/zVzseXzeb27Z328NbHj8rx4pH8/NfOwpTqw9btyOPLlt2V9NPIxdDu55LW8JXr0ZfX4seXkvHV9+f9w8vF89Lx95Ps8sXr1pXq3ubV6u3I7ceX69XI0OWWyN7o8pXw9vHd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[247]='3urwldLy6JLXzNbAlcHewPXL7vfw/dTqnMOU6pDD8feS1tzi1POV54v37ffx0PbQ8c/onMXKy8fzw/yS4dbt8uDC/OKPy+7IxdbckuzH1cje8pX3l/bylf7C3cjp0svy8cvt0O7BlMDQ85TqleOV6vXWlOKL9O3H0dfx6tDh7sDDyJWV7PLVyNzq75Tj0pXQ8dLxwJbD1unl1fbIk+nwlfLA/Mic0ZfV0Oz18sDq7sXRyPHQnM+VlJPB3uflyOjd6PzwwPPQ1s3T1vzhxsGWnfD1l+eW1fzxj9D1wNPX88/Q9JTdlf3L3dLllN2X8NTnkNL81+DA3cjh193nzsHu4tLh7dCV6JXFlsr1ksDxl+nByvzVk8HUkpTK/JXA/ZeSl+z2kvDylpzF1pXi'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[248]='4PaX3dzs1MjU/PzF3PDLzezp/Onl0NzFzsLt1evQ7ffF0ejy0c3oyJH3/PLXytby1OGV95fxlpX1ye+V7MXxkuzC3c/e5dbXzubxkvLw7cXo8/z3wc6X8pP17fLS59b30czU0MbF95Tj1u/p5sHo1Yvgl9fBzdad5v3d7+nK8pLix/PI083879D93e/Q5tTy89HT6uHQ893c9cvA/crxwJ327+nTzO7A3vzWwJX81JLG85SdlsmUwN3O78+U1t3n9c3v6ZPA9uLDw9bi6czc0NTs/NDc9+/q3sH8zezH1c/Fz5bn5df2zZfl1NDA8pTA8v2VyJX2lsjnydSV3uzVlfLH3unexpTykfeU78HD6JzpzPLQ69fLx/PQ1sjs/PPp4db80JXq992T4+/I'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[249]='leno0N7w7fLTzNbHi/PxneXR8Z3x1pbIk8Hu9+PL3ND11/fIxcjt5/HW9+qV6+7FlcKW58XV8MWR8ujd3sLV6eLB/JLjw/Gd9MLoncPQ3urcx9PF/PbT3fLF8pX9ytb348P88efN85yLx5TF7sfx6o/S7dDx0ej39sL8nOjG8vLvytWUlNDLwMbA1uLs85Xn4c+UnefD7vLe6/zqxc6V0PDG09DA95Ty6PaV8u7A1unO/dz33OCX0PTH093m/NTylMOV5/zC7pKRwO7qk+rckuXJlcjGx/XA88r26pfq6JL0xfLAi+2XwM7ql+LrzNPq9veWndT23MjvztT3/sfLnebB6Pfc5ZTv88PLkovil8XO7ZT38PGXwNHN6OeV5dWc/sHczdPX1MCV4OjI'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[250]='9PLW3f7A7dDe6vXA5deU6tDty53Q8fKU883zlNfPlO/h1/zyzsLy9+fS7feL9tT38MKUwJDQ85yVx5WSwcju1ZfzlOKL7PDH3vHu58bF853x0dzN/cjtzfXD8cDxyPHH5crxyP7ClOrc/cvH4c38kvDH3tXu88vAw8vT7/XJl5LO4e/nnNftyMXK1ufvytbAwcvL597j1tDT0vzn79D36tfOlN3nzOjn7PXV6tfQ/MicztTQj9DwxdTzl+HN18vnwMKUzd7l6NCdwu3qlcDu5+zy/M3mwJed/P2U0Nzg1uftzfHA6dbzlM3I8sXzy97h59bW8pPH8ZLRzJfxktbW6ZTSlpTFyvWSi8DzkpzS1ZTS6cvi9Mb1xebB8ufU/e+c3MDTnYvl6MXe4O3N'
+pcall(function()end)
+pcall(function()end)
+pcall(function()end)
+do OJKLMNOPQRSTUVWXYZab=lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef or 126 end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[251]='i+L8yOz07Z3G/eic48zdldzzl8jT15fH88rzlNTtl++V4ZTF3OrT59Tjy93UxfDFxvzVyJPr3sfe6ffv0uHzlOfX3pLm8svQwOvekvTC6PL9zsvH8sLc59Ti/JzRzpTq89fc58Dl/MjQ9t7A88ve0JzX893o9u33k/ft6t7p08DSwpbPwOne0PHL6OnO5ZTn7Mftxe/X1ZTt0Zf35v3txeHR/PeL9e6Vl/TWnM3M7pTN0ZWU19DuyPzH9+/D1faS1OPy5+fX9+nQ4JTq3cPU5/7x/NXS8fzpwOaUx9PW95TU6d6d8MHu4pTR78jT1+j3xcjVnOj1/PLmwJec0c3V6unJy83jz+jd3uHzndTo85Te8+3Q0dDt3dLA0+eVwJbn8dfV79DHleLX1/bI'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[252]='9PDL9/PQ8pLQ9Mvv08OXxd7l7s3+wO330OHv6ZLQy8fF1vDVl8b3nPDw1emS0dbV5dbe6ovjl8XN0u7nzdDt3eHD6J3N1fDNxsbW94/Q3vKX5u+V5cr8xcPM75TG9ZTn7ODV5/zH/M2P19bF/sDzlc3O6N3e9POd4c/zz83Q6JXiwfLFk8GV59PL3t2dwejizu3W4vHIlu/s7ZaS79eX0OvXlJ3F1ujn4vPu1YvC1eqVxsuSnfbLwN3Q7vLTyvzF083WkpTJ6Orp1t3qk+/35+736PfXzN7Q0c+Wz+XV/MfixtWV783ulM7xlpyPzdbFlfTtzf3L6OnpzpWVkMzVlM793uGR/NTI8MbwnNDt1eqWyMvqlteVwNHP7e/9zPHQ4sHolZPp8ufjy9bN'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[253]='l8b21fzwl/Le9t7n0u/24u/Xl9XO9fPn59fe1ZbN1M2X/PXdl+jW7+XLlt3n1svnlfbd6s7i7ueT4ujH09fx4pLN7ZLFy5fi19Hv6pf2y8Djw5Tn6cr18uzs1OqSzZbvk+Lv7+nK1sXTzJac/cmU4uzl/OLF1paU9sfo59TB7cDuxfCc89De8sDA95WW1/yS3Mfd3Zf1/Ofj0t2cxsbuktfL093h0taSzvWVleXNl+/F1/bNk+r2xc726MXQ9PHFi/SXyJfF8ufn1taV6PeU98XWlOrs6ujv6MKX6pXh6OnG9e7Al8DylPXIl5zcwN7I8PLy1f3P78iVwfGd3PfL0NHJ/M2c0O/IwP3o4ovA8MXA65WV0MHUwMXL3JTR0ujA8MKXx93IluftyvWd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[254]='3dbeyNLr1vHnz+jFlfb87/PO7dDs55Tv9MDW75DM7tXs8fzV1OvdyJzM8dCRxtz39MbuxZbJlMeSzpXiltfu4tfV85LQ6faVks/uxf3R6MDxy97d3ube9+b3lMfFzZTv8crU6tLG3MCSzMvn7dbo6tLv8s3c4JXA6cvo3d7z1M3c7/HQxcOX3ezolN3+8vPv49Du8v7x/MDtydbi1MfzlYv89+/10pfN19Dy8uzA7tXv19PI0PCV99LG/N3x0O+Si8Do75X2lciUyPGSwMeWz+721ZL0wvzN7c6X4c7AlZTh1fbF4vXuldzp1ZXlyJTy8MHt94vlls+RwNzQ887o7/bBlMjc8/LN9dHt6tL38cfc4fHAkMiW6e7x7eKL9u7ixdDznOnP8pX+wcvn'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[255]='3PHx3eDH3tXFyO331OnV6vzw75LG8Nbi5dLU4s789dDFyJTq48vTwJfG8vfv0db31PzznYvC1pLi8ZXAlMPx4uvN6MXzzuiV7sfc99LylcXv1tOdxsX1xfbAl9DpztTV3dDTyNPK8+/Q4ejpkcfLkp38/J3w8pbI6cPu4sHNl/Hzytbpzsf1zf78/OnRzO/q89LW183N1NXx0PLQ/czW75Xz1uqSytbq5vfU1c7n6O/dy5Td4vHu8sDz1pKL9PzQ48jonJfA8NCPzujAwdGU99PP78idxvHq0unW0PDz75Ty9e3n4MCU6sPS1t3+8/zv9c3t8uLz792Vwsvv/c7VnI/LlefDyO+di+j81Zfy7cXy/PXd682UwN7F9vKX/PHn/vCV9+3O6NWczO3y'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[256]='/MD2997j8Z391vaSl8f88p311MCVwtPv8MXz6tzz8eL+8paUxcnz6pXilJKczu/pkMnLxdfI6OHc9dbq89aW55Xp75XswZXq0df26pfCy+fj1tWdwOXyldPRlPL10tWU7Pfv6dLm3PePzJTd6PXulJTXy53Q4Jfn1OXLyNzj8+rTycvvwMbx75TN6OfA7Nbi3dDLxdPL6MDNyvfv3c3tyMHMlff8wMuS3cny6vbx8+nw85TF7O3d6sHO6JXh1ujn89Le8tDG7+mX5cvn6dfT6v7175LQwtad5sLW8ZfAlM2R/ZfH9vGVxevP/PfX1fDd3O2U0N7B1s2X89Wd09GW6dDm/JLc9+/PwdDUle3X3erU/NTqlND2xZPplMXryZad/cvdnZXxl53i8u/I'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[257]='/vfU99Di1uLr15TvkfbuldD17eqL6tWU48no6Yvp9s3Xy9WS0saXkv78y93gx9SUwOjT3dT31OLs4fzh0Mbw8ZTN1ZL1ze3AnNf36tzq8cWc0PPP8vfv3c7A1u+V/PzH7daV6uXSl83p0NbI3Ont0JPn8tXiwu+U8vPV6uLw1vfA8Nbqw9b88dTH08WTxpfvkNfexf3M7dWP1++U5c/8x+zm3eeV6PbN4PLV7/XS1pXo9dac59KV0Nzh8sWTwd6V4dbc9+7wls/A8JTH1MbenNLgl5Ls9tTQzdeVku/Nl8Xl1/zh4MHx3ZX2lurA9fKUkNLT4tzt6Nfp1/LIkMzo1dThlPfcwPbQ3uPulZ3H7cCdxvD3/dHT0O/XlffXyejI4dD36uzt3pL10OiV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[258]='7MfVldLl7pTh1t6S6MLV6tDz1PfO/dOSlefv6u3Q7e/ty8vA7MfTwJP36MXp0fzxwdXzlO/R3p3S6fOc3vDtnd7p092Qzpfy0PeUwPzy8ciW1u3Q5c6XnPbBlsjv0e7A4MX24pTSl++X/dbd8sHo7/bA8ury8JfF9Pz81f7C1vfQ6PDx3vSU0NHO7ufp0Jfv0vz14t7H6JXXyJTi/vLo593V8J3exvyd88no5+fI8vf0x/DyzvzL4sDi6JLFzu/nlsnv7+797dDwwvHQ1MDzyPHR3vfe8ZXVzdCU1ej17+mdwO3q5c3o1efM09Xi/dbh7sHTkvHR0+/RyvLF7c3u0OjClMiQycvilMr1yNT1y+/S9padxsfvldDn8vf11t3d9cjzz4/K1tDO6vLq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[259]='l/fUxYvs8ZL2xfOU7MfVndfJ6OKP1t3p4Mfx0JfF85L10N7x5sfz3ZzQ0++X7ZWU4vX8wN3X1sfe4/LQ59Do6eLC053Q5pWSxdKWlM7p3MiU1tPQltCXx9Tmlc3Q/dWU79bL8uvQy9CX6vDdzcmU7+L20+/Ox/Xv8PPU9+LylPfRy5Xi0OPvkpfi1p3y9tb379fL75f2lNXgwpaU89aU1dLh7sDuwpfH9vaV1ezv9ef11/yS0PSWz+DH6J3mwZfd8vPzkvHW8ertzejXncfcze/W8fKSw9adkceXnOXMlsjc7PXy/cmVkunO1uLnz5bdk+qW6o/MlNXv1vDy0MfL5/796PHuxfHV3OiU0P3D/NDcwcvq09HewJPz1Mjg/PDhw86WyMDHy8DdzO3q'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[260]='8PKU3dTG6OL8xpTd8seWyPbA3MjGwtPNlezL8pPC7++T99WdwO3c0NfR3JLTz5fq79H8ktDq0+fryfLA7dLo0OPI1en90Pzd8dLxncDz7Z3xzpfF7OGV9/3W1u/u/PLy4dLLx/DG3NCV4tTyi+qX0Pz9y93RyPzI5cP81ZPG95zlyOjqwdfw6ufD6PLs4Nbd0OvL9/PX09DU/PeckMvU4sDt6J3y8pfyle/88fbzl/GV6vXy8Mbvktzv8+rO9pTQ19X11evX1ZzQ9ZTV78zo4sDrl/LOxfGS7dLt79fK8O/hw8ud/PzLx+LH8sDp19TqwOrwne/V9+mX9/OV7seX6c7n7eqWzsvHw9Lt8vLCl53j0JfIlfPt58bCl9WT9PLi9dD8nefS7ffz1vaS'
+do local PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=129 end
+do OJKLMNOPQRSTUVWXYZab=jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde or 41 end
+do lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef or 103 end
+do lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=32 end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[261]='0c7vlNT0792X8u3V0ObTx97H7ZKdxu3H89bWkvXX1M3m/PHQ1PaU0N711tXy/ZfNkfboyMb3l/fU6dTA3uWU8tfPl/LGwtSU7Oj8xfHM1JKd8ujH0vbV3f72ldDl0fLNwcjU9+7y8fLg8tad59HvkunS/OfSwtOd/vXyxeLy/Pf91/PI/sHU1Z321ersxujV0vz36ZXt6NDdzNXP3vfx0M79y8329dbQktDcwJPjlt2S0PXvnM7VnPTz7erU4/zx9dHW4p317efe85fA3c3x6pXGlcDQxvDQ0uvzku7w7ffDy9PQktfu55zSlc3O/dPIzv3txenK9+mR8fzvlcb3lYvtl9WT7e/Il/be3fTy7cDS89Xq4MDVz/D378+LxujX0vbe0OnI1NCV5Zbq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[262]='j8nox5Pq/MjN0u/pncLU0J331d3+9pXy0seV4vHN/OLn0PzVj9eVlPLAlcXU4fOS3db8ktzp7+fu8JedlfTx4t3D1erAxtWc187V3evV8sjgwPHIi+DulODGl8jextPA0PSVyPbB1ZLwxujQ3PbT4s7xlM2Sz5fv7cn8xezr6JXdyvWS88nx3eLzlNXNzOjxw8vekpXyl/Lcwtad8cnU6ufX3PKV65fVxdfW0JXr6MDF1fWdk+eX15Xt1urR1/KU0P3WkpzM/N2V/ZbP9vGX597nlOrS9NTF5vbW4v7HlueW0uj37OXL9/DA0+LU6N7pi+fW55bI793Fw9bi3sfVkujx7ZL+95fn9vbWwMXJ8vLm95Tdk/Hu1e/Wy9WT9u/dwdbc0MPX/JXDy5X3'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[263]='1838yPHSlc2X9t7I1MX2lej38cDpydbN4vXy8pDMl9De6/zV68nVz/PS1ZXc8+id9vboyJLW8OL+8fKS7v3d3dPX8fLOwejH/vbTyPT26MjG/ejV9dLW3fLzy83swejy1ObukvXD8Z3pw9adi+H895LMy/fgx8ud7O2XldTrlcXwwPX378vd6fXN1d3zzdbqj9DznNLG0+fF1tPi0sfw8ZH88++T5ZXAj9DulM3P8er90OjQ59LzlOPQ8Ors6e3A1MHz3e7z7tDvyvX3kcfzlIvh7tXc/PeVwciVxZzX8cXr19SVxvHozej2/Mfd1t3I89bw1d7p1OLRy+ic9c/ywIv88vfR1fXqkcby9+j81PLA5/Hi782X9+3NlpX9z+jh78ve59PV9siT8fzH'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[264]='5sfdleHV9dWT7d3p3PKX6e793NX+8ej3xdL8nJXq9sXs8fzvncX33ZbQ1vLv1uiS7PXuyJP93u/OwZbP0cr81fbz8dD88NWc9v3dkpHz1ZzOwe3F19Dv3dTv8pLzytbVk+jU4pPny+/O8/zv4PLVz/PW8dDA8+6U0v3v6tTi1tfB0N7Al+3dndLi6JL8/ZfNks/twM3S7sXs7e/I4MLT55TL3JKL5+jV5vz84c7p8Mf1ztbn9seX19fW8tWQ1vecltD2xc3N892W1tbA3MX83ZTS7tCPyfziwdHvlYvy7pXU9u7V48/8wJXG9uL+/Zfy1OqX3ezq9+nDye+V6cvc9/7G6PLi8ZXN4vbdz/z31sCQyZfvwOrx4vXL3vL9yMvQzcvT0OXQ7tXQwtXp'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[265]='ltHv6o/Q3MXXy5aS4MD18vXQ1umczcvij9HvyM7C6MXTze7I9sH86tDo3tfc7ZT36cmX6Yvn7cjOxvyV09bzlcHJ/Nf9zPzpleDo6tLt08eVwd7V6Pfz3Yvj7cfhy5bdxdfzz/3M3erh1vLn4cjtx8HXy9Dr0tbqls2XzZP1l53j0dXd/sf8ne3J75zu/PeV3c+W5/D21en+x92U1Ovc0JXA6MDQ7PDH883y6u3I1NXs65WVzuKXxf3W1NXXzdTylez8nO7Al9DA55bP3MfuxfPW3Ofe6uj3ksr8xfLG78jcxffP6cyW55fC3sWPzZfA3vGX8eXLlZXm95Tq0sbz593Q08iS0u3AwPPUyM3N6MCS0Mvq/MLWne7Hl9fQ5tbh/cmV1ezp3t3wx+3V'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[266]='j838zevJ1c/OxpbdlsnvyNfR7vLU6PHykcDykufJ8feL9dTQ4v3L997p3tf+xpTH7Pz33dztlun1yvDp0uruxfLCl9WcyPOU0urW1dPM7cDjzZXI/MbUlY/Q0/f0/PDA4MHe0NTp3e+Py5fNxsLcyIvl/OrAwd7F78PL3ZDW3M3R1tPN68PL8vXK/OGV9/yc0sGXnNDgl+/u9e7InfLzlOHS88jS7d7dkcXw7/PW1sXc7/bI7vXyzcDB7cfO7e+VlfXy58HWlOKcw+3H68PtyP7G3NWX9fGS3dLywNfI/PHy8fPpwMCW54/S1ZXdy9Xqnfz258Dp8NDl1tbd19bcyOzn1pKX/PyckfPWxZbM1vH1w+7Qwdfv7+7z7ffvzsvd7c3W6d7i75yL6ejI'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[267]='nNHo98HK9++X6+3Al+fV59Tm1tfiwe/n58iX55TW1Zzi9vzV3O/11dDy6JLQwdPiw8yWnfzG9pXF1u/PxdDo4tD96Mfr1vDi8MHTxfXL3tDAwsvd3Mbw4e/Q3JXe45WV9dXzncD23OLU9+jV7MLL1ZXq3pzA7PLni8Ht8t70lpTAwNbxwOLL78711M2X6vOc3ueV1ZbN753U7PXii8fWwJPn/OfX0PzFwPTuxZzM8fL0wPDF4vXW4uXL08XR0PHH49X88pH21pLd0MvH1OvVyJfllurO8/LN5sbd55zX/O/Q7/bFxdfVnZPp8OHc5fzhnMvvlNfQ1pzA9NzQ19ft1ZPr1Mjzy+id78nUkovxl8CL69PQ79LT8tfJ6OrUwfzi0PzW0JbX0+LO6pTi'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[268]='k+vo1ZDW3ZLNzcvQ7OfWyNzG88+S0ZXV4sfcxeL36OnU6u6Si/Lz7/HS8+nuwdXn3POWktDo8uLy9ZT309Xw8tLo7uLRyPL33cno0Iv1y/f11fX3xsXyxZf06OnS6fXH3uz2lOjH85yL6pbvzc7Lx8PXlsj28tbQ7O3e4ezHl9Drzu3FnMr1753A1uLU95fxwOiUwJfB1tXBw5fi4cvW95fo7+fewdbX9vzV6ZPA8MXc7dPA3dbd59HM/JWT49Wc3uvvz8D91urs8vLi8czdnOPK9pXo/dXI0vLVkpfiy8jA88vAl+qX6e3OlNCT69byks7onM7A/NCQztbikM/okt3Xlufp19XP8dHVyO3J8sDe6fLQ5sfU6v7zlffryZXF3dHezd7zl9Xz0O3V'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[269]='3Mfv3Z3BlZXl1u6Vj9fc95PilPL10dad59bcktDy/MfU7PeV9sfWlevQ3Of1zJTy0Ojwx87q1JTS4/zn69H88u/K1uLrw9bhlMzU8vb8y9DS9/zyk/fyzf3M3eft1fbN0MDVlJzLlt2X/PXFxv3t6pLM/OHQ6/zHleiX8ubB3JX8wfPd6MaVlfzy8dWU1fOczdLV59HI/MfnzO/nnMiUx/TH8+njzpXI/dD8wOjC6JLo8fzpwOCW3cPR/NCQzJTH08vT3d7w6OGW1peV3OLU8pfi/NfU6dzV5sfL75bD7ffU45fik+rV75fl8dXoxu3nl+nw6cXM6OHz0e3Qw9bT0PXR7cje5pWV8daV9/3Ql+nN1fzi9vzLzc7y1JTO6t7dnNX2kpLS1ciL7ejN'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[270]='4saX4dzxlJ3w9eid1Mb2lZzM3ufi8vPI4P3Vks7r6O+cz/H33Orokov9l+/ex5TF0ML8x87n7sXc9svHi8LdyI/K9+fQ9tbx78voncHQ08D11uiS68rUkpfr7dDQx/LQ8PDVneHWlcXc6e3N0ujVnY/JlOrOwdbFncDu59zC3ZTzzdbX18iV8vzH1MjlzZSd8vWX4uvN6MXS8vOS09LW0Oz01uKT5ZTIj8jLwPHMl+Kd9tPnk+vylOzs1d2V95aSwPHx4tzo1ZyV/NT35czL9+XW9dXc4u3N/MHVkpfy1c/08ejX7OrekuvX8+qPzPLn69XwnZTQ6JLuxfzq/dDy6tzwl+nx0dzF69LezdLo3pXc5fzV8df2yNzq1vHB1pXnkNXywNTB/PHA65fQ'
+do jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde=PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI or 167 end
+if lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef then OJKLMNOPQRSTUVWXYZab=49 end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[271]='w8nU4vTB3pzuxtPn9cyXxYvs/Mfw8u7Q9sX14t3J6JWV7eiV49Lx8pDS3pLe6JT349Xw4ufX/Jz2wPDH3sDuld7g6Mju8/Pv89bWx9D31t3w/PXQlNLWksD885zhyfLy3Ovxx8793JXs/ZfA7dfx1dT31uGR9dTy7PXu4pLW3Z3r0u/P89D8wN7H9pX8/NTN3dDy1fTG3tfh19P37v2XwOby8tXU/dbdzuDL3c708tXg99aVlfHz6cDml83j0fyc9MbL3c3PlMWW0e3IltDVyOfN8cfe48vVi/3e6cPX85Toxtbpi+HuyNDq8J2Sz5fpzsDT1ezt1vHsxfLFlsjW4d73l8328O3H3dDu1ZfB7+fe6t2V3Mfu4pDN792P18vAk/DW8t71l+GT7PKV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[272]='5dbT1f7xldWL9+jA3cPxzevV8NXzyJfVl+Pvkv3M/JXFzdWdlNb83e/K8+mLwt2S9cmW54/PlPeV7dPAkfbt0NT03sfAx9z30OXL8tD91pXN0dzN/vXVlMDAlpTU8Oid79LvkvD17tDw9/LVlNDt0JTJ1cjiwPDX7OLV5+j36M310N6c7Pf86pLP8+rm/e+Swczo8fD28+rcxpeV4cPo6eHW/M2Q0pTqzcnvkuDAy93nzJbv8P3u9+j36O/oxpfQ/veX9+LzlOL09ujq19XyktPIlp3OxpfI9MfW6fT2/N3U7PDXj8vewJbM3NXt0O33lfbv6ZX31uL2x/zp1PeU79TBlOr1y+jQ68vT6sDo8pLG9t3qksvt6uLz78/ux9bi7sHuwJfC8++X45Tn'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[273]='0dD1wPHIlffw/daV49Lz6ovl/OfryJacwc+X55zOlJ2U0vPdkNaUx5TP8e/RzJed0uOXzdfDleqX5svik/bcktzG1vLX0Pbq8sCXyPbA7+rQ8fGSlfbdlezw753Ax/eS6PeVlZPtl9Wc0NbQ89bywObC7eLQx5WV0MCX1/71/PfiwfOc48rW1d7p9tDN0u3v7MLW1ez27pT2/PX35c3u99PN1vLn1pTN8MDe4eDwlJLDyved0Orv6ubHy+Lpz/zN8PWU1cD38sDr0fHVkcbczeXQ3efQ6fDnkcCXkuzr3NDhyPPP48jU1c7xleePy92V9dbw7/3O1NCS19yS4c/t8pzI78jyx/bVksPt9+zt3PLt1+7I0dbU1ZPtlZSV6dzQwcPW9+Lzl+Li/dzq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[274]='nNfVkvTH8NDt0JaUl+iU6sPN7+nG8/H39PDUwOjx7ZLAxpXI6PWUyJDQy/fr1tTi3cmVxfT2lsiL6+/n3u/z3fT3lJKV5e+Uwcno1enD7pXA5vPq7OOX1/L37d3S7PHNzvT8ndTrlOr1ydTQ4dKX793N1Pfl0dSVi+OV4pXG8PfFy5SS8c7onfbxlMDB0tby7dfcksb27eKL697yzvOX6ZfpldXe8fHNk+j2xePO1c/RzNPAk+mVzd7gy93e/d3p3Mfu1dHR78/j0u3H8Pz1wNHQ7c3+8pfh4sb2lZfA8JLN0e7VlNKX4dzo09Dv19PI4vOWku3S1s391pfN4sHozejw75WSzN7x88yXkpDM1teS0cvN1MKWlJfw7cDnze7F8vOW5+728sWd9e+U'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[275]='/Pbc5+XXlMjc/PXyxsbu6v3W6NXm8JbvwOXL8t3S0+fhzejij9HL5/PMlMfRy5bdlcfewO/X6Or1zpeczcjWx9fJ793U9dXq48jy1fXW1p2c1taSnfb83d7t3tDQ5e/I0vOVkvXQ1tWL9ZTNzuHx6t7t3M3O45adxdHonPXN1sXU8vPpltbdlOzj1pXA89bd7MDx74/W8eKL9/Pq3MDzlZDK1PLO4tbQltXzndzH3unz0NTAl+rT98HLlZTcx8vH68zv3YvF9feRxvHv9PfUyMbAlNX0/Pyd0uX84u/IlMX2xpaV58nL4vTA3seT/PXv7Ozx3Zfnl+/X1svFi8HcwJzW1c/28ujNw9Lzlf3P6JX2wZeSzuvTkpbI1ercxfCdlfbW1dHQ1OLc8vyV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[276]='5vDV6sDz1MWUze739sb1wO7HlOfNytTQktfw59zx/Pfl0vPn88iVxcbz/N3z0dzn3crL3dLmlpXAwtbdlcD8zeXQ3ufQxvHvk+z13eXX95zB1tOS0dbVnZPh85Ll0ZbnnfCW3YvG093O69aS18r3lcPK1emWzZbv7ODu597Blt3U4NXP/vbylJDJ8s310NWVltD855LK/PHxye6S0vDt8vXW9urzzu3i1MHd6pfn8sjyxfHV0PXLnfD3lMXcx/zp9dLWx5bR6NWQy+2d3Obe6tLzls/o9+3i/cPx5+HSy82V98vNi+vz7+7Gl8j8xveV7MfL6sDzy++X7PXNk+uX3ZXz6JKL8u3I09fw797A8NWL4NTi0sHxx9T03M3h0N3dlebo6uHSy+fr0JTq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[277]='wPKX4dT9lN2czZTnw87vyN3W8cCP15bq78zuzevQl++dwO7V/dGWlNHW8sXF0t6S6PPU59Tq0+LxyvLN3cOVlMHD6M3T0ZXn3ujTwJ3y7eeL5+jVl8bu4t791OrA8+3F48z895XG9ufU4Zfv5vDW7+vR1Z3Qwejilcbxx+fJ7dD1z/zhzsaV95LN8tD8wNPVj8r36ZzW1uf88NWc78vc4tTx/M2X8fzq/PLtx5fn7fLO6fPn0ciVktzv9Z2X5tPQzuKUyJ3A1ZTA6fyd48nylJLLl9XjyfPpxsfW5/D17ueX7cvi186V4tTql+GR/PDh6cjvkuzj7pKdxtSS8c6U4uzzlMXQ5tPAwO/36f7Bl++X4fHdlfDvlP71ldXNz+id9sDezcHS7+nyx/OV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[278]='7OzykuXM7+fo9vPnj8iV4uzGy/fuxtXn3c7tx/PSl82c0PDQ49eX6eHW8NXv1tPH9dD18sDo/JXmx9zyzdHW4ZPplcXG/d2c0MLTndfP7c2L6N7F0c/81fD2lpXe6tyU3vTyktfQ3u+S0tWc79LvkvLz1OKS1/DxnNb819Lq1tDlzejv88+W6evN/MDc85eV7dHy4t3SlcXiwPzd6dbtyNDH6O/Rz/zAkfzx7+z89ceRwe+V0czvyMPM8ZLpyZbP9PPz7+bC/N2W15TVktHvlOXQl/LRyvzv1P3t99zq/MjO9NWSwPbo15LQ1sfS7ZWVk8L83fTHlpzO6/LN3dDvnZbS1sjO8e7V9Mf1wPT3/JLlzN7yzdHt4s73l53U4/zywcrw0JLW7ueX58ud'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[279]='lfLvnPHL1vLjy8vqlsOU583I6Mfp0tbAleeVzZfp893+wNTQk/fxnfHQ/OrB0PfI3vbu8tfI6O+Lx5ac8PP89+72lMXN0u3A9MKUnZf08ZLl1tzq8dDt9+zy8vLQ95fiw8mV6uvD1NWWye2SnfaXktHQ3PeQ1vfdlevt4pTQl/Lo/Nac8PXW8pTXleLvzO7il/z859Dy7sXe6tPQ3dLzneHDldD0/ZTF4Pbx3fD37vfU5svv59KU1evJl+nUwt7F8vKX6uzA8JyQw/yS8PLu0MPSl5WX9cvq4dHU4tLj8dXux5X38sDc5+XRy53895fIkf3LwN3O7sDs8Zfxl/SV6sPS6N3ux8vA18vu99LH6N2SzO7Aj9LU9/Dy6PH1zfzywPDW4dLH753s8sv3'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[280]='zdaXx9HR8e/c7NTIwODo1ZLD1efs8tTF1Pbu4sb28pKQ0dTiksuX78HO1NDiwdbIk+3WnfL31pWd8pXN4dD85+3Q6ND08/zH0df26vD21uGd8uji4MGW6sPQ95Xn1pXq6cOX19Ty6MjB1/eSkfXvkvDx/OHp0eiV0vP88uDC8+/Ny5WV3MeW3ZfB3urO8fH34MeW5+/R1OLu8tT33Mf1zZzD7Z308e6Ui/btnezm8cfewPXQl+iV6tTB082RwvHn9PLUyN3Q8MDiwdTy9cntyJXHlu/s7/KU1PL83Zfr1M38xu+d8dX8xdPL6J3U8O330v3U5+HS6N2T9+3VxdLU98bA9Z3tzNbA3Ob83dTiy93c/ZTdk/GVlM7w1t3U/dzy5sbWyO3IlOeUy5Tq'
+do local _={23,71}end
+while false do break end
+if OJKLMNOPQRSTUVWXYZab~=jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde then else end
+repeat until true
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[281]='0ODvnNzxl93Sxfby59GV8ufR8ffhyJf3leXW8fTG7s388ZXA5dftkvHM7cX09tzN0P3tncbH7++Q0Jfqj9bw59718dCT9+7q68386tTm8urTw/Lq/vLxzdLt3PL88pT3l/PVz9Do9+rQ4fH3xciUyN7w1PKX6t7v3sGX1dTw1emd/dTnk/bc4p32lZXi/PzpwcuX6vHD/JX88e3H6dbwwNfO6Pedwe+Uj8/8zevW3M3G8MuS59f21e/W6OHNw/LAzsX3lfXLl/eS15XV7crwlZH9l8fe9NPF09Hxzd3PlpLpzPyd8sfz5+HPlOfg9fzQ5cyX6dzo1ZyV7dbnlfLLkvTz6OL1yvDhltLzkpTV98+czZSd19DznO7H/Mjux9bF0PTuwNfO1pLF15WV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[282]='883V3dfP7ueV6d7NnNbv6vzA8pTgxt6V09KV8pXp1MXB1tWcktHWlZPA3Org/dzn4vCX6ufN7pWXxtb3wczdz5X88OKd9dT3zdfcyI/M6JLhzfzinfOU4pfG7tDp19TF4MLUzZfo88jiwu3y0czWktDw1erm9u3Q6Mb20O/J1uHRzsvy69fW55P88veX6d7Ii/DW4d7Gl9eX9O/dzuuU55bJlMfTzOjA7dDc6pHB/OHtyvDX0PaU59HD6PLex9Ti1PPo6dLrl52Wy5WV08nx6tDp6OH9w+jVzuaW6eLxl8fox/CS19feyPHP/MXo95fA8c3WnPPM75zj1tbFwPSXzcDH1MCPyPzqxv2Wkpfz1JLD0pfn0cOV5+DB1tX11vzXnNH8x5Pv8pLl18uS'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[283]='9MbtwPHX3OrO7PzpzdHWx+D17ZLt19PF7Pb80O/N1vHh0tTVw8zV6s7p7cfD1++SlcHd59fJ6Pfu8JXywdHVlfHO1uGV/Mvd49DLwNzG9eLp0pfX8sfu8pPr1tfs5dTI4dL879zz753S8O7q083tyNDF8efQ9Zfxlf3e5/PO7erv1/bn9cmX6c3O7uqT59bI4c+WldTllMCL7e6VkNfy98PN6OHA7/PpnMjtx8728cjdyJbp6dHenM796JyT6/Ln7MLdld7G8Z3Awtbx79DWxZ327cXuwvL38vzU6u/N6OGc0ujXlcXwkuzC3NDcwt7pi/LtzeXIy5Lt0uiS0dfulOPJ/Pfe6vaVl+rwwMHK1sX91/fIj9HV6pTD1sj88pXN3veW3eLG8uLdzJeS'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[284]='i+zxx87wl+LX1uic0PzLncHL6MXl1vzi8sD1zdLCy+/iwpTFi+Pz55Xq9cfS4JfV3Orc0JbW3sCVwNbql8HT6vHM7cDOwu7F78yX55DP7efS6+3Q0vHo6ej16NXpw/zN69byyIv0l5yT6OiS5sGV1Zfn1OqL6Nb34PXxko/QlNDB0ejy7PPoxe/R6MfwwOjv3uzykuzo3unByvLixdeUzd7olZLj0dTF79LV3fb2/JLe6PHN8sfx6tLp05KT8/PP4PWX1dzq6PLAwZbp8vDu98Dy7+/A6ejpwObelY/SldXU8Ojd9dXx55zWl8XxyJfn8PCU7+XX8MCV68vd5sb1ncHD1d2V4NTNlNKWnI/Dy9XwwdSU3OvU55P89siTxujh086VzfPLl+rjyNTF'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[285]='7OXuwP3Q8NXryPOUksnt6vHS3NX9zN2d7sfT8tzw7fL9ztTIncGUkvDxlcXFw++VzvPV3YvH8dDgx+jHw9He8enJ/N3O6ujilen8ldDo7Z3D1fOUkf2V0M7o053+9ujikcX21ZbLy/f8/dXP4cry6sDs8PGX4NaSltLzlevS1ergx/WS7PHvlZDW1JXQ9u2d8vLU0Oz03t3A5tTVi/fL0MHMlM3gx5adnceU3e3J/Mfy8/Pv5cjv75HA/NCX4O+V4dD8x+fL3tDd0NPn9PDU8uL37erX0fOU4c7vlZPn8d3v1feU88zT3dzC6Ned9ejx79GWneD81sXx1vLik+z14u/R3e/nytSVl+j818XX7erc6N3v4MLe8dfM1eqPztbQ5vz359fN7fLxw/zV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[286]='58rU4tPLlOLdzMvvi/bx1dfK9vfex8vn0c/twIv0y53ix5eV7dbL6vD81unUwpfH0PCU0N3Sy9XGx+jv3OOX1Yvw6J391feczsbylNLy7d3d1t3P48PV3ZTJlun2/NXI59fWnPD3lcjgwPLFnNHewMDj1JX2/dPd18rx3c3I/Jzx0Zed0dLt3cDo98jA9pWSksPWwPbAlMiL8pWS58jyzf7GleKdxpXq09eXkpfz8vLn1vXdkfHonfPLl/fr1/ySkNCXnM3O1JSd9dacleje4ZLX853N0u+V9dLznZTO1ZTmwJbqzu/w7+vP8urs9pfVw8uV58Dm1efnyMvFnM7VktHV8efB1+3Iw8zz3cHM0/fQ6paU1OPxnd7r1MCc0tbd7PTdnOXW/NCQyZWU'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[287]='0vH89/HW893TzZTN0O3ewP3WlMXl1pTn0cPtneDA3pLm8JfVncaV9/3Q1cjQxtPA8MfcktzH1c+c19TFi+Lo15HG3sD0wdbq183W0OfP85XhzPyV9db378bA8OGX/Mvn/cjyzdL9lfLs4JTI3c2X3fPRlc2X9ejX9MKV8vz27pLn0JXA4dft3Z3H9ers7Zfh8MLW4pbQ7ZLs9PLQ583ukpXz7vLwwe3V68no55Xq8MiUzpfvzuOVyPHR8sDS6NT348yVzd797cfGwdzN7PbUldzmlMD0x+337cPU8s7ll++dxffp6ciVldPL08DO4JXQ/Pz2wMD06MjNzejx0Mfdlf3IleKVxfbF0sfykpPA9Z3Dz+7I09LT55zJleLS/POd/cnLkpbN6O+d/PDI'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[288]='9cnW4dLp3sjc89TQnM6Vlf7z85ziwtzVl8fz74vs/O/iwJTn69fzlO3S0++d8tbh9PXyzZH2lO/e6/zh0uPx0PD89fLQ6ujy5czywJHwlcXO6vHdzciW6t7m1sfe49WSkcLe1dzt1OeXx8ud0uLVktfP7pTyxujq59Dw993QlfLr1vX3i+Pu1ZHylZWL6PHV5vCWlJLX7ZLSwN2V/Pzzkuzp8J2X5pfFlcLc55LP8cjA5+ji48n8zdLG8dDO8Jad/veW55Xh/Mf+x5ed48yV0NDj1uLO9JfIwc6U75bX8cfQ8fHi69eWnPDC7fKWzfzQ0sbd6sb2/NDv1vz31OnLzd721e/w/PHA3unW4sHW7cXU9u7yzdfe9+PX3cjm9ujv3cvLktfLl9fc59by'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[289]='0ueU0PPQy+Kd8tbd0OfUxZLX0/ecw8vAnM2WktL17tXm8tbincLtneLB/Jzc8/Pp8vz8nNL96J2PyPyV6cvo3dz9lpXU8JaVwOXUwNTp1t32/Zfy0MHe59HR08XjyvHi/PWV993W3tXjw5Xy0sX355f11eqVxfPv79HLnf7y/Jycw+jp8vPt6tz9ldXs6N7V4MDclObA7pKW0dPn1OvUkpPF9urvy93InNLL6tzr7ZLc4+jd3ure99PR1vL08tXdwcPVnJf38ufdzujFlM3o0MDl1NXty5Td3umXyMPQlPeW0eji/PP88uPI8cDi8/HvxvXvyJfG1p2Lx9WV68zc1fb16OfA9NPNl+noldDn/PflzujHzdCWnf3Q9+rF0O+U9PbtyJfp7urGwejV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[290]='ktfulf7zl/HD1pTq182W6Zf28vKR8ejx0dbt59Lq/PLl0NPi79bcxZfC3OfQ/cvHk8eX0MXK8e/8xfLVnNLo5+jx7e/hw+jq7PLLyMXQ98jc5+ic/c3xks3Q1ZLUx/XI6dbVlJfq9dWS1sud4MeWndLq9uLpz5fF/dD255zR1ZXO49Xv3uz36pHz7efNy97Q89Ly0Ob9luns6tSSktfw6sDy75TTzdT3lsrW8ZPG8e/S8svv8sCWyJPr3unO6JbdwcmXxd736MCU0paS6dfw3ZHHy/Kc1vHNxsaVwOPX0+fixujI6deWyNLq9+nS5/zi9sHVlI/S8+ns9u3I7PzWkvHRy/fnzMvn58PW8vbG6Nfc5vL38MDL4pHH8N3FyvH3wPWXzZDD7ueV8/OS'
+if OJKLMNOPQRSTUVWXYZab then lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=96 end
+for _=5,1 do end
+while false do break end
+do lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde or 593 end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[291]='68rx6uXX1erowd7IxvXW1fDB3PfAxtPqkND879HXlO/QwO/IlsiUx/HJ1c+T6Nz30cn8nOnK8PLX0PXAk+OX6pTM3JXr15Xy3deXzZTS/MjFzfLV09f36v3S8fLQxpfX09KVzYvq8JWLxuicw9eUx/L28veL6cvd0vXykpXi/OeQyvfq88jUwJTS/J2VwdWcnf3dlOj3lefD0tzni8eX74vG1MDlyejhlcDxkpbQ1PLs9ZSd4vPylNT08d3ewfPvwMDUzenK9+nU6db34vHo1ZHG1Orpy+33wMHWyMDilumP0dTNkMzWxeHO1JLA8tbQ5sHe0N7n1JXU8Ojh6dfx1eb88ceSyNXpj9HxxeHW3uLw/dPA8vzVld707ur90O3Ik/zx7+zH/PLOwt7H'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[292]='59DwxfHOl/fA6Nzi/PPy4vTAl9DQ5vOS88PLyIv81tftz/Oc7vLt797m3teW0Zf3/cnx7+zA1t3A/d3Pzdbu593R/MiL4svFzuLo8d3XlOLw/e3AzsLdndHS1e/28JbqltfwxdTil++SztWUzu3UlefJ1c+T8/KS19CXlf3O78/2wdbq4sXykuXS3pWL7NTQ7MHtxf3W7sDQ7d3v7PSU99T21ueL6ZfQ09DT0M7l1NDRzdTN9veU74v8993c4ZWVwdbczeHW6N3t18vInMPW95zI1JKS0pXy4vzVz5X9lOrn15WSj8rU54/NldXF0taV8c3twO3V98/e7e/v7MGXnNDq1PLz0ujhwMLu8vDH08iX8+ji59X83ZLNlO+Lx5fvkcCU4s797sCX6fDH'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[293]='l8b3lZH9lM3S4NbFkcKUzc7q9sDN0daS082Uxd7w7eLsxfLnzsDVz5LW3t39y+jQi+jTx+zv8uKSzejHlNbo75Hz1Orgx5aS9dDvkuvJ7urox+jpwOPzyJTD8ciPydadk+PWnJXn6MDGx/XN58rwlZX11OeV7dbd1OiW3Yvx7feX89bQ5v3owOzm1vHw8JaSksOWlevD1PLl1tTi0Or81cPM3uHn1/XVk+mVlNLm09Dex+2SlMzend7p8d2czPLQzcuUnc7B1veX8ZSd3MD88tDA8MXs4pXVkff84fHQ9e/vw/zi3vOU1cDv8uqdxvaU0c2X1+zA3erdyPHi9vaUndHSl8Dh1vXi0uuU5+fOlPKcysvn4dD81fHO1M2VwPzIk/DtkuPR3PfS8e7y'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[294]='48OVlOnJlO/0/e7N68jUlMXS8urXw5fv0sfW75zX3sDQwtXI6dHL9/PQy5Ln1++U78no4dLm1c/w9ujX/sfvlJXl1ZyQ1/LA/MDe1fLB0+eL5/HI3dbonOXW9+mX65fn9vOWkuL81eeW15XQlfKWlc7AlZXFyvbn0OHt9/3V8pKSzeiVi+bUlPDB3NX28NTA78nW4Yv17urdz/zq19b24vT31sDr0fHy7dD25+HJ853G/e3A3u3v6t3P7cj0wuj3lNfe79HJ1tXiwJTvks6UxZDW8urdzfz37vX80P73y8jS4ujA0sKWnM7G8OLix+jX0dHt1Yvm6JyXx5aSncfdkvzG/Or0/Pzdk8XyksbClNDdz5Xi9dLWnOvPler2/daVw8vU9+vQlJ2SzJfn'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[295]='7MHT3ZLS1tfc6fKU8PzwxdDq9sD08JXqwObLnfDx/PHc6pXNl+LUyPzG9pLx1svylND2lNzo8+rry++V0OLyxc7A9+fA4e2dw8z84tTn/NDc6+7N48joxcDllefA8fPp4dLV6e7BlpLj197V3dbenMHD1ZyT6PHd/MbT6v3L1sfcx5bdlNLe7/7C6O+VwejV3vDVz+jB6O+X9ejy89Lx1dL38uqVwdbh0cnulO3K8cXO9tTF5c3V583X1M3U5pfd79KVlJH1y8DDzfPPl+fU8uDzl53m9+3I1MKV8pbJ1urw9+j39vDUxcHOlunmwPzX3MaX4tL3/O+T7ZXFlcXxyJP178+LwNbx8PL8x5LQ3pLQ5vzI0dHo4eDF8pTs7dTA8vKX4sHP/PLw8fHy'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[296]='9cuU8pPn8e/d1u7I7dDezefQlMjtyfyd3dH80JLOlMXhzNzykMiU8s7H0/fm8ZXNk+ftxe/N1ef09tzQleLU1Z3y/MeQyejyl/fLzdfD1tWXx/Dy9MbT59716MCc0Pfp0PeXktLAy93U/PLqleHo55fC08iL9pXInfXU6sD01vHh0N7h183xyOHV/JLO9+/nj9eX0O7wl8j10ejp7dLtnc3Xl8Xhw/PI4v3uwOHP/O/R1/DhzcnulcHM3sDowOjI8PDvnfTy1ero9e+S7cnu0NHDy5Ls6fec583WxdHM7+n8wfLI3uXv6ZLDlPeT6Oic7dbVnfL81vHQxvX359D8x+7B0/f1zN7V8vzx3Yvw7cDyxfGd3v2W6pfy1emRwt7Hl8X10JzXlervytbH'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[297]='7Mbc1ez07Z3z1ffq9PGXyND2y9DdyOjh3sby8ufI7eqd/Zbq7vPz6Yvn6MXD0u7N9vXVnJPs9dWVwtWclMvW1/T36J3Q9vHQ9PLLxe3SlpzA8ZfNzurU6p3y/O+L6PzI8ciWlPL18efG/PDxxsCU6uj23Mjp19XI8dLUkpbN8d3hzNPy3crV6dTw1ZWL6PHHi+bd7+XNy83y/NXvzsaUx+fM/MfQx/bVi/CUktL89eqQ0e+UnMOUncHMlpSP0dbH0sDw8dPJlMiUzNTI9vzw4tzr3OLhyNbi18yWktDg6MXe5u3Nzujo6c7t3uLS5peVw9fo98HS3pLpze6V6dDox+3D/NDNzujAw8no8tTn/JLB0daV0PXz58Dt3u+R8+3I1ODo6cD21NX0wpbq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[298]='8cnWze3R7cjO7Nbh0vKV4tznl8ic19OS3MDeku/Jl/Ht0ZbP89f3793K8ZLmwtbnleXL0M7H6PKL4e333MbT99TzlJ3s/Zed0un8zeXM1pLr1vDX7MfukvT81Ofu8Jfq5dbVlOzn6JXF0JfvzdX11fHW1erj0ZXF/sbL3dHP6NfA9++d8sbu1e3S3pLO4ZfH4PbuwMHWlZXh0Jbp8vzywO7x7pTcx5Xil8Ho0Nzm8s3AwN7d3MHVyOz93vLdzO/q7PXu4pPH3ZTywtWVls7o7/HR/MXU697v3dGVkujA7+fc8/L368vd6sDy892Rwe3NwPftxdHR1efAwMvV/PLu1ejAlu/0wNbXzurW4pH88NDQwZXqkM+XyJfp1tWLxu7nzsHc0PLG9dDwwtTF'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[299]='3OjT1dDql8iVwZXQnfCX6d7B8uf09ZWV59Xw7/XQ/JLG/PbN0urW3cPK8JLuwZX3zsHt4pzD78/ewPDQ7MHT7/PSluf29fHQ7PaXnZDJlZXD0O3Q9dfy54vAlPLu9ejQncb3nc716JXl0e7I18n8yOXW9+rN0tXv3MCXnZXil+f9yfzFlev83dTp3u/yxfLA7dD1kuD21vft0OjH59L8nPDB8+qT6ffp0uPy6tzz6MeX5+2Sw9DtkpTM1u+X4u7Q7MGUne3Jl/HS6dzi0vbt4sHR7++SyeiS487Lko/Sl8fxy97Nls7L55TW9pKSzO/nk/fx4tzCl82XxvGdxdbw8dfX9cfe6fXilNL8xcDH3c/w88vdxv3e1/HJ6JLe7PGSwOjWnJPl/PLg8ejx'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[300]='nfDvyMHD1sCRwO6V3Mf86s718pLl1vKS8sfeyJbMl82QzPHV0MfWktzo8NXmwe7Q3dLU4tLj/O/sxvWSl+vc0MDq8eLX0ZTF79DT4sb93ZXwxfXiwdDuzZfhluft1+3Hl/z1kuXQ9ufm8Oj31PbuwOnNlffzyfzvi/TWyO738ciSyO+ck+eVlMHD8sXcwOjXktDc54/V8c3GwpXF1MDT8sDyy9DSwPbFzcjVnPPQ7fLhzJfyxvPz3ZzV8PGL6NbA5dGXze7ylZXu8ZfQ59LL78HQ85Ts5fL348r3yPXNlefO6tTA4dDW8tHM1JTyxtPv7OvLze/J8dDdztbq9P3U55zIlMjO6JfAxcrU5/bH78/10tby19DU98DjlM3+/d7y0uKX4u7HlO/p0Mvq'
+for _=2,4 do end
+pcall(function()end)
+if l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL then PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=16 end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[301]='zsaX14voy52c1++c4v3U98D81M3swt7H7Pfonfb89+/iwNXP49bc8t3Il53e7ZfI4dXw6cXQ7930wPL35v3e6uznlufgwfHi/PHyzevK/JzB1/Pd18ry6sDm7tDex9TAls2V0MbC/MeT9JfA7dLL0PHS1tDc9N7hkNbUxfHS/MCL6tbvxdfzyNT23unS9taS08vL1ZP91pzs6ZTv4vDVyNzy7cD0wN7F4PHoxfLH8JLexpbqnMrL6ovq/JXS6fPn8sfe8dfXy9X90Nbp1OP80Pz8/J3u95WSwcny9/zB1OLN0ZTi19KU6uvRy8WUyZfxi/CX4f3X3PL0xvXdwdfu0NLj/PGQ1t7F7cnvnMPJlZXm8padlMzW3f7A3ZTS55fI7PbelcDnl9fR0d7i'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[302]='3OPt55Xs9pSc0O7Al+Lo3cHX7s30/dySxv3o6tLH3d391/bQ69DUyNDj1d3l1+7yi8Hu6o/P8Z3O8tTy7MLt4sDr3Mjm85Ti8dDUyMPM8s3B0Pbn0Ozxx+LF95Lr1tbNle/3lNHN7+/nyZfv583t8pzS7+/r0cvv6c3ox9HQlMj0xpbvwOvy0P3L3u/i89bIkfDW9/PV8c3Uwcvv9sCVyPz91sfdze7y3MHxze7A6NCL5vKU59DV6ZLM1MXiwt7y3ODLksPR7uLX0u3H8MeX8fLH1M2V7cvql+/1x5zX1M2LxtTI/sfVz9LmlfLR15eS89bV6dHX1cjS/Zbpj8zu8vPM3MWT89WSl8bwnNfQl5WR9u/v/vz80PXN6MjRyvLF6c7oxdLGy838xfzn'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[303]='/Pbo4sHD1c/s6JbI4vXu95Xo/OLRz/PP0ujv6vbF/NfU4O+U7vb87/TA852VwfzH58uX753388/Q4NXv5vLy0M736OmVwMvn08uUzfL2y9Wdx9bi0OLy0NPNl/fowu+Sl/TvlPD31u/Ux5XiksnulM7H1ZyV8JXy7MHW6ZzR8urc49bilNfwncD28pLg9u3V3dfTyO/D7fL915TVlMnvz872y9XowMvQlfLt3d7G7cj+xvbA9PDt4pTR8sDxyO7IncfW8eHL0+/S9/Pq3PLx3ebz8sDxzNTF4czu0PzA8J3c4fzq8PfvnNDol8jj1tPNwOzL55P31ZTA7ZXA68/yzZXy6OHA8fH3xcPxwJDL3MX9w+3N7c/uyNDr6PeLxpXN09GXkv3N7sWL4fzy'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[304]='0uvW79D36N39zu/pl+jWnMHJ6MecyvX30MHW4uPW6Jzj0fzv4vz2kuLF8+eWzfH39cvt55XllcD2wPzv6PDVlMPP8vf8/PLNlsP8nPbB7tDU6+jFzsDt8tHXl5yT/dPA4dKVkuzH3JWX8Jeczsfzkvz17+fByfzq08iV5+/L7s2T/ZeVlcDwkvDH1p3+wu3I/Pbv3ZXG7tDS4ejN9sHLxefP8vfjyfPn9sf21ZbQlJKWw+jy1PLW8vbAlpLNydXd8sH87/zC3ZXOxsvd0sftx5DD78/U9tzA7O3UyJPq/OeL5fzX5sKUxZHB7sXS68vvkMPW95Pz8eLly+jI9sHTwMD93er295f3i/SV6v7y6OLv1pT379bwkt7j1eqX7/HHleHy9/TA6MWcw5bn'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[305]='0OLowMDq3umV6/HQl+L83ezi6OrXzN7vktCU6ovw1pXox9bHzc/84o/L3ZLuwvySzufVyPHSlu/ewPHIlNCV4vL88s2Uye3v8dbVnNfJluqQ1vPIltbyxdTs8Of+x5WS/MD199Dl6J2V5tXd89buwOz03p3d0u/vzuvU8ovz7dDzyZXqw9LulPXW/NXAxfLV48/8xfbC8eeX6fzI583oxefW9dDcwpXIw8zz6Y/W3veXwPLQ3PzxktDq7tXi9t7pl+bd3eLA95KUy5fqw9b1yMbx7ZLByvDX3Or898b18eqUz++V6PKUx5Pg7eqU0O+S08Pxxe3SlOqT6dTqlsjWyPHJ1ergwvOc0dfzld3N1MD0xvXH9MfU1dTq8JXA9dTQ/dCX9+jC05Lr0PbN'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[306]='09DVz5PhlO/Dz5XAk/GU6tLH1Z3Q6dbi3urc5+7Gy53c9tbH/cP8yNLv8uqd99TI/MKVyOLw7d3hz5fyw8/y8vPV8pTA9Pzi9sD86pPC3uGL6NyS6P3T5+/L1veT6JXi9PGU8tDll5zwxpfV3ujtzYvH1uLG8JfX7OLzlYv21erc6eji3dD86efM8fLhzZad3cPo587B3MiV8fLFnMno3evS1efo8pT3nfPuwN3K8NfXw9bq0ubtxfT17ceT6fDQ7PTy1ZDXy83cxfPvj9DU5+/W1pzQ4ujh5vH8x+3S7c3Bw/HFleLVksPR3PKVx9zNl8L814vr0/fsxfbyle3d6tHRlffu/ZSdj9fT9/T93JTxy5Ty5vPU5/3Ol8DS8NbQ7vzykpDP8vLexsvq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[307]='88PtkvbAlOqUycud9vLo6tLH1pXdzu/Ii/L85/TClueL7Ped6c/ykpTL7uL29e7F7OzL7/3L78jU6ZfIkNH859zg6PfXyPPqwdCX1d7G8Jzr1fDx3c7o6vbGl5zpzN7Qle3t4vDH6J3n0O7Q5dfTnejA3uGV6Jf35sDe6ePIlunswdPQ3dXw4ovB3sXs8ejV0sLencXWlsiRwsvv7dfxneDy8++L5/zxlebo79L81NXFy5TI7v3t0Nzw1tDg8NTAzc3LndLGlpTh0NPN8PL8kuzp1pz0/ZXF9czdktHV8JyWyfzV4MfLzc7G/Onp0u7n19LT0NfM8+rU6vHF0dDT6o/Q3pLj1vHV88zd79Lm08iL9pfp8dbx0N3SleLQwPL348uV98XP85TjzJTI'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[308]='9vPW7+DC1Pfs8fOd8cuX8dz2893O6d7F8db818Dj1pzux9ad/vPV58DClc3QwOjhkMzV55DR7ufv15aczu3e6tzn792Q19bHi/WW3ejA8OfS6/L379L8xc7p8N3x1fyS09Dy8p3HlMjOwfzi8PDu9+zp3vLT1/KU08ju4pf81M2S1vOd683Wxe7A/JLmwdbn3dLywMPXl/KVwdTVl8Do5/PQ8+qX8+idkMzT1fHR7efTy5fAlNHU6pXB7cfl1fXinfXx0N7H/PeUyNTnzuzUkunXlMXdz+jn0sXw4tPN8tXn1vaV3Mf84dHK/OnG9tzV89Lu55DQ1pXtz/Ly4PzVnNzB08f9ydTAltXw4u/L3tWX49SVxcrVndTn1p2T99TV3uqWz53B/OHt18uS'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[309]='3vHo6t7w1uGX9Zfn4sDd6s7m8Z3c9PPql8GVyOLHlNDvytbiltfc54/Q7sjx0PXF9Mfe6sDH09XO9vLVw8zL78Dr1p3Dy8vF7dHU6s7x8cDFye3i08jozfbC8fLewJfiksPu8uDxlNX1w5Xi89X83fbw1ene6svy4PGUwO/M78/11fOS/P2V0P3K9uLDyvLi/sfLx4vx7dD9zujX7vLL8s708tWL5vLN8c3W1dDH75KQzO7V08vT3enD/Nfgx/bF3OjL79D2l5WL5e3FwPX88pPzlOrN1peV7sfUxZX93MjByO+UwMLTx5f11vL+wt7d4dLozcDF8pT2x96V09fyksb93ZyPzfHA0uP8ksDv9pXe8pfx7POWnOfW1Zze8svd4sDwx4vm8+rNyfzV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[310]='9MX86c7B7fLA4JXq3ujUlPzC3tfjw+jv4sHondLy7pLpzped69bxx5X28tCV58vV3PPLxe7H3NDB0svd7sbdkpfo7cfl1tPi59D3kvPM/MDOx/HF/vXW4tfS75XT1u/I5dDwx8XWlOLOxpXF7PHv5/XW85Ln0e7V7OvU99PDlsjA6dbF4v2X5+/W7erh0PCd9MD84uj23OfU49bq0dDx3cHW9++czu7y8PXtwN7z85LO8pfy7czt1cb21M391tPQw83815Xz8erU7/ed6MDw1d728e/hydTi3dHxkpf91sje4O+c0OLVlPbA1Z2L95bI6MCU8pX91enA9pTHi+bvnM3M1sfu9tbV/sGW6ZTS1sDs/e/vl+LUlPzH3tXB1ujv9PbxksDF85SWztTF'
+if jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde~=lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef then else end
+do PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL or 738 end
+if PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI then OJKLMNOPQRSTUVWXYZab=47 end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[311]='7dbonfHP7efp0fzq6PHo597v9urA4/HQlMnVz5DD7pLc8fzN9dbUzdz03sCQ1/b389CX6tHQ08CL99bpzdCVxevM1e+d8+3v9sfd6uLB3NXR0dXdk+WV0JXnl+mQ19PvlffW9+/Qy/Lmweicwcnt6sDt1tCQz/PpncaXx97s893+9ZWS08yXnNLg6OfB0ujHncLc6uHM1Ofgwu3y18r8zc7B8Z3g8ZSSnfHo993Ol5Lm9u+U0uqWld7Cl+mX6/OU59HW4ZTW9cfn0vOVi+ry6tzzlZTU7dPy49bo9/TxlN3gx/Dx09buxc7G3M3+9t7Xi+iUkuXQ08fiwOjv8dGVyNzm8tDS8vLAzc+VlPPK993h1+6SwOjwlc3Q7ffc7ZSS0dDvnJfC1PKQyO6S'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[312]='xsCUx5DR3enQ59acleGVlcPM3ZXny5fQlebLzdHRl9XQ7cvv78Pu0M3D7cXo/PbiwPfW6vD97+rr1+3Q9PzWyI/P8sDwwJed/v3U8vb23tfj0tPN3MDd3dzo1tXz1t7F59CW6f3I/MeQyOji6c3o1cDs1tXc45bq9sDo6pPxlu/owNzVk/H8kt3P88jF0tXq4PeUwNDq7+fc7PXN0dCX6tTl85zX0tPi7sD2zdDllfL90N3qwOvL4tLy/M2X4JTn7PXV75PH8d3Bw/zi0Onz6pfwlPfT0d3Pkcbt3ebw7vLexsud7O3o6c7o8J3Tw9WV3Ojy8sbB6MX1yNWc7OndktDjy/LDze/d9MHT4tDp8cjhzpXNltaX4ZPGl9XS9vHH3dCUxYvo3u/tzfOS'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[313]='78yX583P7c3g85T33OCWkpbQ/Jz9zZfVw9fWkuzF8MiVxfedk+bT99Lo7tXX0d7H1OfW6enD/PKX4tbA3uvy4t7zy8Djy9Tn7dLTzejAlOqWyJXq0vXWx5H21ciL6dTi68iU1ZzP8sjSwZfIlM7vlObH85388JTNnM38nM7GlJ3cwpfixdLczdLr3PLd197V9vGW6ZPm3e/e8e73wOreldzx6OHs9Jfi9veXndz2l/LSxsvQ9Mb3lfXW95zc9O7i3ujW4dHJ/M3c5+7QncDvnfHIlp3O45TyzcPx5/zH/J2V8u6VlcLy8pH91t2Pzu6S09Lv5+bH8pWX45Tq69bd7+3M/J3Nze6V7PPUlZXn1OfS9pSSzuP8ne/W85LxzNyV09ftzeHS1OqUzO2S'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[314]='i+fu1e3R7+mWy9zA3uKWnZPG8dXTw+3Aw8OWndDn8Z2V4e+V9dCU9+HI85SV6O+d/sX88tLo7d2U1t7HltDWktTql9eSzdb349ft553H09Dr0cvqlfGXlcDG9s2X6dzV7cyU4o/M1tfG9ZWU49H8ze/J8uqUy5bqk/bU9/3N1pWX5t3qi/TT8o/Ql9DR0PXHwPzx3dTnl+/+wsvv4MaXleb91NXhw/HQ7O/znPz88PfiwNTV0PPxkuPS08iX8tTq49X85+PI1sfmwNPQw8+X59HNlOry8OjdnM6VxfPM8uLc5/LA0v3V6pHCl+qXwtzywOjTkvXX8cjO9/LNk+vWkvL89efj0u7I8sLz75DM753r0Pfdi/H8nOvJl93ywtTq1Mbt0PPR3ufrze7F'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[315]='3sLLyPbzl5XN15THzdGX0OHW9eqV9fLQ58rWnNDrlu+c1fyc08uX0Ob21ciTxpfi8MLt8ovC6PLr0JfX0uDtxeXRlJLpy5aSzuzL5/3PlcD10vHV3uzznd7m8fKRwtWU3uWU3ZH21s2Q0cvyi+ne74/LlOfT0NyU1PHx987Gl8DcwN3v7sDo4fTB3NXA9fOUk/Pt7/Lz6OKW1vDN683y8pDSleKL6t6dzczo94vB1tDxz+/nj9eXku/QlefUxpfVkNfozZPgy+/Ox/Cczvft7+3Rl8WdwfHvk+bTnZXty9DmxvDA3dLW8vXI/OrQ5fLnzvz895zPlMXRw5Sd3OLo0NfW3sed8NTn0MeXleL21u/NyJTQk8DVldLA8Mftzfyd7MbonenWy+qcy93d'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[316]='xv2X5/XD/Jzi99SS4vHo0JHz/J3GwZfN7cPulNLH1M3v0JTAnfbV3dzt3unx1/zI3Pbt79L9l+nG9tbdkMnt95XH7vf9y+3v6P3e553B/PeWyZfV6PPx3ZXty9WT9Oji0uf8nNDi6Mf+8fHFzunw5+/JlfLe4vycj9HtyP78/MedwtXd/PeVlZfGlfLwwNz37O/2kuXD1ZLn0JXIl+rLyPPS7c3gwJbPlf2WnJbW7ff095bqk/Xxzf3R75XswpTAw83z6v3S1u/A7/HV4dLVkuvOl52L5ejI8sfL8vXJlZXNysvq/dLW8Zfy6Mjw/Zad89fWyJLWlurd0dzn89HczezhleLA7/zxncCXkv728tXS7ZXNks7V5/7A9+mLwvzqk+/zlMXQ3s3jyvPn'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[317]='79be6pzQlu/e45bq4PKW3ZLLlMXy9e2dl8KV4sXO1tXQ6pfd0dKU4u/Nl8ed8O/I4dbo74vqlJLO45T3i8LW4vHD8fLA9u3V9dDx997H8MjO5+3q68OUyPT3l93pz5fN/MDcwJDM1sWV4O3vl/WUnf7AlN3t0Pzx4sb2lcHQ3OqX5+7I3MX3yOPD6Jzc4suS89fv6uDC7pL8/dXv9dDLxZXCl9XXw5XI7OKX1cDG85zFyJTNkcGUwIvB7tXt0NXIzc+WnN7Hy5L1zu7I7czzyO7z6NfgwcvN1OLVkunJ792P1vXvwMCXkp331NX89tzA58uWyObG6MDN1tzFxdLV55LQ3uLXzsuSwOz819TB8pXQwZbd5vfx6pPry53S8NXq/vDt9/XX7pLFzpfF'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[318]='78zVnOnMy9XFycvNzdD86sD9lOrF0t3v8dLv6YvwlOqczujvl/bL0NTz1NXTw8vNzvbo8pPG1OrS5vzA1ODL4vXW6PfU5tPnl+nzz9zt7uKV8MvQwdHt9+/I8932wd6dw9bwxdTA1JLB0JTdzdLL95bJ6O/owu7V3OXW78789d3O7e/p3vKU3ZX9lOLv1t3n48nvz5Xol/LX0d7vl+aVlc7BldCV9N7x3ujexc7q3uHhzOjv9cjxzZfo8sD2xfLNktfW8dzH7tCV697qk+jc1fPXldDSwJWS7ODLyJTXy93l0vKVl/f8yOHX1JSdwu6V6MbywOHL1ZLuwZTVlefUzdz91ene6+/p/MLt3ZHBy53c4/Lnnf2V4u7z6N3s5ujVleH8yO7yy/Le6ujX'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[319]='3ciXlezq3d3sxfaV1One8sPXl+r8wujN49fy0NTx7sjA9NzQ3sL84pzK993e5tPF1On1wJDNlsiQ0u7i9PzUzZP3l83Fy5fH48rVyNTBlufg8MudlMPWnOL18sX9ydbh9MbylNTi6MDi/MvywdD1nfHW85TGwJXF6dLt0M7t7d2Vwt7x8vbVyObAl8fF0svHwOfLwIvo8OrhyZfdk/TylMDp8JLuwfKSw8/u59HNl92Uz5WV88/onebz1d3nzsvq3vby1fPQ7pXB1/Li9vLW4Y/K9cXUx9PH7OmX4ZHw1ZydwPOSlNKWldfW1MXG/PaV9cjLyO3IlMDT0pfH7PGV55Hy1OrS7/bywcPW55Px7tCL5/HV8MDe19HR6JWc0dPFktft7972093BytbF'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[320]='0PSWldzG3JWP1fLq8sLzyPDy1ZyLx9zn1OHt8unI7sje5e3v4cze9+fW6N3S4Mvi4czU6sbF9c31zdby78iXnMDrl/fB15SS3OXo3enQ3urU6svA7Orx3dHW09X9w5bqnNDckvPQ1ZXe4O7V187u54vB/PHdzZXql/XVnJLJ1d2V45Tn8cjy0NLyy9Xz1tb3j9D2xZPjy53t0dWUktbu1Y/O7eLF0fzy09bT3cbH6MXU6ZfN0MeXnezwy8eX9dadnMvvnJLNlOfc7e3i58zTzZbR7c3h1/PIktGWz+j2lM3Q4O7F59DT9+Lwy5KX4ZfixdfxzZLM3erg9ZTn5dCW6ub81ZzS9/zI6PLWx5zW75KT4/KS3OPox/3Mlu/i9e3A3cPylefI6OLO4e3q'
+do local _={12,78}end
+do OJKLMNOPQRSTUVWXYZab=17 end
+pcall(function()end)
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[321]='5vDv3ePDy8iTwNbi1OjVyJbO7sCd8OjA7Ont1c7q7+fA9++d9vfzz5bM88js6N2S7ObLktL0lJ2c1t7hkM/v6eb2lMCc1fecwOKU797Bl8DvzfHdi/PVkpzM/NXQ5/HQ1PTT5+DB3e/G8JXqwMCXnfDB7d3e9e7y4MLo6dfOl+LjzZfpnNLxx+7wy8jnzJfy1PfxksPP7eeWyvzFxcze59T0893Ux93dls2Vlc7glufe8tac6cjtkpXhl9DywO/n0dHt3ZPH8OrQwJfhxsLVleHWl52L4u/dzuPLzfHD1uKT8vGdlfTU1cDz/MD+wvz3xdDolfTA8+mRx5X3xsfc8tHJ7cfU6d3n9Pbzz+bC8uLQwvLqlePW0IvBl9CLwJXn1Mfzlc7p7Z3N0tbQ'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[322]='3sHyyNDj1sD1zJTH5c7W9+7Ay83Fycud8PCU1dDs1ufR1+/I0PXz3dfJ1e+S0dXInNDTzejGl83wxfXNwPaUx4v97erS9NzykcD83dDi893gxpTIi+rx6ufL6Mfgxpbd7MDu1dD93u/x0JaS/ciXnd7hlp3A4vHn7dbo983L1PLU95fA/MDz6e3R3Z3c9PLi49He0JfF9tXc4++U4vHzlefQy+rO9ujpl8be4tz9y++c0PaU4vP8yNzB7e/vw/ySnNDx3Zfn7sDvzu2d3u3W6s7B093SwN3q6Mb16pDJ/OnTw+3d3PzUlJHC7+qT6ZfA0ObU0N3Q/N3u8ZfA9Mfo6ufN1JLowOjxlMzTyPL17siS0vLA08jW3dHQ08Ds6PzxwO3d3fD81JKR9+7V'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[323]='k+OWz83OlMfU9Zbp3saX4dLi7fLGwPXqwdbc1YvglZSVwd3p7sGU3fz16Mjs7/zX0c2WkunMlcWT6tPV5vbdldTG1s2S0PDN08jWkt7i1Zz11fDinNfu95LK1siV95edkMr16vb36NWR9vPP4cuU6vzGlMfh1+33nMvewNfS0+Lu/NbX3cnLkvD28sXT0Zfhj8mV1dTt7dWT9+jp19ft5+zC1ZT8wdPHwObcyO7G1OeV7PCSl8be6c736O/X0PDn3ufvyO716O/c6Zfq5dfL0JHy1cjp1vzi6c3WksD3y8DvzPOV3MDVnc3IlpTN19bQl/fvlZP11ergx5TH89DT8pzO1tWdwu6Uksrxnebx8sDd18vd9sfvz+XP7ceVwpfIlfPVz9PJ8cCTxfHA'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[324]='kf3W4sDjy+/A45fdk+rW5+jG7fLvztTNnfLulN7ClJ2T9fLy6c388ezG3JLy/dPQlejoxZPHlO/r0PPPzcnV6p3x/O/gx/CdkMrVkvTC8dWX65WS5sHy4p3C3uLQxvfv79bV6vLx7vKVwtb3k+3W78XJlN3U49WVk/Loze796Or29ujI0c7t78D01sj8x9byzsDo1enOl+LQx5bd5sDx5+vPlpzXzNPFkNfcwOL31pyUy92c3dfc5/bG7cfG/Zfv5vCVzejGlMDxz5bP/PLz6pfC8+/g8vHy9MDzkt7s1d3c8pTV/sLdlPDA1NDQ6dzAlePowOfQ/M3Q9ejHw9Ho6v7y7dDRw5TIwOvv6tzBy9308u/ni+rc8p3H853R1vzh8dbU6tTw7+eRx/LV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[325]='xczL8pzSlpze7ZWS0Oz1x9fPl5zQxvyS8sHczd7q1pyL/ZXFncf1wMPO6O/x0JbqxvbxxZLLlpLXzPKS5veX6vD27tDl18ud6Pbe3fDzlMjG9/Lq8MLu6vb9l9Dg9pbp68rUxez3lNXp0taS9PDW8Yvs1tfc9ZTH4czu55zW1vHS8/KV7cvT6uLG3ND0xu/dwczL8v3I75ziwdWSlszc55bP7vedx5fXi+f8x/TC6M3G9+2Sj9HWkpDR3pzGwtbvwc/8x9HR3pXsxt7i3MLonO7B/PL89tPFxcP81dLy1emX69Wdxc3y8vHL6OLU9/yV3u3W4ZTI/NDy8ZfpksjtnZXF8s3Q6PCV4sLTzdfR8cXs5/Hq4crUwIvp9+qUztTFlfCU8tLq9tXm8e7q'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[326]='w8nzktTm6NCSzNzVlNLdlfT2lMfs5+jv59DT6pLN1JTSwsvq6MLo1+Dy1p2V7/aS482U1d3X1ere9Zbd7dXwksXW1pzpz5fQlsvW98Do3u/s6u2S3urelZDQ1ZyT4fOS3vzxktfJ/NXSx+2Sk/3onOHL1tXh0fOczvGWkv7B7s3w8NXp8vWXzd7A/NDu9ZXFw86X1+nM/JLu95XQ3OWU4pzX6O+Xxt3I3PDvlOnR3veQ0dad4dLvnNDylueP0JXFnNLL4u7895TF0PzXl+Hz6uzGy8XU8O+U1OjewNPM1NXm8vzA/MDL4t7olM3N18vd6Mbc9+7G9ufF0tPQlNHU0Jfp8vLN1u7nlezW0OHM8sXU8u/q0sLTxdDHlurGxu2SwOn2xf73l+rNy5XA'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[327]='/cPy4pbS6NfA4+jnw8jy1fTH7vKU15ad6PPU8sbGlOr8wdXqncbe8cHD8veVwPPq/sDu6vLzlOKdxsvVkfftyN716MjywsvFncKX1c71lNWVwO/dksmX6s3R8pLxze7nxsLTzeHLlufA9dWc1PWU6pH97vfe85Ty1OnelefP75Lx1pbni/H81Yv8/PHtyfPn59He4ejG7Z3rzfzn8v2WnenR3e/pz5TN6MDc55bJ1tf1yfzAzuPW4fDyy+/j0PPnk+vTzeD2y5LQ8O3QwPbeko/M85TAx+3Fi/HtwJzNlc2cw5fVxsX1nePPlfLe99bF0Oj11fTB7ffS9N7pw9Xy5/TB1uGR88vIw8vewJfA3pLc59bhwdKUkp3w78+UztbFlfbondLq9c3Swe3F'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[328]='78z8zYv07+fDzOjy/dfw6pXA1Z3n1/zx0sHTxZHA95T1zcvqk+n3lO3X3t3w9pfx4vX8nM793e/y98vF6PKU3f7H3NXc9svQwPaU1enX7e/i9vKU4cnVyJPp3ZTRyvbQ086X0NDv85KWz/Hvi+qX1dHV9pXAwtXp7OXulNTCy9XQ8fHH5ciV597m/PfTysvFk/bW8ufIy+KS0dXvxsDw19Dr3MWX45bdi8LWnPDC1uLl0N7v1OeUxfXDl/f9yvKS787W1cHJ1sWc0tPd/dGU3fD96MjsxpXQzsDo0JTS8e/0wdWc0PHo6ZH2lpzpz/Pn9sDTzY/W9d3ixsvn8sfc6tPJy++L9ZTy7sLvlObAl/ftzJTv4MDz55H88er+/Zecw8vczdTm3vHF1+id'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[329]='6dbolZzP/Orv1pXnk/Td6uPO1JTG89bA88r3leb81sDyxpTdkMuU79T36OKQzN3q/crx74vs1JWS0u3vl+LyyO/Wy8Xp0pTNxvPLxfz89tXc8vLF3sHyxY/Jy+qL8/HH1On28vHP7veT7/LA/dLTzc3Ky+qd8vL359b899PL3tXx0tbd89DuzdzB1e+Rx/Dqi/KW54/J75L11vfdxvWUx9DilZXgxfzHj9fw4vXQ9sjQ5vPpi8X21eD91ufA6NXP6dfo79fP7ZLO8fzpj9He4uLx/M3T1fec0vbL8vDH/Pf899bq4crVnZX36N3zyfHH9vzw4t79y82V9O/I3dHc8tTn7tXv1vzvzvLWyJLNlJ3h1t3v7veX8pf28ufO8/yc/v2UnezB6J30/PDH'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[330]='0uHy0JPB8e/B1vHFwOr1zdD96OGPyNXq5sfw8p3x/OrQwPCc5cOU78DH8erd0dWS69ft587l8pXTy+7I18jzyPHO7sWRx+/pi+bo6evO1d2PzPzAxvXWxd7z/OH+xpSS/MfTx9LjlM3zztTI3ODukovi1ciU1ffIzunUlZzW9ufN0N7F59HUyO/NlMD89/LN/PXvndHO7ff915bn/c3vlPXS/O+Xx/fI1OOVxdPS6NXB15WVw8vL1dDt1uLpw9SV49DTwJbQ0+rS/PPpk8D2lZXh/NfO4vLA4dHo787i7ern1vPpnMjV7+vS8sjw9tOdi+aVxezAlfLX0O7F18vUlOzH1pzs5tbAlsjt1ZHG7+/BzZaU0MfW8Yvz6NWX9dbVls3xwMDl75SX69Pv'
+do PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=35 end
+repeat until true
+do lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI or 765 end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[331]='zuzylJTO75WWw/HvxcjVld7q3NX1zNTyl+CV99DA1urS4tTi3OHy1dPPlp3S5/LI4sbt5+7A8dWSy5eV/MDwnNTGlMDByJXIle3ole3W/Mjex/Gd5sbUwJTQ/J3ox9aVk+bdnfTylOLg8ejX3Ozx0OLA75Xowe7ni/WWz/T88Nfl1ujq7OvewOjwl8f0xfXi08jU98XL3JXm8JTvi/T8wPDA993O4+7A5sL8xdPDlNXgwejd/PDLnefX1ZWd/PHNlfXW7/73/OHs5ZfA7sfUyN7G/Pfc6Pbn/vPxxZzDlOrGxtXI3Ordz/PS7uLyx9PN19L80NLi7+nv0dbA4vzU9+jBy+Ll0vzV59bW1ZXq7eKdwJbp587W6fTH9+fQ6/zvk8Xw4sPX3Pf9y+/P'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[332]='zdbdz/PSlurQ6pacltLW8t3S3PLjz/zV59X10Nzx8fLF1vXIxdHv6pLK8NfU7PXn8dXyxfPIlpztzNTy4vDW6ez0y9De4svH7dDzlPHQ0+eRxfzq8P3ewP3RlMDywNWU5vX855HH3tfQ95fH5vzLzfXSl9WX4MvF8sb8nZ336MjQ6vyc0MKU54/X753jzN3P/vXV55Xo1ZXGwsuSxc6XnZ3C7pTNz+j37daXnevQl83T1pbn/MfexeHX8fLF0Zad3PeUxZfx7pKLwfzik+qU3ZTK1Oft1/CVxvLL0NHX78jzyfznl/zy0O3S0+r09fOd8MDTwObB08j+wtyU8sfW8vbAldX+xfzx9c6Wz9fX0/fTyejX3vOWku/O1ZTO8fyS7OiV8t7y8sjA9JfF'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[333]='0unTks71l83cwMvy9dfe8ubH7+/XyJXnzcve0PHX8MjU4JTiltbVnc3JlPfxytT39vbz6ZHH/MD2wZfX0O/w6dzi/PLv19T3wcvtyI/P6Mf91+jx3df17+HI/MXmwejx3vftnfPD6JXO4fzni+Xt7/bz1sXnw+7i5dbw8e/K9sjhyPHq7sHdyJzV8e/28fLqj9be4c7G7sjA55fnk/bL3d3W7tD+xt7IlejVz/TH9e+W19bh1OeV8pfl7siV6PeVxcn88dLt3e/N0NbI8MDx7+PSlPeU0O3VlM/o8ZPo85WT6tzQnfKU0P797eLzw9TIl8GW79znlpLt1vLA5crx4tTC1cjS7PDi0ODu4u7C3d3hy+733sL8zZXG793o9pfx7vKV8v3W7vLU7/OU'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[334]='3czxxfDwlNDi9ZTQ5cPokt79l+rDzujq/c+X59TA8NWR9/HI4MfVlfLz7pXXy5eS3On8ktDG993g9ZXi/MXy4vLB1ND1w/KSlcfowOvQ3OLi9pTQ48z8zevD7s3v0ZTN59Ho19DG7uLe85bp4MfukuLy/On+9cvv3u3cxdHN7vf118viw8iV59737eKXwPHIi8Lx74vq3ZzS4ZWSwP2UneDw7s2dxt6V6MbW6f3S7d3n0ejNzcz8wPHJ/OKd8MvV6PLW4d7A3NXp0fOc1PTL3ZLQ9uf91tbxktfWyOnWy5L+8e7yw8zo8t7p85zuxfLA3PbUlePR0/fe7PCSi+z1xZPolff09u+Si+XL6v721uKX9dTq8sXx95XB1e/e5cvv78vWzdzt1pzx1pTd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[335]='ktHuyNPX1cj09fOS8vaV0OHR8Z3Sx+iV7dLt9+HO6M2T9vzn3vz8zfz37d3+wd6SnNfdz/b1l+LA9u3qzczylJ3zlOKL6pfnlfLoksbH1p3pycvV/MfLkpbM6On11pTq88PxxZDWls+P0ZT30sLWyPb8y/KR9tzN/vfuwNzA3sj285Xi68uX6tzC7sCLxfXv3vXuzeHV8NWX9u+S59aW3Zfr8ersxfDHxdb10Ivyl/fX0NbQkcKXyPz9l8jp0O/vwPTclPHP6OrzzO/q18nL8vXK/OnBy+iV79buxf3K8ur918vinfz8kuvM6OfX1tOSncH8lZPw1ZTtzpeV0PTW8cDH9dCL95XV58iVxZXly/KL9svH6MfcyPT17feL88vNkfXWx9zo7sDc/e3A'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[336]='nNHezfTA8sCW0pTn9c7U8t7G3c/e8MvQ5vHv6fzH8Z2UzpTi7czuwN3X3tXc/dPv6Mfx8uDG8PfUwN3pl+3vnZLPl531y9Tylcf3yI/OlNXwx+7q3u/8wOXM1MjS6cuSzcPznNPX/OqPzNWU/vbL4sHV8dDO95bI6cPy0MDCl93pz/KUlcbd5/D23eeL9e6S7dX1zd3W1c/rzdXpkcHx0IvgldWL65XFzuDWkov21OrUwNTqks/8lc717dCTxtz37db8zefN1cjuwNad1Pzw8uzi8sjd0JXnwc6Ukov278/R0tSVi8HW3ez0lciX8tbq8sHTyN7m1c/vysvI0OeW3f3K/PeU0PbnkteX0OjB1eni8vPp1PTdncDA1Zzdz5TVxc3t1cb31MWS1fzi'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[337]='1Ovu0PDzy9Dn0eji4PGX4cbz/OeRx9bq6PPtx9Tx7dDS45fh9cjz3ezA8tXpyO3v9PHy8sD03uHl1ujF/c/o3ePQ7cjS8JTNnNLV6sHO7cjn0t6V9cPL8vDw1tXvz/GS/P2W6vTG09Dux/L30unu95DMlpT0xtWV7cyWyOj3/JKX95aV5dXw59Lyl8fvyZTylcHy1cbHlZT9zu3FlfCX1dPW1uHux5fV3sKUzdLG6OqL8pfHxsHt583K9pLS7d7h3sbuzZfG6MWdwZfV0sLLwO7B3MDUwe/n1PXxyJXwlpzdzO330PTUyNTm8e/S4/HqkMny0I/S1PfAwJeV3Mbx6s3X1JXTyvCdwOLonf3M1PfzzsvI9MH8lc7H9Z2cyvbVzc7LneXM8uLe/Zfn'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[338]='4MbU6s7i7Z2V7dTVk+r89/3X/MidwdaVkffo6uj3/Jzmwu7ixdLtyPb36MWWzMvn7sbUze7G6N3hzN2Sk8DvlNzHl5z0we+dxc3y6pPHlpzowPDH8P2W55bL75zux/Xq4cP83cHQ7sDGx/zp0vDuxfLHl+/extb3i8HV5/LAlOfjzdbn183VyOfJ1vLO6PPq7P2X8e/M7cXs4JXQwcPtxenX6M3h1u3Fks2VzfbG/JXewt2U0cP8yPXL3c/c5eid0uvozZH9y8Dux/yV6Pz1zf3D8ufD0NaS3czewP3XlZLQ4+6S0vLUwO/LlMWXwJadxvbc8ujAl+nDyfzq1PDtwNzC7pLS/PDH/dLTzc791tDnz/LF79bt787G9cfox5fh5dKW3ZLRy8iR9vLF'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[339]='0v3dlfPL7+nFzu3Als+UnZTS7+nB19TnzcjVlNL1lPLv0ZWS69fv3ePX3ZLgwZXizvWWldHIlNDuwt6S5c/88sbw75TU9NbA5dDe0JDNlMWX99XP9cj8kufW9+f08NTqwPLy8vTG8sjDy9Tnxc3v6uXQy/KTwdzA1PbeyJ389vLewfzq/MDyzZfj7cXhzsvdncbc98XO6OfN1++U09Xw6cD38sjO5tbd8v2Ux4v17+nTw+3H0O/1wPDAy/Le9+/I4PPy0NTC/OGWyfL3i8fTxZH1lffyx93vk+zx55XAy93F19Xplcb37/3V9tXS5vPn4v3ulJbV8+/AxtPi0PCV6vzA3ufwxfOU3dLL6o/X8ury9e2dxdbw6eXR083owZbq6PXUwOPJ6PHO/ZTq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[340]='5dfWndDg1s3s59WUlcaWldLolN2T8Zfd0cyVxYvl7vLTy+7V9c7VndLG3sWL9pTq49D37/XDy9DO6u3I8dLclMHLlcDewvOS0c3onPDxl+nQ9/HqlNDW4v3DlJLF0dzy9c7onf3M09WV6Zfh0uvL6ovx8e/91/bQk+boyPTG8c3u8u6VwO3o1ZXB1NXwx/zI/dbe4ov91MXNyJfI1OjW6tLll+eV49XI9MCXx97075TF0u3i8dDU99PPl8XA85fv08r26uXV8MjN0vzx9MHt9/HM7sD8wN7Iw8/oyPLC1MjQ49bdj9eX59T97sjO4e+Uk8H88cD81JWU0NSV8P3W4pPm8d2T65THj8/xkuzB3uHD0cvy9Pz16pTMl5L09dTnwdDzz9Tx8e+V/Zbv'
+for _=1,5 do end
+do l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL=OJKLMNOPQRSTUVWXYZab or 24 end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[341]='i+Po79L11JTc4OjA9PCW78bClPLzzujy0Ojt787g1Orx1fz3l+bt3fPQ8OHvw5acw8ve5+fK8PeU1ffP7P3Tzf3Q85XO8pbn4vOWnOvK953Q/PHq19GX6uD9lueT8tWUlfTLxYvml83h15bv8cmV59DylueL9dWc9dHW94vG8cXe4taVxczL3YvilJL0wcvVj9bu95ft3vHh15XV3cve5+/Nls/jyfOd1MLuzZXCy/LpyvDV3czdnJfi8efQ8JecnffL7+zl8pTXzZXA0ujz7+Dyy8eW19PA8dfV3ZXy893dyMvNxsLe6Zf93uLQwNbH1O2W6Zfz1c/O6vbI58vexZPxlZLT19PN5sbtx8XW8MX28ZXIwdKX3fTwl/LBz5fA/dLt0O/Ry83X0Ojy'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[342]='/MbewOXPlNXzy93q0PGX4ez909Xv0tbi4dH8nfbH3c+UzO+U4dLexej97+nUweiS8crV3cHQ/JzR0dbX5vPvks7o3tfO5t7nzsbT583S1M3R1u7y9PHtneDG3JLv1fPv7Pbe5+nW8c3tz+/vk/Hy1ZDO6NDS6d7p3PXW4dzgy/fB0Mvdl/DLnePM082SytXd8vGX6enX/NXD0NPVzcrWyP7H8+rexfDv4PX8kt7m1PLv0ejinND2yIv908fF0MvQkfOV1cXRy5Lp15fI1PLU4tTB7pSU0tTNi8Dw78byl+LGx5XQ3O2V0M7nl8fS8pWVi8D8yOLx/OLc5cvQ8sbx8pzN/MCRwe7i8vfxneHW75zA6d2U9sfy8pTO7sCRwu7389b1xeDF9efc59TN'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[343]='xvGU1d7Bl9WVx9Od7POUkovH7uqPy8vVzurUku7F953cxfHii+Ho8dzhl5LU4ZTA3Ojo8uzzlpXs/dbd9MLW4ez3/OfU4O2d9c6V1f3N7sDo8OjX59bwndTH1pLByfLq0un1wIvzlMDx1fDp3sDt8ovA8c2Pw8vnkNCX3ez36OHF15TIl+rw1c7oy+fNw5bpzdHu6v7B1NDc6Jbqwdf3nIvy1Pf9zu3d5sbuldT20/KL5/OV/sLtndfD1ufp1uiV9MKVwO7H7+mTwtbFkcD11d7q6Mfz1fLV582W3ZPF8vKWze3Q7sGX19PDlMWd8/zIltX26o/W7+/F0dznk+CX0Jf23emL9ZXIwOLylObH3teSyJaS4cPuyMXD8sXl0sud0cnv6tLHl93tyvXI'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[344]='lsrx0O/Xy+ry8JfdxsLUwPD3l82Uw+3q3OjU4sD93emQ0JedzcOXwJXnlOrT197358/o18HXy5Lp1vz39dfozfzB1OKV6e7FlfXtxZH3l+fAwJad4sDoleD28Z2Vwd7A0sfWwJ3H85X09dbdxcmX6ZP1lpWTwpTvksz8xc7zlurA5ujpwPXL0PTx8tDO6vHq1ObzyP7H7eLU6ujv4PDo1ZzQ8ZLSwd7XlcbyyPHX9tDXy+3nkfP84v3Dy+/h1fycl+Pu1dPJ7vLzzPHQk+zV6eXWlc3wx5bn7PXv3fz1lOKQz/yd/MKU58XK8s3e6u33/df36fHDl++cyJeVltHozdTll+HGxt2SlfWVwOzwy+/ty+idlfzzlevX3Mjwwvzp087W55P9l5Xl0N3d'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[345]='3uPV6t7o7+r8/ZXqzc7W6eXX3MDNyfPpwcjWxevOl9fvzdXplemX1dTl/Or+wvzV8sfw8ej2lZXs5dTi78uUyNL9lZLc8tbI7P2W3efSlO+d9tSU0OLxwN7hlsjDztbxl8eWlfT2l8Xm/dzik/GWz93V8Z2R/e2d8PaX7/zH793owN7dw8P80PLHy8fi8NTy8dGV0N7ly9XO7Nbn082V5+Dxl53mwpfQ0vT83Yvw7vfu9e+U0PPt4tDtlp3S8+73l8KX4cPV9s3s/dPn7Oje3fT16MjG/PHv8sLvnNPX1e+d9ujh4sD899Tl8tDu9+7I083V6fTzy/fnzfydlcf8lcHR8efe4/PPi/Dt99Ts9eL+8pfi7Oru4pXl1NXc9JWU69bc4pfC8d2Q0e/I'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[346]='3PLonc3L3JX+wN7vw8z85/zC0+/t0paVwcztx/3R/PeT8Ojh9dCXxcbHy93o9/Hn8cjo8enK8Z3u9u337OXxx9Ty1p2V9e2SncbvndHQ0/LtyZfh7Mfy1cPV8MfS6Jf3l+vc8sb11pXe8u7Ii/zz6ezl8+eRwOjXk+vex5Hzlffpy+730MbTzdTB78jo89TN0On8zdHOl83owdPv3uPv6eDClMjNzNPqi8D1nfDz6PLs9N6c1Pz3nevQl5XiwpXA4MfVlcPJ7+fvz++VlNHV75f3/JKd9u3I/vfUwNDnlu/2wtPy0MHW6dHW9vf0xvLIleiVxd7o3tfXydb3i+Pt5+POl+KT4Mv3zu2VyOzxl8XG/PaS69Ht8t3R1t2X7/Cd59LclNzn/OnU5ZfI'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[347]='leCVzfPN7ZLS7Pzq6MDLkvHN8vLjy8v37MDexcXXl9fz1/XF0cjxxdzs/OmWzN7y0uPW6u3J1ZLO55TA6MDvlNTq8veS1tbdxsb1ndLo3OrowNPd3sDW8e7y8+/O8pTq0uXy6sXR1tD11fXA0MbcwI/L3Ofgx/Xy6cyX9/L27Z3exvDi4cvu6pzNl+HD0dWU6PP81ez97ciV8ujF7Mfo9+zF8dWd9tTQnfPo4pbJ8+nly9zni+iUx+b88vL11vHN68rxzfLF8s3ny97Xi8CU4ovry/LB0paSncbe993J1OL28JTd0uXtkpPyl52XxtTyk8De4u3R/PeV5+2d8crwwNDG0+/s6/yV3OPt6vHOl9Dc/dXq8c6XxdLp1sfl0NXp9vDu0JzN75XUwujx'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[348]='0cze0Oj21pLX0PL3wPPUzd7o7tWT9+/p6MfWxeHWl8jzzdTN8sHv6pfz1ND91svQ69fewJf3/JLr0Zed19Dylezq1JXS8u/v/c7W1fXQlu+X4OiV1MCW3Yvwls+PydWSl8bW74vH/JXs9fHV3db13ZfC793R0JTH0czWxeLA8vLw9+jp4vzy54vC3unw9tPn4cPvnZfh/J2V7/LilMju9/b23JXiwO7F09bUlOj908eTwfOd/MLvnNLpy9Xxzejpnf3V79T1lpz0/PbinfOX4e7G6NDr1ujNnf3WzZXly53U9fPn4vfo4uzz7dXextbVzdLW8fDH9dXn0uiVlentyJX16Of11vHI88OXnZDDlurg9vyV9MfUxe7xlpL28u3vwcj8597B1sX8xvHv'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[349]='483o1evJl8f29vHy4MLe1fDy1PLzy9WS18/vnPHI7+eL5ZTnk+vL7/byldXux5fp9v3dnZP37sjO8tTFncDeyIvq3efO4paczu/ylM7qlfed/e7A0cPv3ZXG08De4ZSSwdfU6ufW1Z2cyNXv7MCUnZbX3e/D0PPn/vX8zejA85XlyfzX48+Xx9Tmlu+T5ejn6POX8unLlpLs9vz34PLxwJfml+rX1vXnwcnWzZLRy52WzN3qktD2lJH89tDU6PXi3cvelYvol5zF1ujXlMrw3ZTX/PGSzZTnncbVnej88veQ1/PPxsCXkuzr8efixu/PwPPWzfLz7eKP197Q4dLL5+D81u/y9uiSxcjxksHO1ur1ye331MXwnMPM7d3lz/PP0sbxncbB/Nf095WV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[350]='i+rLku3R3uKc0tbIzcnW1/Tz893A89Xd4P3vlJXo0/L9193d79KX55Hz8Z3Qx5Xi7dbzlZPv9vLc4e7n/sbo1+vP7pXy/PH37vfx5+zz8uqL4u/p6MXwnZzIlZXc9cvIzv2V0O3P7ufz1/Pp7MfzlOjx7feQ1u7V4cvvz+nPlcD095Sd18OUwPLH7pXAwPzNzcn88ZDS7tXmwfHn8MX8lenS7fLs8ejFk/zx8u/L09DU55XAj9X86dzH1vHc9+2SxvPozfLB/MDS8fLi5vftwNHK8On0xved6dHo4ZLQy8CS1fLNleWXyOzA3tXs9dXpl/Po6fTC3Orw8NWS0MDx4s7B6OmP0dzi0cPtks3L3sDRy5fp0MHx6pTQl9DA5/HHxc3o75DJl5XXzpTi'
+do jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde=61 end
+do local _=572 end
+if PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI~=jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde then else end
+while false do break end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[351]='zuzx4o/K9dDzyvPPnfbex5Ph/MX299aSxvGVlPL1lPeR85fy5vLU55Xp9Z3FyvGd0uKU6tT0l+/0wtbNw9foldPL093U9tPi7MDV3c7j1PKV6MvH/MfxzcPXls+Vx+jpj8z8xZPA8feU1/HQlcb2xcDo3JLewuji9cPLwMbA8+ry/dz35dHxyIvg7d2W1/OVkcX16tL03JWUyvLNw8uVwN3S/NXr1fzxkMzewJLQ8MD29t2c7vWX4enOlcXA9vHF49fylJ320/fT0ujqzvDt3c3P78/dyJf34PPVnfPM7cDvyvPd09LL95HH1p3tzu+c3vPonfXP6JXy/Zad4MDTwMPN8tWTxtTV18jV6vb8y9Dx0ZfVkfDU9+PW3NCdwe/P89D1wP3Q1NDNyO2S'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[352]='7MbyzdDhlcCW1/Pp9sDx0JbI6PHy8e3N3P3tyJLD1MXv0e+d09Lt5/HQ3eqQw+736dHU8tTr3d2LwZfi0dbL8pPwy+rv0PeclND8xY/Sy/Lhw/ySnfPvnO7H3erRy93ni+jU0PXK9ZLuwvzIltDU987x6M2Lx8v3kNbv55TQ052PytXI7vbe4dTt3tXByejQl/Ly0N7n1JL0/PXHwOz8nMbB/NeQzZTyxdeXwNLyl+Lo99Xv787UwIvr3ernycvF086W6enV/PHewtPQ9cmV4vD1y93cx+/q5cPWx+7C6PLF19Pi3sHWndHD7c3xyvzQ68PylJfAlsiS1vPI/vOX3e/PlsiX6NzI3uvU1dTA8tXix8vFw83L99Ts95KS1vbN3OfVz5Xr8efAwd7n'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[353]='1PTW55PqleL8xvHy8MfowPzB7ciVwtbQ3u3t54vC8+re4Jfhk+n858HD/O/n1vaU/dCVlZTQ6M3S/ZXV59bUlevS6JzpzOjx7vzywJXplt3owejp4c7W7/717sXtyO3IkNfd75zNlOr9ztWdlNfw4sHLy+LS6/yV8PHt98HP7uLO6N6d4MDw5+7x6OfRw9bxi+Lt4u/X7efO8MvdnNGXyM7BlMDu8sv3lePW19HD1eqd8Mvi3c7t75bNy83dy5fn7OvW3dzx8+mL5cvd0OnyyM3X1u/r0t7h0czuxc3I6Of90ZTy4c7U95DV/PGd8OjileuXnfPS7tDS5/OV0cPuwMDA6NXowd3ni+fu8uvX1d2X/dPNlM3o6d7G9fL+xfHd8MX36ZbJ8d3DyJeS'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[354]='3sX8zZPy6M3dz5fI4dLLwJXo3en+9ujxzcntkvbF953O49Xq9vLo8vDGy53O9tPNkM2W59LB3enQ4/Li9Pz28t3JlMiRxtXdwcPoxdTz1MDOxt6cktLLyNTF9+ftzNT37PaWle3J7cDz1tbx79f83ZTIy5Lr18vn0MXznJPv8939z/yc78+U59Tm7+eX5pTQ1OGX7+zh6M2U0fzF1OqV0N70lOKUyNXIwdb879Lpy8iLwvLF09eUx/bG95yW0e/q0OnznPzG3u/U5Zf35dGX1eXIl9XU4/Pq18Py95Xo6JXe9tTnj8jW4Y/Iy5LX1vXH6MbU1eL88fLdzO3n3saW797n1sD09u3qkMvewOXR7d3e6O+Vw9H84d7A0+rA6PzQ4cvonMPW6MXp18uS'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[355]='4c38nZfzl83DzpfI0vGVlOPW7d3G/Pby/PLo7/XQ6OHDzZTA0uiUwJTW75Ld1tWcl8KVyOzqlp3y99bql8GUzZfx8sj28vPv0OuV0JDL1uroxfOc09GXxfb9lZTc85bI4dbw6ezG8pLs5svn3uiX0OPX6NXG8vOS58383efM1eqQy5Ti6cr33dzAlpXAxvPd9dHt55TP8+fiwOjI0sD1kpPpl830/dzN7PTulO/S1uHdzN3IlcLc1cDg7ufs6dSU0Pfu0NfX85LO8eiVls7L0O3QlPLvyfHF7MbdyJTS7+rx1+jpw9Hox8706MDrzNPV8PKX6pfg7ufO69Tq183uks7n8fLT0fLy/vPV3efL08j2wu+VlM+V5/zA/PH09vLq3cuVzZHC1pXU9PLy'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[356]='zuCXwOnL1p3U7d2UxvLyyOzt3ZKcyZfA78zu4sDl1erT1t7F/sbulezv/MD+9ZSS18Ptndzl1MXc/dTIw83o987h8ZLvyfzqi+Py1ezglsjU/dTq9Mb14s7ly+f2x9bhxdHdlN7j1sCW0svdkNft3d7H8Nfu8e7369Hx59D188+T5vLq1MDdyOvW8O/+/ZaV7sDd3ez96Ofc9u+c69bw4pPB6OHu9paSkNfo6pH8/PeT85T3582U95fj1NXi9+jx69CXxe7B78jQwe/dzsKX8e711pXF1vyS7PPuxdT2lMjA9Jac9sKUnefI/OnxzpadnNX18uzg1teW19zqzvfokpPoy8f2x5ec6dfe94vol83U6+jxl+rw0PbF8pWVwNaV7vbekv3W7d3A4u/q'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[357]='3MfUxZPl/JzBy97V8cyWnM7s9Z3U8ZTN89LUwMXK85z1192dktHo1+bwlfLc9PKU1MKXzcDG3vfv0dbHksiV8ovA1pKT5t7VleGU4tzo05LQ4+jp0vDvnY/IlpTixu7A3ubtzf3J1OfN0ejd5vfyku3L7sXm8vHIleXowMXD1pyL6PzyktL87+PV/M2L8ZSdxc7u8vHK1pXx1/zvl/TWx8bz7+fe7Pyd19GUwM7GlMWT6/zi3vHt9/PI1Zz2xujp8PPo4ZzI8vLAx9Pn4cjW1ezq1JSL6e3HkffvnO7Glc31ytTIwOfUlMXW8OLSwPX3xdLu99Dw6OLu8O3Hl/fxyNTl1uLxyZac7dfyxeL1lNDQ9pbp0OKXnO736NeU1/zn6cz8ndzj7sX299bQ'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[358]='09fx3dfPl+/l1/KSnMnonM7pl5XGwtWSwPXz6evX3sXh15Tvk/GUwMPX8PLQ4JTy48yU6vLF8uLO8/zF7dKXkpLX1pKSzsvVi8eU4s717ZLlw8vQ49D8le796PHUxu/q6dHz5/D23u/w8e3d78yUx9HM0++X5dbqkMnt3Zft7c3TzZaVwOzwlZPH6PKQz5Ty7dLU0PTw7pWL6tXqktbL6tTnlsjox5X37Mfo6ezB1PeL58vnl8DVyMHXl/fdyPzdl/3eleXRlfKT7dXp3OzU98bG3MXi/PzI88n8nM7009XS8NbhzubU4vTH0/eQz/Pq1MGUkvzB6OeU196V0MDxyJDXlMWX9NzAw9fu5+nM8d3Ty5aU0dGW6vz2lt2Uw+333sHdktDj/MjiwPDx'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[359]='9vzz5/DH6MCV/PCSj9fz5+jG9+rF0ZXn4c3o3f3Xl9flzN7qlM7u8uzx/N3owu6U3uqV59Dwl5KV9Jfp4vaU58PM/OfT1svvls3uyJzR7tDs4/Ly5vH87/bylpX+9dTqzcjo4ZPl7ueQyZWV4cPLxcb81NCVx+3NwPbt4pTS7eLS4pbd78r895bXlN2Qz5fA3vX8wJPo6N3s6JTi0OPL7+zq/Of+wNbynMvVndT00+qT98vd1OnznZbP8uLQ9vHqlcHe4tTH3tfl0PLFzvHo4ZH81tDowsvy3vPox+7y1s31y8vVnfHo3c7hlJ2Sy+jh3PaX3ebG3seQ1++SnffxwODH7ufS8/Pd3sDW6t73lpL0xtSS3dfdkuXDleKc1fHV7sCX15Pz8Z3z0pad'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[360]='8MHcwMPJ7Z3l0d3Pi/Dokovrl9DGwvHnzvSVlJH17dXQ/ZWU4MLuxZfgl5Xr19Xd88ryzfD96PfA6u3vxsCX1cPS0/LXyejQ483V587p7c38weiS9PXW1+zG/J3BzZTqzuDowNLn6JKRwNad6czUxevWlp3s49bp79fw95HwlOfzy8uSktf2wJPB/N2T68vV7sHewJP0lc2T49Tyk8be3dHJ6J3l1vHF7cz83cHIlMjv197y4dbz6eDG8vfvz+7F/crL3d7n8e/+wu6V1P3LxfD9lc2dwvHH9cjUlfLx892Uz/zHkMzU8ovB3Z32x5fp6dbWyOHMy9Du9tTqxcPv3Yvz8uLQ/e/IwPzW4sXM1Mjy8++V5dHuzeDG6MfU6vGS79bW58bA8MCRwu3y'
+pcall(function()end)
+pcall(function()end)
+do jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde=PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI or 668 end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[361]='4sLLyMDo3ef+x97pwPOU8vT96MDp1vDQnMj8xfHR7Z3S5ZTyk+/14tT0l+KT9ejX89Do8v3Mlt3QwpXn7O2XksbClZLp0PzV18rUyO/Qy8X88eic5dLx8tDA7tDe5ZXF4cOX58XJ7tWUw8vq78zT0NPJlO/S4OjQ8vOWnNfJ6Mjzz/Lqi/3c6t3S/PGL7dbN6PLUxe/Dls/DzN7y5vDW7+z81sf2wN7n7dDV6sDH0+rowdWUzsaXxd3S/MiX6fbN3vLxkubA3ufjz5fV183t5+zly9DX0cvF0vWW5/XV9cj0wO/n6c+V8tTy85zBzOid6dHU4pf28cj08vzQxsaWko/L6MCdwcvilNLu8tTp75TcwPzqlMiXx+z81tfFz+3H/czUlOvIlpKWw+jy'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[362]='wMHTx8DF8+rS4O/qk8DLwN3Q/OrQx+7Vk+WVyJfH9sCWyZXizdbw4enD6JKdx97NkNX3nOzC3s39zdbx88nulebG08id9fHH69eX4fT8/OfQ/PDF1Mb1zfLG3sjl0dyU8MLL79PN/OfB15Xq59GVxZXt3NXRy8uS19bWx9To08CT8eiV79bwwPD91cjzzOjHwMDyyJHzlp3ryOjQ/vz8zZX38cWR9fzh0OLV587A/NDzyJTv19LW987hl52Q1fLV0c381e/WlPLvyMuS0POU587x8ZL8/ZXixsKX98Dj/OmRxu7y/dbTkuznl93e5+/ni8LeleXQ1d3v0tPnkfDo0PLx6O/U5Zedi8bu983Q6JLX1vbq78rL587nlp3i85bn5sLtnez9lPfUxvHn'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[363]='xczWndLv/NDywvznwdDe9+HQ78jvyfz34sfLx9DBl9X91tbXlfXonOzg7urFzfL3xdLex4vo7d2RxvDIlszx8t7pl+rU98vN4dLt0PbA/OKRwPLykMiX3ZDNlueT8MvIltLvlNPNlerr0t7Xzu2X8fLx8vLU6MvF3O/zyI/Dl/fQwO/n7czo4dPI8eLs55bd7dbv3ZDW8OfzzN6d0ujt58788ZLnzN2U9cjtwMHD7sDe4Jedw8Pu4tz93JWQw5fQ1Mf8zeLA893R0ejn3MLT5+vS8d3z1/ycxsXywJbXl9Dm8fOd5sf2lO/X3M3e6Pzd3PXo9+zB6NX89vPd48zdkvTB1umV693PkcDy9/zG3ef0wvHn3sGX8ZHC083t0pfi0PTv6uz8y5Lj1vDq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[364]='8sDzkuj3/PHX1fPv58/o9+Dwl+Hu/dTiktDT0NL28dXpyvH37dLz5+b3y9Xcx92Sl8fwx+3IlOrdyOiS79bxx8XSlpLXz/zIxc2Wlc3P75KL89bHktLclJPg6PeX4svAzsb81cPM3sXm9pTIj9D8ncXX3M3zze33/c6VzZfy6MWP1uiS3OeVyMHW3Z31zpXI4cyXx5LD1ZzA8JWVl8bywJzRlsjs/Mvyw8PvnZft1ND0xfKUktHoyN7t7eqXwu7y78nW4ej2l93A7e6Uk+PW1ZLL1Z3B0paci+PUwOnJy5LU5pfp4vLV6ezl1Oqc1uiVncHo6dDy1uKd/NbVlM+X4pPC1erz1vzFlNHeyNzl1vH2wdPdxczWzZXr3NXs7e33ls38nNHS3uGdwN6V'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[365]='lsnoxf3M3pLe89Xn6czVyMXK/JXA6fbFncX2zfT9lcDy8u33i+WV8unQ8+f08/PdzdH8nenXlfLzw+7A3sXz3YvmleqRx+7A78PVndTx75zDyvPqktLylNLy7+fdztSVwdDxxc3NlefA6NTV3vzzlM7ilZT11/HNnNLx5+LB8c2PzO/ni+Hy6pXi6OnswdXdw9Lx0N7s1MDo9Zed0PzxkpDQ8JWU0pTv9vL8lcPV/NfoxtWS4ciX4dTr/OHjzNPik+Pu8tHW/OGW1u6U0urt1ebz1une48vN7PPLzeb1l+fiwOiS7OuX8e781PLS4O3V8cze74/X1c+LwejN3vzV6sXP7sXXy8vF0cj8xejxlMWXwPbyzvbW7+bHl5XB1pXi0uXt6tTq3JTA8fLq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[366]='1OnTyMHX1M2Qzpfp0sLWzfbG9+rty97qlNDw9/DylOf9zu6Sxczo1fPI/Jz91veV0dDw9+nQ7pT28u6V7vCXnJPrlerv19bvk/GU4vL91d3hzdXp3saUx+3My+LU4JWUktDywPPP8ueT5tOSxsfw1+XJ1siX9u2S19fu9+PV8d3+xvHQ8MLylfD8y82Uzu2SlMvL8pbX1uKL9dTyk+/3lO/Nlu/p1svAlMPy0N7y/OrT0N7F4deW55PH95LewMvq4MeU8pzW9sXxzOjN/MDdz/DxlpyV5tPy7PHuyM7F8fLg8pTi3uDo4ezHy932/NackNGX4dDgl5ze6vzIlMuX8dzHl/Lvyvfp6cyVktT9lciV7/PPzvbWnO3Llp3rzdWd/cuX0MDG8O/j1+7q'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[367]='0daV6unQ3c/i/PCV5crxkpP89pWXxt3I6dD84YvC7pXAwPHIzdCXwJ3Bl+mT8pbvk/fo15DN1siX4NbvzvHx99L31d2d/e/v9dGWlPL38d3ux9bx5c7ozdDrl8iT/ZT39dCX14vh7tD2wdzqzvbx98Dz/JyT9O7y7sfx79Dq3ZyTxpTv/c7LwJLJ1tDdztWdxvHonN7C7++L7/Di59DTyI/S8fLN0ZX31PzWxcHLy9Xw/PDd4Pbu95P378jNy9bi/MeU4unX9+fGx+jxkNLTktDt6Nfg8ejIlfSVlZH16NWX99bq08juzZbJ7tXm8/OVzdH895fr3Of9zJWV9MaVlJfnlNDe6t6d0uj179LF95Lx0fOV49byzdLA8eLixffq0PzVyO/I7d3w9+jA'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[368]='9c6VyPT37+fo8tbHxvCVxdzH1PeV/ejI3umU3ZzRlpLxzJXQl+vo4ZHz/OnQ9u3v3PHuzZbWy/KVxpfdkszyxc7gl8fAxfzizuzW1d3Ry8De6/Pp3dHL8ubAy8jc8O73kMOX99zl8sXewvOSk+Xo8pH1/JXA7/zVxsLx6s7n1t2c1pTq1PHyyOPN7eeT9uid7PLtwJXBl5Kcz/KSlfDWnZ3ylNDix/LA0uXyldDmlMeV6dzyj9LtyI/P7+re7NTAxvDvkvbHl53mwdbH4ciV4pf11tDpyZeVncKV6pHH75LAwe+VxdHzz9PP6PfSwPHI1OqWlMPX7cX0wu3V4c/t6uzp1MiLxfHA5vOV9+7zlJ3pzO+U7MHoxcDj1eri95bn9vLVyNLHy8WSzsvq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[369]='083z6s3Llc2Lx8vyleXV7+HIy82dwdbv5vKX0OPP8pLBw5edwOjw99DC8dDpzejQ8seX1ePDlerR1vLF0c/8x9LB1NXs6vydnMnLwPHIls/2wO+SkcboyNz9lMiWzPyS0Ojzkubw7efr0NPN08P83ZX03JKUw/L36dHo153C3uHh19SU69KU0JzW3pXv1+3v3u/2lJbD7Z2c1pfN7dLL7+7B/NXQ4O3F3ML8zZfz8erx1fHq5vOVkv3NlfLvz5fV0OWU7+nIl9fA9e+SlNLe8d7H7dDi/dXP49f83e7xl+nu9dbX8dfekovq08jS/POd5vPtzezjl5Lt1+jIk+ry8u3V/Mje4vKV3uzyxf3Rl8DvzdSSnfLo55fylM3Q85TI49eVzfD28erQ4NSV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[370]='kffozfzF8tX88vHvzubzlY/X1JTs9tTVlNHo1YvH3JKLwNbd48rL0I/R75yUzN7X89aUxdzy78+T5/OV1OzzlJfo6J3d1tbpwOjyktfW1vfNzN7Xzuvvkv3N7ceWy5Td7vz1kpfp7eLox5ec/sKX4dPW1JLQ6fKU0uLVlJ388NXjztWV3PbdktLH/ND28pTFlcHokvPX08jF1+id7sf1kpf88JX8wZbv/dbW0NzmlpLO8Ojn9c/8ld3V9+fB0dzF9dGU75zW7ero8+7qkf3Lkt3IlOL10ZeS3MbulP3W6NDn0NTV0dfw3f7B1efix/DIj8Pox8bw1end0ZTF1PXU99DA3vKV6e3izurLx5Xx7siX6pfy68vdlNLv/NCW1u+S8vLo9+L90+fQ95TQ'
+if OJKLMNOPQRSTUVWXYZab~=PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI then else end
+do lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=OJKLMNOPQRSTUVWXYZab or 98 end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[371]='ktXy9+/J8++L8/zp683t1c7q8uKd8e6U/ciU5+vX/PGdxfDv4c7tzevL3uqWyNbyw9DdyPLHy+/h1+jx88r87+XXy8fhyNbx09by8sDCl++X7PGSkcLezd7p7cfUwtzVw9LUzezH/O/U8fHQ5cnW8c3K8uKUytWVzc3x6pfv/M310Pbyzsfv6s7m1veV8O7i89fc4vLAy52W1+7V7OuU6vDF9c3e4tbpzdGX0JPz8pX8xvHFwMHWnc7j8ffO4/Gdj8uU587zl+fS4O+d8PXLzdL28Z3S85bI0uKXzZftls/R0tPNlsPy1Z318+qUzfzi68rU1Yvz8dD89ZWSi/HyzevM7+ec0vPqksz8x9Lj8d3QwpXI3uro6e7wlMDFzu7Ij9eVlOfM08fO9+/v'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[372]='4PP8neLH6OeU1vzx3ufo8ZXF8cXo98vn48nW8tLq3Of8xu/qkcfvnePNl8Xe6Zfqzcnu4pbN7fLFw9bp/sD359zp9vKVwfzy4vf88sHMl/Le4paV7daV8vHN1OKRxvecj83L99HLlerXw+j31PfL9/HLy/Lc6vOd8MLc0JPo/OqTx9bh3uPz79zq98jnw+iSk8Xw0NL0l/ft0N7Vk8fLzeztlfLw8vHy3uLz78XO7+qX/PeV0dLL6pfC3e/Q8e3NkfDWnOL2/NXi9pfq5czc0Nz01M2U1u7iwOjtyPXPl53s55fxlcD13eb2lMfAx/ec7sfx6ujH1vLA9ZfpltLL3ZzM1emdwJeS1OKUwOXSy+fGwJfh/PH84s7t7sXcwOjF58ry99PD7Z3U5u+S'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[373]='kfzW8uvL3p3e6O2d3OuVzf3Ol5WT8+ic4sfxyMDl/J3owd7y7v2X6pXC8vKV4fLQzvaVktzt7+fj0O3dl+zwx8HR1OLO6ejd0umXnMDtl+f0wJTVk+3L4uDw1p3A4O3vltb26pTJ8cfp1973zunt4pX0/MfAx/OV/db1zfTH9ef0xuj3/sb2lPHIy+/cwNaV7veX1Zf07fLF0PDy3OzL1dDs8pLn0PDv7OjwyMPP7+ft0eiVi/Dv78HQ7erjyMvy3urW4ZzM6JXg/d2cler8ncbA1env0t2Ul/TTkuLzlN2XwvPd0vXzz9HS6PHR1/yVxcr10NLB/J3p1/DI3ObowPz18cDl18vQ3dfy9+b2y9Ds9Pz3xcnolcPPlNDA6dWU0uGXxZfw1ZLQxpbP'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[374]='wOjvz9Lh7ZKT8/LVk+no3cDq8OnU/ZfN1PLz55381t3i8+3y9vPvkov38eqS0ujy19LUwI/I1tDUwvHy7dfvnPHV95XFw+3d7Pb86tD978iV4tWVltDtwJDD1sDU8u3Q483t3c7h85yV7ejq8MfL4t7ilNXQwZeVnNLxndzq8s3h1u7N3P2UxdHWy53oxvPd7v3u9/PXl9fTyO+ci/P8zfL81ND+wdTyi/Lo0JLRldDQx9TylNbUwO7A3tXu8pTqwPaX95Xs8NeX89Xp8Pf86cbBleqRwe7Q9sHe5+Dx7cjc4+6Vj9Lo4tT3l/LtzNzFk+vVz+z07dXF0NWSlsntyOjC1p3dzpfv/vbt7+727+eV9MvIzcPUkpPg75T28u/n5cnznJfs8cWRxt7i'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[375]='18Pv79DhlPfB1+3Azc2Wz9fJ1Or298vv7sftyNz23tCRx+7IkNDL6sDx8+rr0fPd0cmUx9PNlN3xye/p683y4ov1793+/PLq5vz8nfPX8sXByZfQl+iW6t73l8j+9paSls/z787o8MiV8tb39sb818bzl8DS/POV49Ho8vbF8fLc6u2d49Lo9/HP/N2X5dXIxdfu6sXX3MDU99aVzvLx3dHX9cjG89Ti4vCUzfb3lZTT15acw86X4vbA9+rUwd7q0uPL4vLy8cXywd3d1MLe1dTy6J30xpTq1MfxyOD18ved8Mv37sX24sbHlPLxw5fv89GV0OHXlpKSzO3ql8buxfLwl82c1pSdzsDo99Dg1veT8e7VzurVlJTL792UyO33wcrx6pHw1d2Py97i'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[376]='5czvz5fm3OePytWV/PaX79zmy+KL6PbI/Mfw3c3W8MiP0JTvk+ncwMPX3PKV59Xvj8r2zfDGy9DN0t2c5sLW6dD0l8DQ6O7VkMjvldL26Mj+/ZXi9vDt4t788PfG8ejv0PfvnZ3x6JXn0O7Q/PL80O7A853tzNzV0OXu9+XI7dCV5vPP68nWksDo1sXuxu7I0OLW8p3zy5LzyfPIlsvd6uD27vfo99b37MHo9+L1lMjgwfGS18/y99731OqV6PPv8MLVz5328+nh0NyV0PKWz+PQ3sf885XF4crUlPHK8N3Ry5XV6PLyxefW9pLS85fN6Pbt0JLX/N3XzZeVzcnzksPV8N3r1vfv19DT9+vK85zU8paclsPWzc7H95TtztbVzcvv6f7C/JLlzujh'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[377]='xdaU4tTwy+LT0u7n09eU6sHMls/U7PHA3uLLnezty9X1yO3i0sDy4t7q1ZLjzJaS89LT0MXL6OLd0cviwOrezZfp9cCQy+jp/vHz6cDH3siT6+jFzsbx0OLA3ciV7NSU0PTLndPQ3s3h1++V9sDWks723d3U9JaSlf3W9/z91NDAwJbn58zy8pzW1c+T8uji4MHulIvh/Orxy8vF9sb80Pz2lcDt1u7I8vOWnNfQ85LT15aV0ubT6uzA8pSL6fPp/db36ej37sDrycv36c3UwJPo8O/dw5bd/c/ywObAlunly9PIzsDywPPP/PHD0PfI0On15+/J7tCV8pbn3uOUwNDoy93U4vHnlNfele/Nl9Dl1+7F09btwMDHlOrz0NPileOXwMb11vLQ4+jx'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[378]='0P3WleLwy93U6veS1Ozx3dTg7+nGwtzA8dbo8pfr3Pf+x5acnfz16s7H8++S0tXI0cno1YvH0+qU0taS48yUncXX1ufh1vWd3OvowNHWlunpydWd3v3dlZTJ7+/FyZbdk8Hc0NDm7pXO6Oj37dbT94vwl9DA6dadw9CXlfD16OGW0Mud68r35/HX7e/Q8pbIleDt1ZTPl9f29e/p4saX6pft1ZXTyZedleDW6dTo6PLyx5SSl+mUxdTm1OriwN7x0cnx8sDz6MiX59Tq483y6uPM3M3BzpTQi+nwnOfD1tDQ99TA7dDezZLN8siT9O3nltKU75fp1NXc6/HFj9LcwNDo/JzO69PIk+DU8tzh8cf+9svH7OHylPHX7tX91/HF3uDW8tTr1vHtyJXN'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[379]='/dHewOjz1ZLS8/zi0OntyN7r8e/lyMvFj9Hd3dzxleLc4ZSdnNLL8ovG8ufryPHIncHLx+HO1MDhw/L3zunVlPPI1e/8/daS1MHz3dT07ffU6svynM6X1eL9lZXlzdSS6MbxyMHL1ciQ1vPd7PPLzefLl/KV6u+Sk+eX4cPR1pKP1fzp48/vz9z89cDOwNPQ8sb3nc7r7sjjzdTQj8vulfDAlcj0wtzy3ur2xfPS1ZX8xvedj9X8wNT08efgxtWU18Py6pf91OeT/ZaV1Oj818XV8PLS9t7nl+bozZbW3MDtyPzV79DtzevJlMDN0svi8cmU6tzz6J3jzO3Nl+/35+Dwy+eQ0PDdk8KU8u7w1MWL6ZXF0Ovv3d3W9e/swdaSnMrz3fL97efs8tbq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[380]='78ze6dTCy+fmxfPql8Dzz+/J753S7PLQ6PP80NzA3ZWUytXP19Lv6uzz8+/8x/bI7dLV6pTS85Th0OiV3uLvlJfh88/u85TI7sHu8v7C8sjD0pad78yX78HRl+/1ytaS4Pzwx+7z/J3O8pbpltLcldHP7vfN0ujh4MLewOLzy92T6d7v3PeU3cPQlJLowOjXkcDxktTo3seUw+3n08/xyODF9s3N19Til+WX8fLGl+mWydbHj9be3fHN/Mfv18vI9PDW0NHK/NWSzNSV9MeX98D9lpXQx93p/sLv797j8pTU8/ySwMHc9+nQ1vL8wsviksjL4tzl7sD2wPb3lNDt6v3M053s/NXp4cjLnc3Ky93u85Tnxdb81fDylcXU99SU3MeVlJHwy83A6tSV'
+do local _=389 end
+if OJKLMNOPQRSTUVWXYZab~=jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde then else end
+do l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL=lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef or 62 end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[381]='7vXW19PR8e/B0d7H3PTW3ePR1p3Ox+3I6MHu6u73lO/wxvDIwPeUkt7F9+rB1vzN4cOX99HW1JT29ZeSk8LWzc3S052T69XnzuiW6tfIl9eXxfXdzsb298bAlPfxyNbn7OCU0M7s/J3ixvPq9PfvlZPBl+/v1+3d6dfoneXJ1sXA8u2dxc7uxY/R8s3hzPzp1MbL0M3P6MfOwPDi/sX83ZPHl+f089bX0MXy6vXM6OHOwtTN9PHy6sPDleLo9t7FlfTVnOXI8+n1zZfil8HW4sDH9d2RxvPIkNft3eLF9d3FztXd7seXxeHM7+/cweid/MCXx9fJlpSc0tbQ18rW99fRleLs/d2cl8bz55Xq1sj9z/Ln5vzzlcPIy8DG8fHN9dD83fLF8fLA9+7Q'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[382]='kM2V0MDp8eLU8ujx68nW4ovm/O/hyNWVlNKU1c7v8uLS/PKV8MHVz5Xs1MiW1vLn0cvU6sbw75zN1vOVxsbex5TM1ZLc8Jec6MDdkovl8+rc5t7X1PP8x9PP6OrO6PHq0sDU58XW9cWL9PPPkMvW78Do7eqd9ujV8PLx8pXp3p3x19OdlNLc5+HN1ZT9zNTF/dDt94/W9+fFw5WS1PLWnM3Qlp3U9e6S9MDo8Y/S8uLQ8O+Sl/2Wz9PO7cXF0u3d6PPVyNL9luqPyJTV8v3dz/zHlpzGwfOVks3z7+b36M3O7PXd7dft78PW9efuxfbn1OjVnJHH9e+L6N7I4Mfw0OjH7tXBzfPd7v2Ux+PJy8fz1vPn7v2VldLB7cX2wujVwdD14pTRlp3T0fHI'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[383]='/MLyxenI1uGLwu/dwPWVyJXqleLXw8vFkMPU6uHD/JXjw+jAk/TT6vzH1uKTwPDp/P3u8tDBleLe6e7A7OjTks7n1eqX6+33nND15/LCl93ewe3V3cnU6pfv/JLt0ZT3lsjVlf3Wl92QzNPv68zt8unL6MjOx5TNnfWXlebA3tDjyJfXw8uVxcDxl+nA7dXI8PLL0MDC75SLx9bd6MKWz+7C8urz19bV49fdyJLX8PKX6+3qwMfw8sD03uH+8pSS7OzL75Ppy8eS1/DiwdCVkpPG/OHO5e6U7OfvyMDB1PLo95Sdl/aV9/3S1pzUx++V/cyU0N3S753U4pec89b2zeLBlZTSxfDF/MHzlPHP8+/c6tbA89b84tzj75T119TF0OKXx+L36OrG8+/n'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[384]='6cPt8tfD8ufAwt7Xw9Lx6pf89urO6svnkcfo6cDplpzXzNXPlffx1d7H6J3T0tPF3ODL6vbzl8CL5ZfNzveV1eHK9veX/d2c19Dw4uLw7pWU15fy68PV6dD0/MfU9fHVw8iW553B6OLwwu7N8sfylOnK1NXSwfLnk8fz7/L8853OwNT35sHd7+zr8Z3D1/fd8c7Wldzr3pLSwPPd59D88pLIlt2S0Mvn68jL4pPt093i8ejdkMuV6tfIy8WQzMvQ9ML8yPbF8sDs9+iV6MbonN3N8pXyxfHNl+KV6s3Wl/fX1pXQk/TTyPzBy++S1fHQzvKU4u7B7uL9y+7yleru1ZHF8vL1ye/p7OzW9+7H3sDAwNzylcHox+XN6N3NztWc3vzW59DBls+V/PbV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[385]='3PCWneb1lerT0O7incHu6unRl+mLxtzqxsbtndLH/JWV6+/q78zxndDylNXNw/KUwPeV5+/W1pWPyO3i8PLLyOLA8OLBye3HwMfW4vb11uLs6OiV9PDo4v3OlfLz15TQ7PTowNzH3Pfpz/zy0O2X4ZXp/OqdxvXI0uOWyI/K8fLAx/HFlNX16pPllpTn0PD3/vbWwNTg7ufUwe3FleLW8pXv/Jzc5vzIwOfUxf7y8dXs8tbiw8nywJfv8s2Uz+6SlePUwNLm1eft1ffP187uzcDH7sXhzNWUwO3L6ov275KQ0dXv89f1zcXXy+rl0dbp1OqU6pP1leeWz/GSlND20JLS3ZTs85fv7c2X6f3R85XGwu7yj9D86p31l8DSxfX31PDtkuzo1p3085Xy'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[386]='wMbW0JLW1t3j0dbN8PfUzenS/OL28++U88yUzZ3A1u/91/zI/dHLktLny/eT7NXqlcf8ndLw6Jz0x+/q68jzku797Z3mxu/vzdX2ldTp8O+Sze6VkNCUyN7H7d3O9t3v3PTT4t3W7sjowPHy8dfW6vXL7d3x0t7i48rVz+j11NXe5/Gd3MD8lej93MXwxfGSkcf295Xy/MXSwdPq7Pzw5+zr6OGR99bi9PzLxYvg7c2X8fH3nNHdz9fW3MDB0ZSS0dbylO71/MjU8fLI1OLV6dTqldWL9svq0vDu0NfL3eqd8e3Vw8/tzeHD1MiV5pbv4PP875X2y/fXy5fA/sXw4u727cfgwfzV3P3o1ZTX1Orgx9Xd4vDWzcbxlu/vzNPi0ubxx5DP7pXS4vOc'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[387]='i+3W3fLH8d31ztWdzdDv797s8PKSzdSV8MbW59Tj1tfnzdaVnfPx95fC7dX1zu7i49f2997v8urD1/OUzuLWxc7o9d3g9ZfI4Mf11cXX8erm/Nbh68Py1ZPz7pWSzN7Ak8f84pPly8fh1pXqwc7U9+nRldX+/dzF/Mf84Z311ZXw/dbilMzLyOPX7sDnzfPnj9fulZLK9+eL9u7F0uiU6s7jy82QzZTi786U6pH18cDAxtXvi+Xy8s3D/NDc/PzvwOXonNz17sjT0PL34MXxx+3Xl93d1vzV78jxkovClpSV4ujA9Pzy983R0+ru/dTy/MeX787t75KLxpfV49LylPPQ9vLgx+jd7dHo1Z388cDA99Wc0Mbz59Tx/OKT6+6V4Pbzkpfp8ZLzz/Pq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[388]='78jz3ZPAlpSSw9Wc58jz3ZH38eLNzfzH0MCUx4/Wy/Lc65fX4c3V55Po7sj1z+jd58vL3e7G85KSw+3I0c7VyP3W7Z3mx5Xi0MHVnO/Q3p2Tx+7Ii+Pzktzn/MiXx/Hq3sfzyNTs8PLo8+j3783vku7B6JXBzfzh/sKUne7Hy5Ld1/zA58vt3cPS0/LjzNbQ7vPUyND0/J3Ry9bxnND17/b11NXwwtbA8cyX1dz37ZLm8NWU89GUwJHz8pL2xfySwMHTxdzq992S0tXp3MX1zdLo98/jytXP9dHc6uHJ8+/89sv30uHz58XI1e+QyOjV3dGU1dDgl/L88pX36db2lP7285zo8Jbq/dDw8dPS3ZTNy92d7saXx/XS3s3g8/HV0ujy1fz28vKc1vDh'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[389]='ksPtndL11p2V9ejI58jv3f3K9+mUze3iw9eU98HR3JTFzu6V3sL86d7o8JKL55WV7dDv6fD27pKX6Nbvk+eUkovGlpXjw+7q3ODo6ejzlpLoxt7HkcfT55DP8+ro9tTF6dft0NTyl/LtyNbVlfbo6ovp6OH91tyV6crU4u7wl+/r1u3i1PH8ks711c+czujAl/Xoleby88jny5TI/cr28t3Q9cfQ7e3N3urowMHOl8eX9vyc79fe78XN7uqL8tbIlMz8kp388OnUwd3vzubTwOD18+/e4+jx8vXx0NDGl8Dix/fq69fozfTH6Mfz1tP3zcjuwJHyy8CX9peVksn87+vP7ZKRwpTQ5c/t6vDy8sDtw5X30sLVyJLP7dDS8u7y0dfw4t7l1tXwxfLA'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[390]='zvPW95XF8tDXy5Xn1Mf378bA9pLs4pXiltDe0Mb38+/D1vDx1P3W15f91PLB0PPd49HexcbGl8DT0e7V783t0I/L3JTy8e3InfPo14/L1Z3A7ZTN4MfyzfHQ/JXN0Jfq0unWlf7Hlt3A6e6V3Oju587385yUydbh8P3uzcPD/Orlz5bqwdXx3ebAl+rty9Tn8cPtnZX38sWd8peVkszx5+L9lfeV6u/P78iUx5PG7ZLnyJTqncbowOD11JT89u3V7OOX74/D7cedx+7n9vbo4pDMlM2Wz5fxk/TWx9707sXryZfdwOaWksb375KUysvF5cjV79fM3pLA9PzI/PLxx5bI/JXs4vzq/vP8yP711t2c18vInf3ewO7x7ueVxuicls+WnJDO1sfO4/zp'
+do local _=736 end
+do local _={51,35}end
+while false do break end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[391]='0MaUwOD91OL2wvOS79D11fzz/NeL8Mvv3OiXwN3V9uru/PXinMzylI/QlpTg8ZfQzvXt4uPR1uHl0PzX68n8ncHX1M2U1tbikMyU9/HR8urQ6faV7czV6ZfG7cDvzfz3i8D3ndzB7erS/d7vw86V4vDC6MXe9ejq0Ovv3dzpl+HTzZXV7vaV1Y/R793T0NPA6PeVwJLM3pXt1pfA3PaV9/3S3u/e5/zx4sfczdPSlcXgxpXQkM3o0NPM6Oed88vd4sfy59fQl8X9yfzhi8aXlZ3y/OmP1/Gd3dbu0P3S/OGRwdTV9MfW75DM8sjhy5fh19HvnPz8y92X6fDi0MDu0MDBldX29svy0c+VlM3S7cDR15XizvDt0ODH/N2X7PLn1Ofo9/XR3uHQ7NWV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[392]='xsb36sDrlpTQwPeV6MDc6u7G0/Kcyfz3/sDdz+PX3p3Gx/OU1OCX0NLi6M2c0vLV3sLUkvDz7fLU7/zx5cjo5+nP8ZLe8+6UwPLu1YvF/MXxy5TIi/PUlZH1l/GV7PaSlfH8yND27efF15ac9sD3nJzV8feW1+jN08jy95zQ3c/RytbXk+OV1fPX8d2d/e3v1PTU4vDw6PGUy+/Il+bdlN7o8eKd9+7iwdf84c78/J3w/daSleLu0M3V8pSTwN7i4MHT6sHWlfL1w+734c/t0O/N1uHjztXI4P3o4tPN8ffzzNbI6c3x8sDq8PHw8NbX3OCU75fr8tDF0tWS8vPoyMbH1c+W1vzp8PeU5/3X8c2SyJad/PzwwJzX/M3U6cvQzsXwx+D26JX88Jf3'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[393]='ktDzyMHP7+qcw/HA7dbo8s3X8+fe6pXN887t6t7G1NDe/PLV0cyWlPLx8cXc7/byleuXx+zt6PHpz/H34MD21cbwlefc58vy4cr33cDm8pTs8+7A3OuV9+/I8Z2Vx/DF48vcyMXD1vfdzZTIzsb25+XX7vfn0MuS19CXx5TQ/OHl1vOd8P2UzdTm8ciL6+7qzcr13evNlOfj1++d7MLdldHJlPLA9NzI0Ojw8vDF8JXv1/HI3cPx3fLCl9WV9tWc7sfUkpHz/MCV6O334c7W6ejz1teV6fPp8sbT0M7o95LjyNbH69bz79zG092QzO/pk+2UyNz03PeT6vbN9Pby95XplND09dXn3urvlfL23OLO5vzqzujd5+791OLzy5fq78yUxZLD7eqQzN7N'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[394]='1MXw1dTt3MDc9PLNxvOUx8PX/OHl0Pzn1PL84uj23ZXR0O3I19HznMHK9pKL5tPq7OuXx5PGy8eP19yUlerWxZDR3sXFz5fIwPWX9/D91pLs6ZaS9veWlYvp7ZLs7Nbd4sD25+bx7cf89svAzcOWlfXN7sjs9e2dw9Dd6sD908fm/NTFnfbuwJfx/OrO85TH3df2kt3W08jm8NTFk/T86dLw7dWV6fL3ksjz3fLClPfRy5XQi8fzyNDH9s3tyfzV7seUxd3D7sD2wN7q08/u98b27d3v0u33wOrw1+7A/PHo85Xy4vDUzdTv8cXS/PeU8vPtncHD1s3u85WV7sX3yOHD893cwJfX8dHWlZXC1pX9zO3q7c2WyOHQ1veX7dbN8PXykpPGlMDz1u/q'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[395]='leaU1cDF88jpw+333Pz258POlPfpz+jd08no8ZbRlOLz1tyU/sbVlIvC3uGS193ni+bW1ZPi8sDBz+iVl/3VyOnR7uLj0vzh9vfuwNDv9s2czfHA186WyNTzlufAwfLq4dKX8ZPA7sDowtTQ7sb3lNHL7eKX6dOd0unxzcXR1u+X5svI0ub895DQ053S9e2S08vd6eXR7+mSzPHFkcX8x8DClpTcwPLy78jy0JLQ9pTi8O/q4cry6pbK9vKTx/H3wMf86sbF9c3e6O33w9fox/bH7uqUw+jy89Dy4pTM8e/lzNXn/PCVxfLzl+eWzN3ql+ftneXN7dXrw9Xd0Or18tHQlZXX0tz36cjW4ovG7siL7dac08rVnJPH3pLF1/ec5c/tkv71l8DA7PDQ'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[396]='1PXz7/bG/MDdz+7Ql+Xz5+XD8+nOx+2S4czxzf7H8tWT8ZXI3OrylZHzl5LS6vyS4PLU9+fSy/eL9tzF6dGV59zp6MfO8JaUlMnv3ZPB8dWVwtPH8cPW3dfD6Nfp1pfX88nxzenLlff28tad0MeUku/Dy9WQ0ZXynNbc0JHw7dXT1fXI9vPU583LlOqX7dPNzdf86ZXy893ox9bn8cno7+XR3sXjzPHH/PzUzfLBy83v1vDh3uvowPHN7sXU6/KVk+Px58Dpy5KX4fLn4c3z6tLh7c3hy5Xy/dHx78D9y9WQz/HQi/SU0JzX7feR8ZXn0cyV1c3Ml+fly92V7OGU4o/M1pWWz+7I0dfy6pfrldXOxfb37O3ozZ3x6NeU0Jfn7sXwksHP78/ywPbI'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[397]='k+vTko/JlpzAxsvq0PfvyMDx85SczcvqwOjx3ZPr7932x+739sLt6v717ueL6PLileXW4dHN/Oro9/Pn5vPW4uLAlcjd0PeS1Mf88sPOlMXo9vycj8zL0MXR/OHDzu3HktGX18Dt3sfc9vKUksrVyO3R6OqX6fLnw9L8zdTrls/28e3I79bw6tLy8Z3FzPHv8sXxxf7A8fLNzPL3i/Te15HH8uqLxsvv9PPu6v7w7ZLm/NTF7ODL59zy8e+LwtPi1Ofv6e/PlefXz5XQw8jywOHK/N3gwdbH4vLt3ZzMlJLN0JTFkMPo1cDx8dD2xt7p0OHy4o/WlpTn19PN3P3ex9Tp7sD1w9bq0MDo8dzA8cXe6NXq0dbd59T88efO5fzx79buzej89ffA9dTN'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[398]='k+uV8tPX7ZLxye+S9Pzw5+zp3uKQ0O3q6PXulIv00+fn1vbAkcHLkt7C8+nw9u3Fj8vW8Z3A1pKT5fLqi8bW8ovmlOLSwO3n6cr20PD905Lc7NTF9PbW1ZXl7urA4/L3xsXw0OvK1pzA/dPn0ObTyNHV9cXs6ZWUnMr24vXD1Or1ycvNwcjL99z0/M3S6fDF9vbczcD27Z3S4O3AzvLx8pft7uKVwPzHlcb8lZfhlN2XxfLI78/t99Tn8e/x1/XH6PLxkvLy/OLc69SVwdbelfDz7cWPw9TI6Pbo0PXO1OqT69SV4vaV1e79lpz+9svv0ufUkvzH3umX5ZeVzundnNfW9dWc0NbyzcPV5+728vKUzdTF3OqV8pPB1sDm8svn4vLLx4vw1Z3oxt2V'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[399]='3MLe1/3Dlffm8/Lq9c7UyMDxlZSczN7d3MbW6pXA3c/jz5XIxdeU5+L21s3O8u7V8MHvneXK8+qV7ZXqwMeX3ZH88+qXwtWd79be55X885Lc7dzFnM/xnc796PKL/e6S7OmVxfb8/NeQy9bnxvPLkpzV95WSzfKS8v3Vz+D88pWL45TN3On259L31eft0tXIlNXy8pLN1pXS/e/qzcvTksDo3d3pyfzdzvPx1dzhlM3l1+jh4dfenOLA/N389daV3OPVlN3O1e+c0PLy9sf86tDp1JWVwujx7P3uld3N88+dx97pwMLUzcHI/M3ly9TF0MbVnPzC88/s95XFzvTWyJTQ8NfnztbdzvbW55bL6JzU5pXy0dX14uXX6MDr0fLF48iXnMDG3e+Vwpbn'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[400]='5cn859HR6NfTztbdw9DdlJXtlPfc6O/I3db11ZXn1d3A9O3NleCXxfHS8ergxfaV/PXuyOHQ9Z390O+V8MHo1c7y6N3Q8u/P0Ov8583W/MfU6d3n783x55fhl+fNy5WU/c/x99TA98/A8fPIks/owPbz8dCL6fbnzuKW7/L1/MXR1+7n7cnowNLG8PHhzpTi882XxePPl/Hc4ejQ7cPU1ezp8ffG8NbinNX1zZHy8ZLy8ZfV8df16tHWlO/A6JadxvPU0Iv27ueT9+jF19fe75TOlfLswNzV8czclenK1MDi9u6U3und58HX3tD8x9yU89fo19zz75L0wPPqxcvc8pfn8e+cyvXF19f1ndzy8uLj15Xy/vfy4v791ur88e6S4PGUkvLG8ufXyZTv'
+do l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL=jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde or 62 end
+do jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde=78 end
+do OJKLMNOPQRSTUVWXYZab=PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI or 18 end
+for _=4,2 do end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[401]='lMiX6pDX85SX6vLI0Pz18uzG3OqPy5bPlevz6ZDW953mxt7Vj83L6tPJ1MjGwO+d3u2U4tPX88jl1vzIwPSX95fg1sj1zu3Qj8voxeDGlOrR0O3V3cvt3dDn/OmPz+/p/c7t79fWy8iP1vzvk/WWkvPM3pLQ8Ojy4vPyksDl1sicyvzv3OuX1c7i8cfSwJTV8PeU75zR3pXhz5fQ3PPt55PCy/fdzdXIzuvUyOHMy5LzytXd3uLylZLQ/O/Q5vOc4vPLx+XW6MXQ6dPv6cPz6uPLl+/F1fXA8vOVzfD3/OHT1fbF0czulNLp7pXSx93dl+PVlNDq9cfF0PPp4vCUxYvplffr0svd1838xfL93JLw8JeVzvTL1dT88c3x19PV0ubo9+7Hl52V65fq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[402]='i+uX98D26PfNytSS8vbe0NLrl/fh0Ojp3O/10Jfx8er1zujy/cOV8uHP/N3U7Ped9P3T95fylMiL6e7AlfHo0I/Jl93c7dzy69HowJHA8fKV7/fp4dCW79HV8Nfc6fz37OHy55fv/Ofs8fzd7PPxzeDy753tzOiS08zd7/zy1pWX8Zfh8vHo7/zxlMDDz5XV5cr1xdPW1tfTyMuS7OqW6u3N1NDo99bp88+W75zI1sfnyPzXwPaX9+nL3NDh0tOd/dfV6ufX1c+Qw5Xik+bc4t7t05LQ6tTV48rV6fDBl8eR99XnlfaV5+DC8+rj0tWd4cuW6vTB75TS68vH9P3uxc3Ky9XhzN6SkNf8wP7208jx0fPqwPXx8s7mleL+xsvQ3sHyxeXS1e+X5/yd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[403]='69bdlPXN/N3sx+/nxvCW6o/K8tX2/ZbP8cr1ze7Hl83zz+/pwOvzlMDl7tDr0dTI4vDo3ez3753sxfLy9sHuwOzC7c3U4vySi+OV6sD285LzyvXixcnL7+nJ1Ofx1/KU8P2UzdPR3ufpzdad0MCWkpH31tDx0dby8sDt58XD7+fc9e7q5dbt1eD3l5Xd1fLF3sDo5+HJlt3swfzFxdDo4Zfml8jA4ejV68vd3ebH1efm8vydwOnWwOD31Z2XxfzF3PDLwPXW1ZXS7ejX69KX3ZLDy/ePztbQxcvcxfD90+qV9peV7vb84evLlOL29u7qkfDLndDn/M2Xwe6Ul/Xz797z1NDQ6N7HwPbo9/LC3d3e6dTN0vH88efN8dDpz/LV58vLxe3R8vL8wN7v'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[404]='8vz20JXwy++W0PHd8sLLxZzK9eLh0paUwcze14/W8Mfs4ejVwOjvz+7H6NeVwvOSzuKWz5Xll8fj0u+d/PHy8t7o993tyPKVxczczefK8O/cwu7A3Ozw4eL18fLd1pXFxv3W4vXPlu/i99bylevU6ubw1PLd1u7V3uHtkv3V9s3m9dWSzsHxzejx7uLzy+jx0u/24u/O6MfS9u6S0vPolezr6O/S5+jy08rW3cDp05Lrzu737PLulYvllZSV4tbv7PeXwOnX8OmU0vHdw87VyJXllpXF0vHqzuOUyMHO7pSL6/ySnfXz5+3P8cDGwPHAzcvLxc7H1c/A6d2S8MDy6uLG8Mjzzejn6crW15fil9Xcwt7Fk/XznfHQ8dDnyejixcmXx/zz1p2U0Pzy'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[405]='/PfUlcXD/PKUzpeS7PfLx+zq8sCTwPKVwMaUnenSlsjt1t2VwMGV8pPCl/Lr1tzqkM2U1fDB7dXc9O7Q7df8zfHX9cfRytXp9df28tz0y8je4tWSzuXowN7plt3iwdzFlcLenJbS7ffUwtSV3OiXzfL26PL08svynNft8tDBlPLhw/zpks3VnJ3z6O+c0u6S3unznfLx7tWP1/Cd0MX80Nzn6NDy/cv3lMzTktTy1d3ix/yV4vDt74/V9vfc69zilsyWnfD3/OfuxpfV9MbTx/DC7c2c0fLi/crx79T3lt3dz5fv0PX81f3Q6N3c5ZfV3PaU95LW98j+8MvAk+rLwPXJ7+nS697X0PH81cbwl9Xpzfzx5vbV75LQ7+qUzNbA1OWUwM3M752PyOjh'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[406]='3OH86pf06M3tyvCS4dfwx5fG8tXS49SV3sbexZX18erTyJXni+bW4pbR3ZzewMvn3OaVzZDRlZXj1tbi3PDt79Ly7Z3s6t7q883o8dD1l/f91tTi0P3d553xlZXry5bp/PXy1d3K8JXGx9zVkNfL7+Lz7++V6NbN6PbvnOLB3s3e6t3I3uKVldTh6MiWz5fx3czonZftlJLUwvzNw8venc3Dy/fuwPLq4vzw7+/X1NWP0Zac3vOVxezt3MDx1uid4PXW6fb9l+LRzNz3wdHT6pHHluncx/Hik+vo4cDl1OfX1973k+fV6pTPlOKX/dPy4vbclJbLl5zv1pfhlffo6dfM1ZXUwO3y/P3TxZfs9uqPye3I3vft9+XN1c+SzZfi0cjy8sPPlcD09cv3'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[407]='3Oj2zcDx8dWS0PHdnNHvneLB6O/x0tXpxvbW4uDwy+eQ0fzQ7Oj84ZPA/Ofs4tb33PPxndTt1OfyxvGSlNCV0N7BldXw8+7VwcrVndTB08iX6e7Il/fvz53C6Pfzzsvnw9LV58Dw6PHS9vOU7OjLze3N1vHO4ZTAnMzo4u3W3PKL9e3N8sf8nOPI6OLs5pfqlsPV74vB7cCSyfznkM3UktLAlt3O9O3q6c+XnNTp98iL6PGSzuzw4dzl1efx0PDinfXo78D0lZKV8u2S9cnt3ejz8cWVwt7Iw8+Xxd7r8vfS9vzI08zylPL90/Ls8NbV19fwx9fR753c6NzN0sbw8pLQy+rs6Zbq1Pbox4v2y8jDz/OS1OPu6uHQ8Nf1yejhwMHt793X1vLBytXP'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[408]='7vOWlezt7ceT4vHqi/Xu0OnW1OfOxfLF7MD19+7Ay+KQ0d3n09fT3ZbLy53ywNzF3vTckpzW09CPzZTi7Ojc5+PI8cft15XnwMDvyJPrlOqS0dOS883t8vbB/NWX9JTv/PKX9+3O1t3w/ZXQ3MDUzc7H1sDO4JfhkMvUwJ3y/OeQ1vz34sHL1d7C/OLixsvV8c/z3dHS8sjtyNSVw8yV0P7B8d3wwJackcb84vXL6J3lz+jF683U8tTq6MDs4+jdj9X8lZPs1sDB1++c3u2XxcHK9d2T98uSzuPxku3Q3eqXwPOd/v3c0IvH8c3t1/zH3Ovzz5zQlOKLx/bn8vDvkt7nluqQ1tTI4cPz59HJ1ZzUxfzxk+Lvz+fS0+KU0PCS/vzUyPDwleKT5cv3'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[409]='i8fc6uzC1err0pTIl8KV993S0+/cwNXv0czclPHPlur10pfywMb1zZX2y9Du8pXVk/PLxfLBlZLhy5eVnNKW7+PP85Xe5svQ9dHL79PJy83gwvyc4MDvz9Tx6PHowsvd1OrtyOnIl+nUwsvii+rTx/D18ZKVxfGd0dDc95XC88+X6/yd18nVlPTGlp3j1+jnk8Dx4sDq3ZTdyO3i7MDxwObz/Mjx0NTA5c2X6uPSldDA6pack+jenOnDlMXgwe7I0ubt9+3Ny+rjz+jn5c6V4s7w6OmS1/zV/crLx5HCl8fQ6veV9Mb1kv3Ky8DTzfHi5sbw4ufQ7ffU/POU0dD2yOjG7Z2T8JWUj9bywNLj89329tP379Xw6u7H/Mji89Tq0sD3kpP9lurN15XN'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[410]='8MfclJbS3tDA5/KS9sfVncbH8pST9NXI5c+W6fz1l8j1zpTd08ju1eHS8+nB1vHI1PHyxf7y7siX6Zec9PPV6vD88cjQ9O3Qk+zW0OzG3ZLnyvbIzc7Vz+PSlsiV8/HIzvbondT17pLu8u3N18mX1ZzW7efmwsvv0sLdktHWleLA6N3nnf2U0O3X95SR99TI9vbd3ZzK9+rl1/zhj8OXyPHI8cCP1u+S3MaWlfz9y8Dhz/LVkcDc997n1pzryejQ4sHvnO3Pl+fr0NTF3sbWwJLN/PfB0vOcwMLTx+nQ7cWdx+jq59KVzZLPl5LFzZWV3sDd5+zt3u/c4NTI7vCX7+HN1uGT5vzq69bvlM701M3089bh0dDW99zo95KUzZfv1PbUxevW8MjXyPLn'
+do local jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde=979 end
+do PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI or 969 end
+do l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL=lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef or 21 end
+do local _=976 end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[411]='zcmWkpTD7Z3m8NTQi+fo3c7G3eeLxtzql8LL0JPA1ufg9cvH0OCU3Z3A1ZKLx/Xv7dLckpDR/OHmxfGS6cvt59zj7dX8xtTi7sD84uzAls/F197ii+rL79Lml9WUw+7n8vDLzdzmlt2dwNP39vGV95HB3M3vz/L30vPU1cHQlJ3S6+jN8c3Ukpf1ls+TwNPV5sX2lMHDleKQytTq9dLWxez03pXvzfPpxc2V6pLOy8fQx/LQktfu8pbQl53hyPOdzvf81fD37urc7/OS6c+X98PDy83SwpTH7MDzkvDGlMWd9+/vwPbW7+b1lefS8ZTv3ubx0Oz3lZX89tXn1PP86tfM8uLn0tbn4PLWwOnSy532wJTy8MDexePW3Of91+7inNaVksPSy8f9ydTV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[412]='lMjxyNPS0+r+wvPn7PXt6vzG1Z2T4Mvy483UwOLH1ZWL9/PI3OjtwIvm88+Sz5fVzc/owPD9l+eP1feV09CX3dfI1Mjt1fDvleuU75Pql5X1z5WU8cPU6sPQ8Orj0N3q8vzVne3Jl5X9yZTd08/86uvV9eKRx5bn3ujL1fPXl9fo/dPA9vH8leHX1tDt1/ec187U0OfJ/J2c1u7y58/u1dL18d38x+jq0OPonNLp1uruxujq6dX24vT1/PKX8+7N79D3ksb23ZSX4+jV4vX81Yvg6NDr1+/p4crW0Pbz7sDd1faSwOvLks7j/O/tzZfAlejWxd72l5zG9+33ksjLx/LGlPedx/Dp9vL8nO/L3c+X/MvN0OvylO789ur91vLQ3dHLxe/L3d2V6+7V'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[413]='3MDzz+3L3u/F0Jfv58zL99Lv9d2TwPDQnfbdnN7r3ZLj1pTQ3OLonc7p6Mf+8pfX7PPtxZPo3NX+wpTV/saW5/Lz85KT4vKU79Dx587x8pSQyvLVnfPylJXjl5WWy8vnwdLvnfXMl9fBzMvNxdf3z+Lz1u/U9O7ikM6Wnfzx753G9tTV3OvTnZPylND+wNPQ6czy9+LzlOrGwcvNw9Ht59DA9e/w85TQ1PXU59Dv9urex/eS7PDuwNzy6JzU5ZX33cr28o/K1MXwwO6Uk+rU4pXH8eLs85eckfWW7/XW8MCLwt7H9c+V0M3Xl9eV4e6SzvXVnd7jlp3gx5Sdw9fe4tTllefRzZTq6ML81eHOlOKQyZfQ3MKXzePQ8pTU/NWd8MLt1f79052W0vLq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[414]='8dGU1fDA1c/m8fHI0uDLxe3R1JXByvPq3PzWnOzpl++T55f3zdf3lebHlumL/PbA883u0Ob23u/+wNbhkMvczfHQ75XF1vXHzuOWz5fF8tDO4vLy09X255f21JLwx/LN7MbWndzp85Le55fQ5dHtkvbBlcWL4+6SwPLUwJ3F8cjexvDI8dfo4t3M/OHry92dxvbylNzh8+eU0e/IkMr3nPHD1seT/PXA89bW75Xi6O+LwfOck8D3z9Dq3pyV6PbFlfHo8pfm3pyd8Zbdw9He4fPS3PLj0tPN/vCVyJzP7efo8JfN18uVwOLCy+rB0PzvkNLLzcDv/MWV7Nbqk+vW8fPM6Nf8xpTywPSUwPXNy93AxvHv/dDL1cXRl5390paV3O/879Dm8+/XytSV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[415]='k+zx3dfW3umUw5fywc3xyJPBl/HO8Mud09Lo183S8+rD0PDy7dbe95PB/NCR/dWclcLc95DJ7pTUx97i3OjU4uPNleKU0vLN0Or3lMPD1eng9ujyncb3lePW75Tzy5SS69D1xdLy6MWc0JXQ7OH81ebw6PLwx9Pn0sH86pf085TGx+7N1Or859L23sDpzMvN3OKU3fzB88iUzJbvwMCW6dfW9e/1y9yUnfbuzebB7cf91+3I6dCXnNzpl+/+/cvQ7MbL3dfJ/PfSwNXq4cnu4uvXl/fNzdbi1OvU95LNlpXUwtzIk+zz5+jA3tfd0JTF7ObUwNLq1uf11/Dy1PP8lYvG1sXzyfPvkcL84pPg1uflzNPi59fvnM7plPfOx5ec19HUwOfX7d3t1fOc'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[416]='09bLkpbNl52V65aSksrwxenX09309tXp/dfzlfPI1OfmxvWd0OHvkvTF/JXv197q9MbT0OvR75Kc192d6PGW55fGy8WSyZfN5sf2wOHI7+mSzpXqzdfU0J3B7pX+9fPv7vHulPXX8pWcw5bv6PeXyJLOleLGx/fp8P3LwJP06OnAwJTn9Mbd6ZzIy+KLxfWS88rxndLq7tWPy5fi/v2U3cHN1ZTG9/zhk+P8xcXM/N3n1pf30vaVwOfO78/n1vOU9c3o59HD6OGT9Nbv7PeUxe3W8+/cx/Dd1OiX74/M8+npzpfile3e7/XM1urpz+7Q9df3yOnN6PGW0PH31PDox83X75Xyx/ed8vLV78PD1M3t1vycl/TU9+HSl+ny8JfNw8Pylf3N1Oru8tTQ'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[417]='l/GWnPHM/Mftz5SdlejcwMPK/OHT1fL3kMjWxdzhls+Pw9Xp3OqX6f7H3eqX8u738PfulZfHl5XTytbIls+VlOXW3Z3+wN6cltbw6uvK9+qL5tWc78jVz9HNl52c15fIl/SWldTl7efT0d3q1PTxkpzMy+fnyPKV183WkpPn6OeS0OjVi/DL3fD23sDg9ZXy/dLv6eHD1uLS9/zX3vz86pXgl+rsxvKUlcHenZXxl+nm8+3d7df8wJHzlZXt1pX3i+3t0OvP7vec0fzQwcjoyIvA95zzw5XnwdLdz+796PfOwcvI7dKXnOfW3veT4tbd683z6cbC75XA6fLn49Xx6tHJl5XNzdbqxvfVnJfy8cD2/PXN19HV6u/M7vfzyZTdwO3txeHN1c/y9ZXn'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[418]='kMr378HX8PHw/cudlsnyyNfN8cfSxvXizdDU8s797pSX5ujN3OnulOPW8M3Fw5X33vPUlc7yl/fw9tXqzcmU9/b37+/i8Ojh6cjz75HH8Mf1zdXd78/y0JX91pzry92V4c3o8eLH9cfQ8/zHk8LVlfzA3sjGwe/nwOjuyMXQ1JL90pbn0c/8ldHSleKV4tbI4dX8xZDX7vfA7NWUzciXx8PD7tDuwNSSzvby98DqlcjB1+jA1PPU59Tll5XO4OjF7c6X9/L38cjc9u3d1PGX6ePK9uLc4tbpk+2VksDn/PLc4ejnl+WXnJH1l8XAwpaV5vzU6pTO1sfS6ujIle3dnf79l5yc19SVw9fv3fzG3ZSU0NPd6MHulcb3l53yxpWV1MLonNzB85SL4/zV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[419]='6MKX5+HIlPLtzPHq7PTWx+7y7ZLG9ej3i+uWz5Xyl8ji/NXdksmV4t731M3A8pbp1O3v59Tp9e/2wPXVkcfW79Lm7ZLO6d6V78zekufQlpXS95fN3MDeyOXX1pXs/PbynfCX6pzRlcjywPX37Oru8t7h/Or0xfaVxsKV9/PM7cfnyfzF4sDt59TH7ueV7PPv9v3c4tDo7pLn0e3d3PPV54vhlufX1/DA5dHLzfT3l9fQ5/Li6crznOL3lsjXyJfykfDW0ODCls/08fLI7sLL0NL1lPLc6tSUlcf8x+HS092VwJXV4MHex83Xy8iLwdbQ5dD88dLmlOri95ad9sDox9703OLQ6tzIwMbektTH75L+/NaVktfu6u7F8+eWyMvF7dfL7/7xl+nh0OjH'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[420]='wcnVlcXK1vKS1/aS7PLt8s3My9DhzMud4vDonfPW892RwvOU6cOVlNTC8pTyxt2d/v3uyJPA9erz1pfI6cny1e/S8c2T9POclsmX4sHP7+re49Wd8MDy5+nS/PfO4/zv8crxzfbC3d3O6Jad7dLd79Ls8N3x1tPi5crW1e3Ol+newO7F89fd6ZTD85ST95Xni8KW6ovF88/O9Zfd/vDtyOzB1ene5+3Q7OnokpzXy8WV6ZaV7PGU4u3S8dCPy5bvnMP8yMDilPf+9+7F89b3lJXxlOrewt7Fl8XxneDF8d3O/e7N1OjyyI/Sl53T19zI19KW3ZXo/JLs6veS/P3dkovp6PGSze/v09DWzZbQ1sWWz5WSlNDx79z07ZL118vd6Mfwlc7i7tCWyJTH'
+repeat until true
+do local _=811 end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[421]='/vOU3dzo7+nOwtPq8PKW3ZzK/PGQ1tbVk+n2lOnQ78/z19Pv0OXUzeXS08jcwNPF89Lc8sD1y8eT6vLyi/WX6pLR3PeL8vyd68+W6u7A8OLDyZTinfXv6d3S85T1zpXNlerxyJTN1s3gwe7Ik/H84fXLy+fe/PzVwdbezdfS3Z3A99T3/cnW0MHX6MjB0svv3On3ldLn75XDzZTI59Dexc7v8MXQwPHAi8Hc4uXI893Qwd7A4PPvlIvq3c+P0eiS3deX1dLj1PLc49bq78Po3d7F8dDsxvXv9PeXwN7glOrs99TN4dfx6sbF9uLDz5TdwdeU0Ozl1JTgxpfh19LxkufM0+fywsvvzv3uksDG3ZTc4tXq3sXyzeHSlpSSzPHn4Mbxx9zs1ZSX9t7Q'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[422]='/deUwODA0++T5ejizvGXx8PK1NDn197xxsDWldDh6OfzyPH39c3L3c7F/MjU6e3i8vLU4pHG9c3Gwu3HkMzLnezC75TU9Ojp/sHt8uPX8O/G8tbd0PXW1/3W3ZTc6e3Hl/XW95TL3tDwwfHV1MaU6uz2l5yX5dWd4Pb88fL89eLO9u/pwMKX4s7GlcCd85Td3vzUldLCy+fX1vOS3czc5/T1l/HU4O7N0sXy54/Ry+KL7/yc3sDo8c3M3uH8x+7y5vPW1e727Z3A9JXI0sX819L21OLe7dWS9Pby987r6MDe8u/pkf3cxezm6PHt0t3p0ubU0NLq/JX9y8vA5dHT4uXN/OeT49T39PXL8pPl1p3B15bv4PaV6uzB7tXwxfHvk+uX8fTG1tD2xfX3'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[423]='0Onz6evL05KXx/LQ4vbVnfTz6OLl1vySlsnx5/HJ1tDs6veVlfTWzeLB3PLgxfHQ48PtxZfp09DUx5fdncf80Ivo8vLB1vbQ5sLexd3W8+/n0eicl+zw6ezq3MXtzu3Hw9fu8ubz1JLnw5XA/vGUkvbGl53ox+jQ/vHu95PB08fRzpTy8cPx58DHl/Hs696cwdLyzc7h7pSWyO+dwPLW6fLw1JTzyvXA3uDV6ZXBlc38x/XF0sL8nObGlPLnyPGSnNL8xZbL3unA4Oic48z818DH0+/F0pec89aXxfPW8N3p0POc6cyU0NHS/OH0xvXH7MDu583M7ffT15X389DWx+HM09Ds6dzN/cjvlJTWl8iS1fOSwdb84pPr0+/2xfHq4dDcwO/K/O/s8vzi'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[424]='4MKU7/7C3Ofv1/zn7OiU7+vI1M3m8ZXyi+iW78DH6MXXyOjx58uXx/7B8d3jyPLq8Mbwx8PK8MXgx5fH083u6uvJ85SX59bnj8Pzlfz17+nz1ffd3vWX1+zy8dXmxfCSwdfo6e/Q3ufSwu/v5dDclc718uLty+3i7dKXnZLW6OLvydTFj8Py4tHP7ueS15fX0dXxwNT06MDn0fzn9vbW4sDp3Mjrz+/d7OfW79fJ/J2d9fPI68jW8ZzJ1pzdzcvv8dHW6v72/PLQ696d7Oz8kvzGldDO9tP33Pzylez0lcCXwvzdlMzW4u3K95Lv0pfvl+jzyJzI/MeXwfHI0vHolZPG1eqP19zF09boxe/R1vHmx/bA8vfo4u3N7sXh1vLI7dLezc728+eQ1fGS'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[425]='8sX194vn6NeV4ZTy08PW75Hz1JXDzdbv7c386ZTW7vLu/PHF3vXxnZzQlpKL6/L37c3twO/I1OrG/NXnwPOV0OzAy8Dvw5Ty8vfo78Dm1d3S6Oick+zWndznlff+x97vlfX81eDH7sDm89bQ8sHT6tfXlPfs9dbF09bu1eb38e/pzJTQi/Do4pDOy93nyZXQ9vPV79PLlfLc6vXN7PT81/D36PfA9PLy7sDenPz36OKV/NXv3P3UlZfB8sXvyfOSk8Htkt7y1MDr1veU8c/8x/LH7fL0wPbF7MfWkpP97pLmxfzNj9X10M721uHS8+/P3MHTnfbx7dXh0N7Q79He79Dm7fLtyJXN0sDxktLF8JKL6/H3k8H84vzC7ZL2wpXQ5vfy6tfJ6PLox9zn'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[426]='j8OX7+fO6OmU0dTI1PSX6cPI8vfvyMvylMzulNfQ9s3GwNXPnMnoneHQ/OHc4tXq8veWlcDG/Jzo8JfVk+fo6sDClPLv0sud9MHz79L17dCV6pec78uVzdfSl+Ly8+3A08/ylZDN75L+/PzizuDo8uzm3PfNyPzA3PXt3ebx/N3Ox9zV6cmXx/D36M3Bw9Xp/sHcwPPJlueUyOj36Pbe6c7p9pXS6tbynf3cxfHN/NDB0t2c4MaX0M7ly8Dz1u3Qk+mUndHWlpThzfOU88zv3ZTS1vH+wu6Sk/aWlf3Q7e/u/cvqj9b2lZfr85SU0svqi+rw6pH89eLwwt7p8MD33dDv95zjw+7nktfcktDB3teV6e/PnMrW0Jf2lefn1/Xq3MLo4ez18cWdwsvH'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[427]='3cz818DB05L28+3N3MXw787q8+nXw9Ty5dHv6p3G/OLdz5fIi+vtx/bHl+LX19bvkszt8tDCls/DyNSV6MbenejB8e+Qye3i3OXx0MXV/N391faS3PKX8uPS7siX69Wc5c7o3ZXz1M3A8pXV3vTe4cDl7sjs4pec6dH88dzC1Z3U8JXA0c7V5+HN7+/v0NPF3uLx1dDql82QydTy19Dt0M721s2U1pfq9vfW4ZzR083G8ZTIwPXLyNfX/OLm9t6Vi/CUwPXN/MXv15fN3sf20M3N1sCX5ZfI4vGUx/Dwl92czPLA7sXx0NLq1ZXNz/Hqw9GWlOfR3MCU0N7Ij8iXkovn8uLmwNzI0vbV5+bx8urowvOS78vWzZXv8O/iwuiVl/GWkunK1tDhw9ad'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[428]='nfXU0N3X3eqdxpTi7saXxe3IldX91fPqwMbTyP7F/NWUzZbd19bWnNTx78+L7NbVi8LU5+fD6PLrz5TNw8rL6vHN7cCT7/zpzubdld7y1ueT6tbF7Ovvldz278/gxtTn0cr8ndzm3MD89fLy3uvc9+j27tWW19adwcny6pLD8sXtyZXA3Ojz5+3R0/frw5fN7PfyzcHV9eLT0ZTV7sfw59HQ/OflyZXF4saUwMPX/NfjyPPd1Pbo78HP7sDl1pfHl/foyOz03vKSzu6UnMnzktLs8e/t1+jxxcjy6pDM6NDS9O/dl+GV95P209XG/PWSj8PW4ZXGlM3v0N7pi/zw6ePX1tXex8vF9sDW197y1cjA6vzHlePL5/DH8Pfx0tXdzuvxxezH1efD1vHV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[429]='zv3c1eDx793uwd7Q0PbvnPPX9+fA9fyS/sDt7+jz6JLX1pac4vfv7+nJlp3hy97H1MfcyObz7+npzJfV5dX88d7i8cfXyOjV48jVndTp/OqX9fHqzdDo7/XK8OKS0uj3/vDoyJLV8JKV/cvvj9Ho9/PP8e+V9Nb369DuzeLC8uqR9dbiwMf86s7F8pXA9dSSxsfcxdT205KW1fzh78yV98Dq8urO8+jH08jv6pDXlM3nzZX3l+Ht95bM7d3U/PzxzciX0PXIl+H8xpSd8sHWzdLl85zr1vbQ6MHtkpLO7s3u9e7n883W1cXOlOqX6vDF3sH8x5HC3vfBzujq1OKVyJfG/OLz0ejQ9c7u59D11ciT4JXq9cnU0OPQ3NDrzdbx1PKVwJHF98jA9vLN'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[430]='ks+U1ZP9lc2T9t2U79btx+HR1tfm95Tn6cvW3ZfCy+/n0NWSl+z2wO3N1p2X9O/IkfLx1ZHzy+KT8ejH0dGX6ePR/MXy/ZeV1Mfx3ZPz8Z3A6fzd4sHd3evV/NDU45bIxdfykuvJlsjlw/Li3cnz55Xp1ZLe7/XN4cztyNfRl9DA9e/Ixc7W94vn1NDw9tWclMzx4sHV8tD+95bv3vXy0NLilNXA69Xd/sDU8vPNlNXS6/Pni+re15fH7Z30x/zy3PH80Ivp3uLtzpfxzvz1x+PP85LBzfLI4cz8zZXh7pLp1t6S7dLzne7F8Ori8pbql8LWyPzHlM3A7/bF7PGWnP3R7pWVxpfx7Pby993Mlp2Pzpad/vDL0I/Jl8jU/dbq/P2U8u/Sls/QxfzF'
+do local _={17,54}end
+while false do break end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[431]='1Mfv6pTOl5KcyNXv0sX16tHWl5yd8fPnlcHox873lcDh0PHyxcPo8dfK/MX08NTqncfU0NDrlpKUzZXAwdHT95Py793jyPyd68OV4vXW09DU9ZTi49be4ZX93sj+95XV3vGU1eLy8cDy9fzQnNbwlefV9s3o8NXd9dDVkpDV95LhydXq/PaX7+3Q7d3Q/ZTQ58mXnPPI7urd0JTq48jt3eXWl+rcxvLy/sft6o/NlcXp19bpw8PWnOLB1sje9tby6PDWnNLq1sjvz+jF6dX81/zH/Pfy85TH8dHTyN7p1uqR/eiV9dCV8uvN6Pfs8fOS69HzyJbRlNXrzZfFxcPvyNLjlPeWyO+V7vPzyODGlc39y+jIkcD89/b385XSxu/plNCVxZzP7c3sx5fF'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[432]='kNf8587q75Tcwtzy9MD18unJ1NWP1+7izvfVz/HD8uLx0Zbn08Px1fLH/JXpze2S4vby1d7ly9XS4tbiw9bL6tHI8+fQ9pTN0ueX8e3RlcD2wOjv3MDW1ZTS083N0PzF59bw8tzBlOrex+3v1PGWz9zs8vLv0pXA783L8pTMlffU6dPInNaVzeLG/JKc0dPv/Mfw95Hy7vLX1pfI3OvL1ZXC6OfS6dP3i/aU58XK1ZzRzOjx7saX6tDx8pLO8/zHwOrt79D01vLQ4tTy/c3uksDjlPKUyvDd8Mfu8vD11uHc4tbx/Pft75zI75WdwPPp89by98DCy/Lly5fqxvfyyNz0092TxvbAl+iW797ql5zQ4pTy7dHe6tHI/MDDzZaUzc/tneD11M3O5svV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[433]='5vf8zdDg6OLs4pTA1Of83e/Q1Ors8pfInM3WxdD31c/c9NPVi8bvlPDGl/fzz/HA0OeW6pDJ6Mjhz/Hqk+j2xcb17c2d9ZfF/Pz83Yvo/OrO6fPP7deX597q3NDmwtSU9dLW6Zf9l+nUwdb33dHxkpbM3s3t1/bq5cvdyM3W3u/o9/HV8sfex4vG3d2TxtPi8vH8yNHX9uLGwZbPi/b8797t0+/0/PDp7cve4fzB7sjwwJXV7cjW0Ozrl5LD0NTqk/KU0OPX9eLs8vzA49KWz9701ZTdye3V9Mb25+nQ6J3v1+7nksrVnJbM7ufFze7Q4vKV58bG3sXS4JbPkfPyzf3Q3uHUwPHi7O/y1d7h8++V9dbV4MLV3e/I8sjywe3dl/buxd7i1ufw8pXA'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[434]='i/T86pXt7cDswtzFl8KX4vzA9vLTw5T3182X6eDH3MjQ4ejq68vU8pbDy+/exfbi79f295H38dDBzfHy7cuV5+3M3eqQ1+7F58iWlJLN6JWR8vyd7P3U5/7B7cD08ejhlNDW6sDjl/Lw9pTyl+jVkvPRlunjzpTHi8DW8fDGl+LU8/zq3dKXx9PD6NWT8pWS3PH8ktDp1uHe4fzV3unyyM7o8sXFy5TN5dbL1ZH89e/e5u7Ql+Du6sbHy9Dhw+7A7c/z3dPQ3vLS8+iS8vDo4c3M85LRw+7VktDy4tD08pKW0fLnxdbdyPLC7sXdy5bI3OrUxdzAl5Xzw+7i/PbUxYvq7sDj19aVwOfx3Z3F8Mf119TF8MfTzeLx7eLcwMvI08ze58bGy+qL9N2c'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[435]='kfKU4tTH7erByZTInNLLkvL9l/Le/PzH9sDxwOPV8Mfl0u2Sxsfvz+/WlunS9u7nzvfL6uXRl53z0O/ni+XvnPbA3M3e6N3I1Oveldzw7cDlw/yV7dHzz9z1leLy99ac9dfw78b2053ry9Od/vXyksXO6MfS4/LywMbcwMHW1ZLO7db358yVkpXylMjXz5Xy0dHt0Ozv8e/2xfLn19CXnN7nl93o8vzyw87u8s731vfxy97V/PDUwO7z7+nd0dbVzc7LwOvK/NXlz/zQlsvTkuvM8feP0tbii/SX6c3I/OGcy5XQ1Ovo8Z3B05LOwpTi7sGW6pbL1JLs6ujQ3cmVzdTm6N3l0dbp6dD2wJfx6OnBy+/Il8fy597t0/fA6/LFkM/v6tD91e/D15fx'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[436]='7OrywJXpl8jGwt73/PbvnZf31Pfr1tTikfXt4pPBlMeQyO7y7Ojo8evD/NDA5u3nkNDz55fqlu/pyO7qnM+W7/HM8eLc5ZaU48n89+XM/J3s/PXV0uXW1d7y1tDj1vDX187WyJPi1vft15XVlezL3Yvz853x0dzi0OXUktT3l5XOwe/d8vOXwOzy8efc5++c9c3ule7C/Orly92U083W8vPI/M3n0u3n88vulf3N6Pfe4JXAj86W3ZLLl8jO8+jdwPXU1ebH0/fs4/Hn89bukuvI8pLmwt6V/dLv3cPM8uLs6d7F5seWlM7H3tf1yO73kcHLxZXn7e/Q/ZXF1PXu4tfW1efN1u7ql8CV8pzS3JWQ1vXqzvfVyNTh7tDU5u3d69foxc3Q3tDF0u6V'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[437]='kcfU6pzSlMfR0dzn5dbt75X3/OfO/cvFlNGUzfbB8tCQzMv34PWX3dD26OGUyPHi6838ndDll/GWzN7N1OeX79HSy9Dc8e7NlNGX987h7eft0O3v79Lo8Y/J6JWd/Pby7cjo783D1vH91+3n6Mfw15Pq9erXyPzXnNLc1fTG8MDDz+3A4P3oksHM7+rs6N3q3uXu4vDC/JLm8+/nkfbo6d7G1efcxt3qi/SWlNPS1seLwNzq7sLWzd7CleLy9svnlenoleLB3JLox9PvleCX1e3Jl+LNyfHy89bTkuvD1s3RyPHi89LWx8HJ6OKSyZXVlceUxeXQ3t3O9POS8dLy6pfl6MfDy97H9Mbe8pDN7sCT8O2d3u3T3e3I7cXT0u6V6dLUyNDt6J3O8vLN'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[438]='5vX88fzG8OHzz+/v1OLW4eHM7urewpbdi8fv6YvG9ciUz+iS7df3nc7n1uHz0PHd7MX88cDq3tXc8tT30sCXxcDz8ufh0Zbp0vPx9+Dxlp2Q0vLq3deV1cDp3sf0wdPN0PHonOfX8++Lwt2dle/w4unNl5Le6/Pv/sX8zY/W7eqV4pfQj9LTyO7A6JXnzNTizuf86c7A8+eVxtXIwcuWleXD1vL2wdbHlMjoxdzB093e4Ojp7cz8xc7j1Ofj0fzxl8DvnNPKy8WXwdbN3OLz6sDs8+f89dTn89LvyI/I7d2R/ZbdnMzx0JHz/JLw/PHAkfaUktLC3t3Q9+7AleuX4fzy/JXQwZSS9cve6uzll8j0wfLFk8GW3dfM7+fd1svvk/3L6vPR7cjs4MvH'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[439]='wOOX1dDm0+Lg9tbQkMr8lZ3Hy83S95XA5sL818DH0+eU0pX37dHe4dfO6JLixtzn1PTT55Hyl/Lc5svQzsaU99LC0/KT9PzyxvXu0PL11ND08pSS/v3tnf3Oy/fXy9Ti58/ulMXO7vL9yZTvle3e99LAy9Drz/Ly/sf89/TH8N31yejhktaUnfTHlefAxtaS4dDowMPPl9XFzpTn5saXx83IlZTiwfzp69Hdz5fglN2dwvHixv3L4u7wl8eR8JX3kszT0Nzq3s3cwpXi7dLvz+bx6PKV8vzdj87L6tDB8ufTzNWVwOnLyOjB8fflytTy1OqU8s7m3ZSdwfHn8cjy0JPr3M2L4ejq7dDVnJfx7Z2VwMvQ3dKV5/3S8ZLxytb3/vfzz9zr1PeT8JTi'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[440]='xveU8ujx/NeT8JX3zc2X6tDilO+X5pfy9c/o3cDql5zS9JTA3MCXnJLM0+f11fKSl+ny1Yvq3PfhzsvNi8Dt8t7s8s2WzdTn/vz8nP788pTUxvL3ktfz3dTi1ZTO8OjX89fT7+7y/MjXztXqk/bUlJXj8vfhy9bQ683t3Zfj1NWQy5Xy19eUne7Gl/fD0t7A7dLLnenJ1enzy9zqkM3W3eLy8ury9dbFl+bUktT31MDU9pXNk+b895bX3er88ejF79by0OzG1pyX9N7x78iX9+j16JWPyfznnfzWzevNy832xtOdwc6VwJ3H9siT9tPi78nondfP/NDnzPHi89aXnebF8J2VxpTHj8jo6uvW9uLmxvzN3czx4sbA8s3e7e/IzdD18sPDy5Lh1fed'
+repeat until true
+do local _=418 end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[441]='j9bo1fb18cfoxu7iw9HWzfTH8tXz1t3pzcn8wI/W6N3S/e2d6cjy1dTv8efX0O7Nw9fxxc3N6OKT4ejNxvPW1+/X7ued8OiVk+nwnM7H8ZLA9u7nj8jV58Dp8Z3e7d2VwcP8x/7G3eqQw5aV/PWW6vbz7cCT6/zx0vGVlf3Ols/Tz5fv8Mb8nfzA3MiPyJfy6MCU95TV8cDo9pXizc+V4sHR75L0wNT33OuV4t3Iy8CT/Nbv0Ove8sPXlZWRx/Ddw83ox+/V9cfD197N58rU95XolM3Gxt3pzcuUxdHM1vLh0pbIi+fU58b89pLRz/zhxcPzz+bHy+rjzO+c0OmWks7q3ZTyx/fv08OX8pXi/JKL6e3H4sDxwN3N853pzPz369bUkvPOl92c1fzh'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[442]='nMmV94/D1tWX4ujX0MLV6vHM8cfg9dXv08vvkujz8feV4tTnwOfznO7B8ceV98vAj8vo8dL07Z3R0ujF3dbLnZPB093d0u7N7O/wx+jH9+eX6fH37Ovt3f3Qy8XG/PXHzuCV8pfg7sXx1ujV9vXvktD06PKL69PqnNCUx+jy75TD1vLF18PyktfJ78+T8fzNwMD81evD1JTj0dXv587L7+jH3pLU6dbQ7sf2zdDo85SL9dXn18/80ND91vfU59TnwPLW8cHQy+qdxpXyi8bclM7i1MD8/Zac4PCX6dTt3Mjhw/Pd68yXxZbM1OLexfLV0vWU6sPNy5Lix5fQ0uOU4vTB/Jzy9Zad3c/xwJTW1e/e7ZTI9vHy0OLBlOqLwtXnlf3oncDr1ZST5ZTN'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[443]='w87Wko/S/NCP0u/nzunyzdPW1vLi/cvn6MfL6tTH7efTy8vij9f83evPl+qPzdWd0ubWnNfO1uLzz+2Szurwx5LS6M3lzJTnzczt5+D91p3s88vAwOCVksDm/NDm8vzHltDoksHRy+fD1u7IlfWVzdDB1tDlzejQ5dLvyOL9lurw8Mvnk+GUktz3/OLN0Mvn8cOU0OfS7Z2R9t3p5c/8lf7z7tXo9u73187u1ZTK9cXpw9bF6P3d54vql/ed8OjN/dH81cDq/PHs4pfx7vXv3ZbI1M3wwNT3kM/y8pbN8sidxfbykNbtne73l5LN1fedxsHc8sXR6MfR0svA7vGXwJzDlJLixtTy9dH8nPXI/M3Ny9Pv3cr85+XJy9DU8Ojp89LezZHBlunuxvD3'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[444]='0df194vA9feV6vzHxdby0JbR8efS9pfFkcGU1fTzlp3Nyfz3i+uWkvHV8+eV6+7Ils/oyNTH8N3c5tac4dbzyPXX/M3+wPXF3cnW1cXIl53extSU4c7onJfn7vfO9tWS9cjL0NfOlpL0we3A9sDtks7y8+fS7Zfyk+jt4pXm3ZyV5vLI48jW3ZbS6NXA7Pzx7cj86pLL6NXpw/PdltDvz+zi8+fA5e+cktD3kuj21OLmwu/P0sXw4s3Xlc3UwvHn8dDeyOnX9pLA9e3v1ODt6sDo1OeVxfCczvbo5+vV8N3m8NbFxcn86ZDDlp3s9N7V3Pbxx5bRlJLr0fOV/MDU59Lg1M3c9paV0vft1cHQ8c2T5fHqwP3U6u3X3tDv1svi08zcyPz16JLU4fHF'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[445]='7cz858HXldDd0NTnwOOX0M797vfu/dzN4sfo1ePI7pLcx+jn0P3ozZbLlNXixujVktbLx+z38cWT9t7F9dLtnZX03urQ9vH3w9Hc6ubCl8WPzejIktX8153C8pXh0uiSk+rUwMDx8sDly5fhl8LenPz26MXc/d7V1O/11eHM7ufv0e3F4P3tzdT26OHNzJXIwMLt59Lv/J3h0vzV7PTtxZbO1env1/HA1PWV4tfJ6MDi9e3yj9X81ZXo9+nO4+3qksr2yI/O1uLS9Zfy7MLxwMHIy9D1zfzA6dHtwJXo8N3Fzfzv3PH89870/OnS5vHi4czW4uPN7pSL6tSSw9He6vPX9sjn0PH30c/855Phls+Q0NyV4MHuld3S/OLA/dXd4cPVyMDi78jNy+3i'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[446]='4PLt59zC1OrXzNPq8vWWyOXLl83U69PizueX3c3X3tXA4/Pd08jW14vtlJLA/Zf3ktfy1cDqlMWRwZfV09DzlN3L1ZST6tPyzvDW1Yvr7urc6d2dwOn1kt3X3enF1+6S3sbTx+zyleeS1t3v7MbzlePR7eeV5fzF8MKV6uDy1NCL/NaS4c7u0MXN1JLD0PPq4PfokuLz1Ory8fH33uvU0NTv/OLN0e3NlcLox9fI6NfS4JSS7MGU0N7hl8fO8NbA1POV6u7C7Z2X6+/qw9eX0PzG7uf+xu3Q8sDUktDyl9DnzZfQlM/84eHD8cCW19Tq7OvT7+PM093h1fDHwOnw3dPJ1efw9/HQ4PbVncXWl52Uye3Q4czylfz91vHi/PGSwMDuyJbI1uL28pf3'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[447]='xc+UzfLF88jUwdzyl+vdnZzR/Mjtw5THk/Lyku7G1uGd9sud3OjxwNz11un+wZXF/dX29+jy6PeR88vQi8Dw1/HD1t3yx9zFwPSXyP7x/MfQ/NXd683znfDx8pLDzNPN/sHyxYvClurtycvFk/zW993V8MfNw+jVk8b3yNzw1JSWzpTF08rW8tLr7pLox5fd68rW59Lo7c38xfb3i8bu1ez26J3e4O7Vi8X80O/N8siL6JaV4Pbu0MD9l5LD0uid0c6WnNzty/eXwvOS9sDeyN3K8O/dw5fXxdbo8tfOlefewOjq3dDxxfz9y5LS6pTV3OXo4s703vfm9e+VkszW4ZX11cjm8tby7OPyzeHL3vLT0JaUlMrV6tTmy93By+6S9dbo1f3DlpzF0svA'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[448]='1OXxx+L81Pfe7/HiksjUzePP/JX9z5bn8PaV6p3G3MDjyNbv/czTx/bC/N2V6PHH0Mbe79Tm7cXx1/bV8cP81/3MlciczNPd9PXV59TB7eLDzpTd6dX175PG3Z2VwNbp3uLt0NL18cXU9vOc6MfT3e718cjRw9bywPCUyOnS3vGW0Oj33dbw8ZPtlPLwwfHNi+PV593S1Ofc9u6U3cvowPDG1JX2xpSSl8bz7/XX3Mjxy93dw9X88t7n1pLxzJfp9sLd6evR6OLAwN73wdHtwIvH3s3o/NXqltXwxe/Q1uns5ejHzvb8ndzp3s3S7PHnl+2X55Pi1Z2L9+7ykfeVyOvX9cDm9fOV8saV98PV9urm9vL35vfo7/PJldDB197AxsDtxcPSlJLU6Mvv'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[449]='l8bVlOz3y9Xu/d7h9cn84ov885LdzPOdls3o6dHV/OHF0JeS78z86u/R88/A/NXn3OaXktzh/ND8x/Ln/Pfo7+zA1sfF0cud9dLUzZfH/JyLx9P30dXw95fjlef0wfzI8PzW19Lhlp2Pz+jV4cjy1f3Xl/LX1fbynfLo18PQ7vLUxvPd7czu8pLMlcjr1vDQ8cnWx9ThlO/O9fLAi+L8zdDC1pWdwPCdkMrU1ZPC8+fswvPn3POWndLpl+/c/PHykfWX4pPH9pTh0dTN/sHu4tLq3s3T0Nbn3c7W6uzjluf89cvQ0PzUzc3MlJLs9ZTv1Pfold7C3enS/PXdkcDc1ZTV95zowpTn/P3d59L21pWWw5WS/c3895PglZLO9PGS18z88ZHz1OLwwN2c'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[450]='58+WyNPPl5X+/cvH6MKWlePS7tWL9ZfVlfX8nJXq753m99ac3Ovo5/HN8s3Ny+7N1OLznfXQl53o8/zXi+PLnZDXl53x0JbI8cPv6sbB3MCWyfLq08zTzYvol9Dz0OjIwdLo4pDV/J2cw9bQ5cPt8s7978/DyO3H5sHW4c7A75zd1vPv3vCX1f7H09Wd9cv34vHukunDy5Ls6O+S7MDLyN7p7tWU0tznks+VlNTC3d3T0vyc/PaUnZfn/MD8wu3F/PPVz+fNlZLwwN7i7sGU95Xjlc3v0tbvnMmX3fPOl/eR/ejN7MLTkuLG3Pfiwfyd8PHxku7A3pXGwpbpk+eW3f7B0+qT9ZfXzcrw5/HQ8pXm9/Hi/vP8yPPI/JLO6fXy4v3o8eXO6J3yxfKV'
+if jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde~=lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef then else end
+repeat until true
+for _=1,3 do end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[451]='0OvzyJP17cjcxvHA0PXL79zG95Xz0vHIzsLy55Pz8erzzdTq0sbezcD88cjQ9dWSl+mWldD89cDixpTVzvWUneDw7cfU9Zbn9dLvnePIlsjz0ZX36cnt75fw1vft0PbN3PP84Zf37s3U4Oicw9bd3ZTPl9fdz+3A0Oz24s3P/O/e7/DhzvTe15Po3vGd9ZfFzsfvnOvS78jy9ZXNnMzcwJLX08XpyPLF59Dt597n7vLzy9bp5vfVks7o1u/s9pbp5sDt5+zA0+KLwMvH/sHxyO3V/MWSytbX587owJX375Te4/znnfPz3fPO6JzQ9NWd3uvuks791ZXSx/PvlefUwJTLlNXzyO+SxvHoneLylOedwPfdzur3lZPt7sjsx9Xq7Orw1+Dz6O/A8u3F'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[452]='5dKX4tDo/NDN1/LA8PHyzZHB78/h1t6di+eUkt7plND+9fyS/vLvktzC/JLQ9cvn0ueUxfLyl+rU6t6VleuU6unR3e/Qwejx7sCWlN7y8Z3dz/PPw9bw8u781pX915bIj8nVlOD975zT1fWd0c/z3d7ol9WczJWV5c6V0NDs1MXxzPH3/PLU6vbG1sXm8tac3PLW5+7y1NWcyvzdi+zWnd3S1sDU9ped4PbU9/HDlOLOx9WUzvz1wPbylpzixffpwMGV5/LGlu/hye6V0PDL5+731t2L95fA68mX78HN1s2UzPHH783vyIv26MDR1++d0PzLzZbJlpLA4+id3db259z91enNyMvVxcjv7/73lOrgxfXqkfz24s3MleL10uj3/dDuleL91c/iwdTQ'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[453]='4veU98bH9ffewvHvl/Po987qlerU5vLq3uby4unW88/SwO7A6MDW6uLBlM3c6O2dzveXyPXRl5XU8JXi8sfu8t7j/PLS9sudnfHukt7j8tXO6/KU0ujW3ejB/NXQwvzX9PGU7/PN8+fn0O3nwP3d75337c2X5u3iwcOX3ezw75zwwujFk/Tc6tPP8Z31yZeSi/Do7/XM78j+xvCVnNGUyObA8ZL0xpTA79Hdz5TQ88/pzNTNw9fWkvDz1pLs99XqkM3ylcXMy8XzzZT3nfCX99fM3JLc9O2d/Pbx4pLJ7fLU85edxvLz6ufD1pLexfLI0uDWnIvBl9XSwpfF3sKV8uLAy/fy8tXP4seWlfbA7dDO45Ty88/zz5bI/OLG98vFj9fW4e/PleLzzejd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[454]='9MKXlZXl1sDTyvDA7dDowOHW6N3Q5vHI8MeUnfPO1MWWydTNxdDdku3W9pWUyPzxzsLW6uHN8fLO4JTI3PGU1Y/Q6PfixtWS0O3T0N3S/OHR0cvdl+PW0N3M/MeS0NbhnMvV6uDw1uLFz+/n0dXy8pzI6JXU9ujqkfWV4pX03er90eidj9fLnevD/PKT59bh0dDuwOb21eqV/PCd3u3W94vp1vfQ9dbn7OvT6vXO6NfUwO6UkteX4cDxlOeUw/Gd4cnUlMDm6NfU5eid4daV9/PJ7urxyO3FwcOWkpPA9sD2wsvdk+DW4e/R1siQydWVwOvy4ujz75Lj1u/qk+aV6tL91c/Q9pfVwOPU593P6JLGwdTQkfbo6evQ88/s9e3F18jy6vTB75Tux/KV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[455]='7MX3yPHX1JL0/PHV4sHzlPzAy/fNy+jAi+LW6fHXlNCcw5ad68jx0JDS3PLT15fn/vzz6tL03umU15fXlNDL8uPKy+rFyZTywMDoncXL3Pfe9pad09fwktDo7cDSwfOUzu/2lZDO1t2PyfLA7db84ZXC6JLl1pbd0sKX1eDB3pXo/dTA4PHx0NLp3pX+wtyU4sD8x9fN1pLO55aVkNbc6t7x6PHrzcvFzdb26t79y8jQ6PLI58r21dLp/PfDw5bI6Pbxx8XL1sfByJad4sfy4vXOlOLy8e+d1PTt79Ly6NfS/dad/PzL8sDs/JWLwu+cxdL8kpXH9ZL2xpaU4crVyOfJldDA/PGd8sf1xY/N6N3w89bynceVyMDol+mL9e+d8PPx997B8vfxz+id'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[456]='8P3olfzA/OGU15fd3Pfo8tLn1urGwpWV/deUnc7wls/B0t3d68jo5+bAy+rv1/XN4MbvlPDw75XuwZTH5vz1x83MldDU4e73wOjonPPR7+rGx/Xv9v2VyJTN8+nu8Jfxi+jT1fPW8sX90t2V7Pbt8pXp/J3U8/Ppk+mV0NPX7uLw9/zIw8rL1e78y83x0fLi0OCXwObx6Nf2xpfd/PPU6ujGlPKXwcudj8zUyIv93Zzs4JT379Lu9+jzl5Xt0e3qwPXx94vy1uqRx/Dik/GX18bC75TiwJXqltXx3ZPA7cD1zfzA1Pzwzc71lfLGx/DA9MeWkuL93cjox8vH8cnt0PzB6NCc1/bn8PGU1fTzlNDNzNOd/Mfo19fK8JyL9ejv18nyze73leqRwt7V'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[457]='levLncPV9Z3t1svq8sLo15LM88jDz5SS1PSU5+PK9veWze+U3sCWyOnP8Z3Owe6V3dDu6unX3NXt0tbI8czxzfLz6NXjzNbAlsmW5/HW6PHwwpeS4MX84ovn1MjA4ZWS0sXylN7olc3w9vHd3vPy0OHD1OfvzpXA8dfx0I/IlerTz+/v7PaV0O7xl5Xg8fzinf3Wnc7F/OqX7/bVl8CUncPXlpT1zpXq/PeXktDq7cfGxvDQj9be3eDBl/HUxfbi9PL8wM3X6Nf1z+3Q5vOU1efX1eeT/d7dk8XwwM7z7cec1/bik+j3yM7w6PGTwN7nwdaWldDz1Oru8NbplND84u73/NXS5ejX7PLxnc789ursx/bnl/WX1YvBy+eczfKUi/Xo6e3N7erO6ejh'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[458]='xdfW79fI7erzyvDqzvCV1f7B7c3rw5TFlfLUlN3J8eqP0t7X1MH84f7wlPfl0PLNxcOXlc7Cl8jx0fzx0OfWzZXzlJ3rw5Ty3cuUx87z88/n1faS1Pf81ZbV8ufm/ZTd0sfy5+7w1p3jzujX68/uxZDJ75Xc5e7A487o187i1vH29/OVlsiX8s3M3vf91/Hn0PLyktPN8+rSwe/pnMrL4ubA8MiV6Pzh0unL8sDrlufN1tzi7dDw8v3I8e/s8fzvncbT0MPQ3veT5/Ocl+DVnOvI7siWyfznj8PWlfDB1vfS4fPp89b1xY/JlOKdwMvQ9PPWyNzs9Z2T6PyVkNDu55bSl+LNzfPp1MXzndzml+HewNTn7O3W6tL18ufi/PHy9sLW6c3M3JLi95XA'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[459]='i/3Lko/S78j2x/XN0cPx993Q3vKL6dTQ8vDVlJTS8fLQ6O7IlNbw6d7G1c+U0fzV8PbcyMHJl+Lowu7Qksrx0JX2l/GdwO+Uk8fvlOzzlNCQ0PHy7PzzleLGlOfhyvDhxv3T6tLj8pXe4Ojv4Mfwlc7Gl/Hv18vvnNKW3fzG952X8fzI5dGX8ZX27vfzw9bA9PDW99HR8eLw99ac0vKUx9zl8vfD0Jbn7dXx9+bG1vfxyJad8PHzyPDy1PLi8O3Nzcr21dDB3vLz0fPq5vKWnNT0lpWRwJXAzsb8zez27uKXxfbi0OPvneXN6PHx1veV3ujx6sHO1t3u9+7qkNfwx4vt1vL89vzQnM7tx+XD8ueX9/LqlM+X0M7y85zS6fDA7dKUwOznl+LuxtXv'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[460]='6Pfvnf721vHxy8vI0cnW79PK1t3T15bq5daX4ebA1pXdw9WSw8iV6t7m7vLOx5aVi+mU1ZPA3pLixffdlenW4c7B75LO4fHQ4vHzz9fI7cXl0JfxxsXxks7j1ueR89bNi+vWwMbw7d3Q9/HFk+nU9/PJlefO4+jH08mVlcXR85z8xtPQk+v88dHS8dCSzMvi6c7u8vL23pXzzcv3/cPLzZTNlMDA9dTn0dfo14/J1MXiwtzQ8c/v5+PD85zS7/X3wPzL3Zfq8cXcxfzI8dbc5+721enFw+jdw9Le3d7Bls+L/MvdzdHo8e/J85LQ6fzx6dDVnJTRl+Ls9pXq7PSU6pLMlZL1zpTIi+z8zYvplMf085fxzvPL783K98/v0fOS/PP8wIvo/PHe8JTI'
+do OJKLMNOPQRSTUVWXYZab=lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef or 50 end
+while false do break end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[461]='wOaU8vz88dXs9t737vzx6pXt1cjU/e3QzufVyP3N8d3u9daVktD36pPy7ZLBy+6VzuvywN3M3pLXw9aSl/3VnYvq/OqX8e3H4dbW4pXy6OqP15fp09bc4tzGy+L1zNzy/sHowI/Q8uqPzNXd59Dy0JbQl+/g/dPn5v3t9+7z6MX91feUzcPWku788OKV69zi8Mf80JHw1PLD0JTF0sKWnN7q8d3zzPzv09Hz3evV8fKc1u+dw9DLnfTAlOrNyvDn5sLVz9Ly8sjDztWd3vzV3fPMlsjmx/XQ0vTtwOLyl8jD0N2V/vbx5+j97sDU5tXqk8fo4e3J1NWWw9Tyj82X6ZHF8eeV9Nbhncby1ZPA08X8/PLn8sLt3Yvo1PLRz+6U6c7U1fHK1PLdyejQ'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[462]='6dHL55zM6JLh0PHv78nuwObHl8eV6fXN1O/2wMXQlNWL4/Hi3vfv6cbA9ur0wtXPkMnywOnS3vHX1tT3zcjt4vLB85zmx+3FwMGWlNHQ6OL1z+iVzdXz6tTt1MWLxvb3kszUlO731ZTcx+3v4seV9+HJlJKT8+3nnNaUx/HQy8DT0PzpwMbuwOjy85KL7dTFlNfLnfDz79328pXAk/3okufS/OHl15XF4Pbe8ufL6Nfp1pTF8cvo3eb2y/Lh0NzN/Mfu5/PW3OfU6vLNwOjx55fB/OGTwPHn4sX85+DC7dDs5eic7cjulNTx/NDe9ejn7dLU4uvMleqT5dXPwOXy9/bA3NXm8/LN1Mbo6uXQlOrj1/aU6cvT99PM75XG8/yS8sbc5/XR8s3O5u3I'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[463]='wc7vnJbWl+Hs65Xq5cuW3cXL7pXrz5aV0cmX6tzylZX895Tq48380JzR/Mf10fLVw9DVlNfQ1OrQ69yS3vWWyPTA/N2W0PHA9dDe3ZbI/O/U4u7n59f8nNzq0+fRz5WUnNDV6cHR3t3s/Pbq4vHo0M3Ky+KSy5fN3cjW7+HS1pzQ5tbq7cvt0Pb37+fU7dbn5sDvkt7F8s3Q9JfinMnx9+HQlMeV9JfV8vfL0JPnl5Xxw5TQlfLzz+Lz6MeX4JTq9MHU1ZbQ9dWT692S7vDWx+L3lp3R0ZWUzdbw1eXN7efA9vOUltHtxd71lNCRwO3FlM2XxeXR/J3d1/LAkfDLx93Nlur8wpTvlenV3YvBlt3Q6Nb37Mbw8tDn/NXc4O+dltDe19PX88/XzOjp'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[464]='8MLU8tLq09XBw9bIl+n8lZXt7Z3jz5fAwc/8yPTy7sDAwtPqlMjL987p3teWzNbv1Oj8zZTJ/JWRwJXq0dLU1cHX3efA6e+Uk/PW7+DG8MXQwZXI6MfvnNTplc2d9vHn6cOUyO/P7urt1fPv58rUwPb175TA7PzF58Pv797jy9De4/yV9dCWlPb2lOrr1fHI6MXwkvHX9pKU0d7n683VleHL1tDy8vHHzueUzdDty53nzJXN0cvT9/Ly/M3O7cvi8P3ukvbzl5yX9NTQw9LV59fM1ZXc95Xq1Pbo6YvzlN3c6PPd8MDvyOPW1pLe8vzv5sCV5/LG7ure4JWSj9KV6uzGlMXc8tbQ/dfW8pbQ8pKLx/zd9sCXwMXX6J2Szsvq8vbWx/zwlp3cxtbn'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[465]='wOLW1+nOldXr0NbNzcnukvby/OKX6pTN3uj26pX23pLp0JXn/sbLyO7A6M3dyZf30cOX5/DzlunU4vLVzsDo4ZfB1sX08pfh1PPWx9zHy82cyvCV5c3tkov07efUxfHqwOjx6s7i1vfXzPKV49b2wOzp1Zzp1pXi/MDw6uLy7dD1w5bIncDdlfbClumX8uid59Lcks731Zz+wOjN4vfV6t3S/PeczMvv9sb2yOjG9ueT6t2U/vbW75Xty52T9/Hyl+uX3dTz/OLrzN7n7dbc4pXh7+f28ZTHwPKU5+PX3ZXj0JTFxvbT1cXLl5XG8u7i9vXV7/L38Z2V6tbv1OfzyO789urQ4Zf3w9Hezdzq8PfhzdTq7vbU59Lh7ff0we/d7vbx4uzB6MCX5ZfN'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[466]='0uvV6t7p7erp0d3P0On155TW0+ru8JadwdDVkvHOlt2d8OjH0sLTwMXIldCL5tbA6dDy94v9y5KW1vHA0OiXnO/Dl5XO5ZWU4MaV8sXR/MX+8JXy3czv7+7By8jl0eid9ciX0OvRl+rtz+jv7vL8ncPW9+/cxfzd7PLo8fXD8ffQx8vF79LzlNDmlPKP0NbHzsGV1dHQ1M3mwcvHl8Xw8ePR1tXD1vDyxsfU8uz23t3U9e7Q69Hvld3L09CS0PDh19f86cb2lu+c0peSwc+W6uPR08iV/PDN0sb2lJbJl+Hs6u7Nls6VxeDF85Lt1++U7O/znJDS3MXO8e6SltfU6vbzl9CUzO/q5dLu9/LBlufc8ujn7ODL55XG9Z3vzZaV0veWyOjzl+mSydXd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[467]='ls/o8e7G3cjw9e3n08ze4tTs8OH90PySxsDL6pfj78+V9vHv9sfT7+vN6Pf095XV7MGVks7pl+qQyfOd8Mbc99DA8Of2wu6U18ntko/V8cfU9JecxdGVxejH8Mjc4tbAk+jtzcbC1Of8wPHQ083zkovpl9D0xvWSl/CV0NPMy+qczN7h49HclNz31OLj1+/n3u2U3Yv37dXG88vI8sboyOHX3JLF0vLi1MHylNTll8XmwPfPwMLW6dLq8+nv0u6Unfb819POlurS6O3Hw9bxkt3L1urO5e3n9vWX55bSlufhzO3ynNfex/PIlPf+xujxl8KUzZTD7ffl0PzAzsDo6ZXB1ufB1/zX8vbe8c3I6MDR1+7Fk+uUnZH1lMiUzPzqwPeU6tz28tWRwMvv'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[468]='wOLx59791sXy9vzvnfz2zZXtlNX+xt3ni/eU1fXL3OLO6O3v/sfTktz23enUxvyV6c3W4vzH/MXj1u/IkMvcleDwlffQwvHN48zt593O6OqVx/Hq8ciX4cD3/N3s6e331MD33fL9lp2d9vKVls6Wz/LG7ZLU5e3qxv2VwPTG8vKd/MvQ7PDvz4/X7dXOx93I7OrUxdzs1Z2W197pl8fx1dTq6MXOx5TF9vOX7/PLl83hw5Xi7OXz3e/D8e/tyJWS0OWV4tfRy92S0Nby7vPxx8bzl8fSxpeVw8vWxZH81sXS9tPN7PPt7+3R1Ofc6tPA1MfLzd3Nl92Rx9PFzcyXyO3PlpztzZfQ3OrL4pfp/NfGx5fdkM6V1cDA3pzw8fLQ/df16vzxldXc7ZSd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[469]='79Lxku3S7dXl15fy3MD3ndzB1Mjc6t3n0MbW95H1lN2L9eic/MX1kv3O1MXuwvzxw9GUzZXA1s390ujd58nvnOj26M3SxfXd79fo4ZzW8cjTy5bdk+Xznejz8Z3xyNXvk8DvlJDWy83exsviwOjW1+nS6JzR1tPNwMD1wJDM/On9yfPql/byld3X7cXpze/p8P2X94vjlcjGwejx3MDvlPT8y+Lm8O7Ij8Pvz8Dj8s30wuj3l/bW8ePJ/JX90vHn9PXvnPLF8sDUxpfi4sD29+zj7e+Pw+2S8MeV0IvA3u/S4pfFzcPo7+D88uKQzJSS4dbWx9D28efe6tPI3OaUxe3S6Oedwe3izc7WnNPRlO/j0PeUltbzz8718cXd1t7H883WxcXV8NWT48vd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[470]='ksuX4ZfH9sXD19PI4PHoldHR1PLv0fOSwOb84ZXy7Z3A9t3Ik+vyktHNlerwwPedzsD81Y/K8ZLS/cvVk+no54v008fjzZTAwPfvne/V/OH90NPnwdbT3d7x8eLix+7Q786X6ZP2/JLt0OiSzvOX6ZXglunh0u3y/MHL6vL2l9Dmwe3y8MLt4tzw6OHd0NyV6crwlZPt3JKX9uj3ltfcwJfm/OeXwPXF/vXtzZXC7d3swPDX4dHulIvA/Ori85TAk8DwyO7zlMCU0dTqkMr14tfD75KT7ZTV/MLLxfHQl+rv0vOc58OXkpLW/PHw8fyc88jW95PB1MXs4vPIltDdyO731sXxzPLF3MHUlPHWlZLQ5tPvw8rL0MXJ7sDDz+334MbTx9fX1e+V5dT3'
+do l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL=jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde or 332 end
+if OJKLMNOPQRSTUVWXYZab~=OJKLMNOPQRSTUVWXYZab then else end
+do OJKLMNOPQRSTUVWXYZab=lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef or 294 end
+if l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL~=OJKLMNOPQRSTUVWXYZab then else end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[471]='/dLclN73lcXF1vLi79Xw8uXWy/LN0vzy4veVksHW8PLlzO7I3Oz8nNzl/M3BzpTqlejtne/X3uLc6JSd1OeVlM7g1env0dTi49LT9+/My9XBzpXil+zylNfX8pLe49Tn5vKX3cDjluqT6pbn/Mbo95zJ/OHU7ZTH18vd6fHV9Z3dye3i/Mb14uzA7uLxzPydwObe19fS/PLw9pTHkM2U0JPolu+Py5XQ0dbdlezB8c310PDixc3uyMPJlOKdxfOU9Mfd3Y/Q3MiU1t2V3OPu59DwlpXU6vbF6cOX4dPR7d3O7Nbq08mVzfL8/OKL88vq79CV0PDA8Jzx1tXI0O/wndDB6OHS4NbQl+HylNLp0+LgxvzVk8DulNL27eLQ8+idk+P819zA9cfl0dXv'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[472]='wOjdz+zrlOLvztTV4daU9+Lx7cXzzu+U9dLTnez23tXxw+jV7sHUzY/J1OqL8/yV9dCVxfLB7vLsx/zd9Pf819T16O+cyvfI3Ovz3eHOy+/B0tXd79eV5+72/OHe6dPV8MfV6Z3xlOfux9bn88PUxcXN6OLU4suS3OnclPTB8ZLQ6Jfx7vaVyMDB1MDA6vXAl/Dt55TK8J2VweidlfPx3dT38sCX8u+S9Mf1xe/R/MWLx+7A3c/818XSlZTywujXktXz58Dv8tWcyJfF4MfyyJbQ7eLU/ejN5vDV6s7ClM3ewd7AkNGU1dzH3uGPzsvn0MHox9T08s3QwMvA4sDL0ODx7tCXwJeVj9HdyJP31ufwxpXq7P2UyO3L3e+T/eiV0urw58DBl+nh0Ojx'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[473]='0MDT75TDlZLlzu/IzdLvz87glPfe69XqwdbL6o/Q9eqL/dPnwMbW3fPD85zA5u3F3MDexez11Z3O9u/q/sfy0Ivtl/L29/KUj9Ho6uzr3tXRz/Hq7vzLwOL11seS0pTvnNGUx/HLlMfQ55f3i8fclY/Q09DAxvXFkfzWnOz81pLo8e3yi/bVnOzG8NWUy5TikffywI/Il/fh0fLy7P3d3f71753FyvGd8cz88vzG9eKX9+6U6MfWzfDG3uLt0svq0uHt6sPW95Xv15fdi/fV6uzo08WQ192c19DukvHI8eeczOjFwdDwxevS7ZKS0ZTy58OV8unI1enO6ZSSxsbxx9LG9tX90u+S7Oz355HAldXRyfzhleqVlfLxlOrs7dWU6PfU8uzy1s2L7PfI'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[474]='48yV0Ozt1sjDyPHv08zv6dzH8MfNysvikND8wPD908eL6fbV58+UkuLH95ST697Q7dDVyM7z/JX+9fHdj83U6tTo3M2S1svHxsfu95Xo7tDX0pfq08+XndLj7c2T/NbA4PP88unK1JLe7/Dv9MHv54vC8sic15bPnfHt4pHA1JWT7d6c/MH8x/LF8pLswdyU3vfWwJfll+Hc8e3F/dKXx97ny+/pz+3dwMHVz+vI6PfUxu/q7OXUkv7w7pXnyvPIlNGV4t7zl8D8xvDp19Dx5+71y5Lx0JTI9dfy1eLwl9CU1vHV6PbozenS1vGT9Mvd0vTx1ZDKy/fu9tbvwcrW6cPO793gx5fH3MbeyNTz8cD11+jH3OOWks781ciU0vzI0OXo4vbAlfLe8Oji'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[475]='3OWU583Q/OHw9ZfA3PWUkuPW8MXxydXq9dbV7971lJLix5fv09fclePJ/PLs89bFi/zxyNTzy8DNw9T3wdLy9/DBlPePzujvwcjtzenQ/PGV9+3H58nu8vLB6J3m9ZTH0uuUnZLL7urs9vOV7vCW3d7C1efO99Ty9sfu0ODA3veV7/DNktb159zz1enS7Pbq9sbU0N3I/N2R9ZXN9cPxwI/I/JKT6u/P5vPW4uHK8OfXz+3V9PGXnZfz8ef28ZXn8sXw8t7C1sXQwJfqksvW8e3L6JLz0ZSd4v2Vxc3X8fKT9tTAzdD25/PR7sjcwpfA3vaVlM3J753A9O/I88+X6ZLX1p3nzfGSk8bt6sbG3siT7Mvnj8iVldL3l+ns7PLA9c7Vz/bHl82Qz/Li'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[476]='zcry4sXN8Z3s7PDA9vXv59716MXpy97dw83vkpzM09Dox5TQ1Onx1dHS1tf1w+jNk/fu1Zf26J3vyZXF6Mf10PHW1tWV8+iVxvDo1ejxl+fA8++U4PLLx5DR8eqPzO3A19DLwPzxl939yMvQk+2W7/PR7dX1yvzhi+zwzdzmy932wOjd7MfT99zyldDe5Zbn6c7owPHL1pzhye/n0uvW75P93ueR8fydwObox9Dzlffs/dXvk+aU4vzB7cjQ/NTV5vaVlJ311NWS1u730u3czdPL3Oqc1pXn4cjvkpP11cjiwpfh3uKX3enD1JX+8fHy4PDuyObA8e+X6vDhkcX855XqlpyLwNby1ObW4Z3908jw8svy8vft0O7C1ZXywO3n19bt9+XV8eKdx9TI'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[477]='1PH84ezA1uGcyNTFzuHznJPHy5LjyNbNzvSVle3S8e/t0O+dk/z19+PV8pXs9e7Qlfzx6vD38cjrzZeVwMDVnc731cjTze2SltX83dPM3PLhycvy0dH8nJH11cj8wO3yk+Xu6v3Dl+nrycvd3ubc6pLV8OKQ1u7Q3dDU6uLH/OnNzMvA59CVlJHH3s3G9tXn8sKU5+HM0+qVwZTN7dKVxfD27eLsxpbn4MDuyO3L3urryZfx9MDwyMXRlpKQw+6UzdDc9+3X3ZKX/cud79Ho4t3N8e/hw5fNzdbyxZ3Al8CdxvOU1OmXndLl6O/U85fdwOftku7B1MDBz+3Q9dbe4p338veQyNbvk/PW6pHC1Z3ix+3vzvbWxdLzy+fS9+j33OvW74/J8efrz+jn'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[478]='k8fUktPX3uePyJTy79Hexe/Q7e/D0tPn6c+VyM7H8fLn1tWS/c+V6uz0/N2Sz5TV8sDu5/HK88jUwJTq5cryzdfN7++PyJXF9vCXx/zyls/A4vHyzcnv6u71lJ3U9/HH88zclPbGlZLU9vyc/dLu6uLG8OnS4sud6dDtyNz96OmTxpfQ6MD8kvDy/N2dwd6c3PCXnZfC3sDUxfLy19D11fDBlcCU15fi7OjW8uz36OLj1/bq3MKXxcDz1uLg8vOU9MDU8ov1lcCTx++d/cjykt3R7s3p0O/P7vfo14vG08jUwPDF4Mfu8uzy8ufnzfyc6P2X6ovn1uKQ0JWUj9Hu9/zA753O6fHF0uGX8Y/R3c/11pfHl+rU8sXQlNDQ6tbAkffU1eHI8pTO5ZTi'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[479]='w8+X1ZPzlJLs6O7n487W4efMl+HUwJec4MLuldzh8eL11vbVncDW8fbF8NCR/Zfn9dD2kvHXy9DvzPPI9vXulNzq95L2x/KVi+ft6tTi/N2cyJfi0dfykpXB3eqQw5eVl+zylevN/MDUwpTI78nulOHM1JXBzsvH0uft1e/Q3e/1zOjHzsfxwOjwlcDlydWS7c+U79DF9ZLXyfOS4sfenO736M3S6u7y1PCUzevX9pXGx/HnwdHx8s7qlPfrw5TAxczTx+zq6JLDy+733vaX8uvJ/PLTycvi9MCV1cXOl83ByvXv3vHv6pfp/Orrw9TI1OrdnZDRlJKVxpfF9sDT55bP/Mft0vOczvKX4uzr3JTs6fHVwOrywNL3l+L1yJTF/v2W6dfV95yV4tXI'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[480]='nNHV3d7r08CP1tPF3uPt8v3Ilu/y9e3QkfPv6pfB1pWQy9Pni+PVz/bBlJ3O4tbn09Hc4v7ClZXU4/zHj8z8lcPX8ff89ZSd8vLxyPD93sjv0fyVwdHVz87t6OmV5dTA18+X9+nS78jQ85XA3PWWnOztlp3Q6vXI9PzwlfD21t3FyO7q/MX26sDB3vHmxfLq59fW59L3/JXiwt7Q8PHv74v23erwwdzn/dXz3fDxlfKV4pfn8vfy1ZTP8cfO8vOU8PWV5/3S7ur8wdzA1OrW6v3X8O+dxpXn087V6dHD8dCRwpfvw9f88Yvjl5zD19zij9KU59zmy92P0ZWSj8zV58Dr1efg8pTA7c3UwNHX3ufc4O7N0vOXx9Lt6PfAxfaS7PfvkpLV/OHSxtPn'
+do PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI or 554 end
+for _=4,4 do end
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[481]='783x6pbS3tXO4u2S7sfckuXQ1JSc1vDpwdHz6dLr7dDF0PLn1MfVnNTiy5KL4pfdncfc8sXI7+fr0JecnMzt8uvX9s2c0cvd7cvt55f01PL1zPHykfz8ks788Z2P1vDQ/cPW6ufK/Jzu8JWVwMDT6v3D7cCTwNaci/CX75fv9fLc8ejQzdHW4vTF8cfO9/z3/c7W4sXM7cXi9ZSdj8yX1ePW7cDF1tWV3dHtwNTGl+/SwZbp6cvo0OXK9vfs5/zilMzozZX17eLjzZfnl+DLkp3z6MjUxt7h3Ob8x83QlNDB1vzh0c7oxc7Ay+Lzzu+d3uXo6ZXw6JKL95fXl8HW8fPL6N3s5t3nxdbL75zO7+/AxvL37OrTzevJ7c39yMvvktbxkpPtldXe4fLq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[482]='18PukuvJ1vfj1+jX3sD1xdL3lZXs7NTq0dDW4pbSlZXm/e2d0unU5+D88eKL4vzVj9aV9+PJ1c/T15fIwPXxzdDo7pXQ8+6Vxdb21ZzL6OLjzcvij8/o6u7188/e5/Oc78jxx+nPlMjB0u7nzc3W6d7m8uqSzJf3l+bUzcDH9cDRze7q3saU1d72l/ftzMuS3MDox5fi/J3lw5fQzu/zlY/LlpXO5vPnw9CX58D3/On90Pfn48vozd736NWP0u3q09fTndPS1enhyNTy8dGUwNLl1s3Nze6V/sf8kvbwy+/10e3HzdeX1/3Ll+fpy5fvj8mV4vD17c2W19738vKXkpLQ8pTu9/LqktHUyJPilPfUxpTIwPLtnezCy8DB0fzx3PPtwO/L08fdyPHA'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[483]='7OX8zc3Xlt2V6vXI583owNHV85WPzZXnzuje0JLR1OrAwcvq9cnWzdTv8MfU9OjV9c2X5+XNls/88ZaSj9DcyM3Q6NfF0Pfd1Ofo9+zi8+mLx/DX0ubt75DW6O/e5dTA3vaWnP73l8fl0tXPk/GWlc718+rt1/Hq7sDT1dHD6PKSyvKVkf3T1ZPs8pTB1taV3MDc55323e+VxfzQ7v2XlcXQ9+fAxpbpxvPtnfD91MCSw/zqncfVlY/W9Z3Q8eid3u3T75LN8e/D1u7y8vPolZ389pTc5vPPkfDWzZXs/JXwwfLFl8LW7/3W/NXhzZTH7c6XyNDz1ciU0tT39P3t0PLG7vLg95Ti0Ojdnezi7sje6/yV8PeX6Z3H85LS7PHqw9GU1eHM/OnQx/Hd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[484]='lsr25+L28vfU9vLqlejUktHQ3cjTzPHQ4c7uyNzx85zmwe3Qi+PWyJHAy53c/dXp3PHy4sXN1d2Q1vXA3uj33eL31unzzPHA0PbWkp3w1tWPz+/vi8LvyOzAlOr1193I89GX78DA1vGT9dTNlsvtzdfK1pXz1tzF4P3ex9Lqy8iTx97Vk/WVwPLy7Z3NzJfh88/zz9fXlND88vL37MfLzZTW7pXty9XPnf3o4vb3l+/v1+3VkcLex9fJl82T7/Hv0OHx3Z3ylMDdzJTI1ODUlMHNlfLi/e7N7PDL3Yvz78/owpTH1MHu0JDD1c/o8pTH0dCX3Zfs8+ng8fz31PCX6dDzlM2U0NaV9sb11efK8erz1fDI88PylZ328eL08JfI6MeX6tLnlZWc0tzI'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[485]='lceUkovB8Z2U0O7I3vTVyJTQ8OHU6fDdwMXylMXSy/KRx8vi0MDw8uvS3JXw8tbA3PfUxd79l++R/ZWSzsbw4dDw1teU1pSSnNDt6uL9y8WL5tbv7Ov8ks788dWTx+jQ6Pfo1enQ6JXFyvbn89Le4ZDJ1MjjzO/I0vXVz5XA0+rX0tOd78OWncD0083S8Jfy4MaUnfDB7pLQ7d2d88jo6vPM1NWL6dTFi/Lozcby/OLA9e3i1OXyxd7C1MXo8vLyj9DW6tD16PeV8JTAzuX81e3I8+ny/NbQ9dDt1e7Ay+/vyZfI6MCW6ezs9cXNyPLNxcve193W0/fc4pfd68uWneHJ1d3DyZTn3sb1yJfw75yc1vbi9POX7/7z1uLowe7qj8rW58Do0+rtw8vq'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[486]='08jyxeHN8cfy9fPn7cr8wM3X9vfm9vz31Pbu0NLp9ceX9N7y7c2XlePPl53DzpWS0sX1ndDA7ffo89byls/84Zf91tfA8ejpk+Ht3Y/X/OmV9cvQ9P3tzcPV8dCT6dbd59bvnO711vfSx9bIzvPLncHN/JXpytXn7MbT4tLilt3A8JTnkfCVle72l8jn1tWSxvPtzenJlpzr1pXN79be8tDA85Le4O330vbUwNLs8eed9tPy487uxZLW8N3G/e7Ql/z10M7j1Zzsx97A58zV3dHM1s3s4/H34cmUxZPi7cDw9pXI18Po993XlcCdwe7319Ht8uvJldXxyvfdk+vx8sXR793Q9OjH7veX8pXA98jnyNSS1MLtyOvN7Z3Xze+S0Ob8ldTh7cDp1/OV'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[487]='zvLo4cDtl5390tXPi+fLnej8/NWW0dXn5vWW6ZbQ/MWXwt733veX4ePS6NDy8fKV4dLW6pHF9sCd9+7i3PTL4vT81d3A5fGSk+b88c3I1JWd8u6SwMDtkuDHy93DzZbI0ObWnfT27ef8wpTd58Pt6s7h85zxw9bqkfLznYvmlZTQ5pTVzdX1kvXR3PLn0u7AlNeXyOzz/NWW0Pbq0uLWncHX3t2T4ZTQ7dD81fPRy8DQwt7H186V1fD81sic1fPvj83WwPXQ85SL7dbIlMPV6fDF/OLe99SUzuvTkov8/O+X69PIltbdlMDH1emT5Zbpi+X81/L88d3D19WS/dGXzdLo9tDOxt3p3vTe6dfS0++Wz+jnzuaV8vz11JXB1fDQ08r3ksD91OrU6Pfd'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[488]='3Mfo6pLWl9D29/zq7sDcwOXM/N31zZbdwcPL0Ozzl8X08ZT31Ob86Zfo8J2R9vH3kfbenN7z1ZLt0ujIxvDu95HH8NXox5eVj9KV6ubB/Ofuwe3F5dDv59738cXFzpX37ObeyN70l+rc8JeS49fL79L88OLn19bi8cr1wJHG0+f+9Zecl/3elfDH9+nr1/XyzuqX4fPX/NXh0JTN0ujzz/zwl8DwwtbNlM3z7/3Ol5yVx/OcwPzUyJHy6PfS/ZbP4Mbe0JDDlffc/PKV7dGU4pfqlcjnzpfQ49LtzY/K9pWLxt7v0OLL0JXglufe4vLV7cn8levWlMeX6PCdwdHtwJLMy/f2/ZackM/84e/X3sD11/Hv78PylJP01sjm9pTV18mX55LV9pT0wt7y'
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR[489]='3MKX8ZLLl83nzJfXlcXyxePQ3sjtzdTi1MGX9+PS8+fe/dzy0vDV6t7q/M2Pzu2d3MX1nd711OrS9e3F9PeW5/3Oy8js5fzpi8GX6pTV3dc='
+GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR=defghijk1_lIFHIJKLMNOPQRSTUVWXYZabcdefghijklmnopq.concat(GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR)
+do l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL=16 end
+do local _={6,82}end
+do OJKLMNOPQRSTUVWXYZab=jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde or 96 end
+do local _={48,55}end
+do OJKLMNOPQRSTUVWXYZab=PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI or 26 end
+if l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL~=OJKLMNOPQRSTUVWXYZab then else end
+if OJKLMNOPQRSTUVWXYZab then OJKLMNOPQRSTUVWXYZab=7 end
+if l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL then PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=0 end
+if lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef then PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=32 end
+do PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL or 65 end
+local l1_XYZabcdefghijklmnopqrstuvwxyz_O={51,3,182,19,117,164}
+if lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef then PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=93 end
+if l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL then PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=62 end
+if l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL~=OJKLMNOPQRSTUVWXYZab then else end
+pcall(function()end)
+do local _={39,87}end
+for _=2,4 do end
+repeat until true
+do OJKLMNOPQRSTUVWXYZab=jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde or 21 end
+if PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI then PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=40 end
+do local _=82 end
+local function _Ocdefghijklmnopqrstuvw_OTUVWXY()
+local d=GHIJKLMNOPQKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzNOPQR
+d=HIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrs(d)
+if not d or #d==0 then error('L8')end
+if jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde then l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL=30 end
+do jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde=lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef or 55 end
+if jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde~=PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI then else end
+do OJKLMNOPQRSTUVWXYZab=4 end
+do lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde or 6 end
+d=OOoVWXYZabcdefghijklmnopqrstuvwxABCDEFGHIJKLMNOPQRPQRSTUVWXYZabcdefghijklmnopqrst(d,l1_XYZabcdefghijklmnopqrstuvwxyz_O[6])
+for _=2,4 do end
+pcall(function()end)
+for _=2,3 do end
+do lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef or 580 end
+d=HIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrs(d)
+if not d or #d==0 then error('L6')end
+do local PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=800 end
+pcall(function()end)
+for _=2,2 do end
+do l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL=OJKLMNOPQRSTUVWXYZab or 662 end
+d=OOoVWXYZabcdefghijklmnopqrstuvwxABCDEFGHIJKLMNOPQRPQRSTUVWXYZabcdefghijklmnopqrst(d,l1_XYZabcdefghijklmnopqrstuvwxyz_O[5])
+do PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI or 751 end
+if PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI~=l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL then else end
+repeat until true
+if lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef then l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL=19 end
+do PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef or 464 end
+d=OO0TUVW0STUVWXYZabcdefghijkabcdefghijklmnoklmnopqrs(d,l1_XYZabcdefghijklmnopqrstuvwxyz_O[4])
+if OJKLMNOPQRSTUVWXYZab~=OJKLMNOPQRSTUVWXYZab then else end
+do local _=477 end
+repeat until true
+do lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL or 75 end
+do local _=655 end
+d=OOoVWXYZabcdefghijklmnopqrstuvwxABCDEFGHIJKLMNOPQRPQRSTUVWXYZabcdefghijklmnopqrst(d,l1_XYZabcdefghijklmnopqrstuvwxyz_O[3])
+do local _={26,28}end
+do l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL=63 end
+do lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef or 57 end
+do jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde=PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI or 62 end
+do local _={89,66}end
+d=BCDEFGHIJKLMNOPQRSTUVWWXYZabcdefghijklmnoXYZabcdefghijklmnopqrstabcdefghijklmnopq(d,l1_XYZabcdefghijklmnopqrstuvwxyz_O[2])
+for _=4,1 do end
+do local _={96,85}end
+for _=4,1 do end
+repeat until true
+d=OOoVWXYZabcdefghijklmnopqrstuvwxABCDEFGHIJKLMNOPQRPQRSTUVWXYZabcdefghijklmnopqrst(d,l1_XYZabcdefghijklmnopqrstuvwxyz_O[1])
+return d end
+if PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI then lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=44 end
+do local OJKLMNOPQRSTUVWXYZab=441 end
+repeat until true
+for _=2,1 do end
+repeat until true
+if OJKLMNOPQRSTUVWXYZab then jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde=95 end
+do local _=715 end
+repeat until true
+Ilol,Il0HIJKLMNOPQRSTUVWXYZabcdefghijklmnouvwxyz_NOPQRSTUVWXYZafghijklmn=pcall(_Ocdefghijklmnopqrstuvw_OTUVWXY)
+if not Ilol then error('Decrypt failed: '..tostring(Il0HIJKLMNOPQRSTUVWXYZabcdefghijklmnouvwxyz_NOPQRSTUVWXYZafghijklmn))end
+do local _=394 end
+do local _=388 end
+for _=4,3 do end
+do local _=36 end
+do local jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde=210 end
+do lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef or 433 end
+pcall(function()end)
+do local _=591 end
+__PQRSTUVW,YZabcdefGHIJKLMNOPQRSTUVWXYZabcdefghijkOPQRSTUVWXYZabcdefghijklmnopqrstlmnopqrsQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_0=load(Il0HIJKLMNOPQRSTUVWXYZabcdefghijklmnouvwxyz_NOPQRSTUVWXYZafghijklmn)
+if not __PQRSTUVW then error('Load failed: '..tostring(YZabcdefGHIJKLMNOPQRSTUVWXYZabcdefghijkOPQRSTUVWXYZabcdefghijklmnopqrstlmnopqrsQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_0))end
+pcall(function()end)
+if OJKLMNOPQRSTUVWXYZab~=jklghijklmnopqrOPQRSTUVWXYZabnopLMNOPQRSTUVWXYZabclUVWXYZabcdcdefghijklmnopTUVWXYZabcdefghijklmnopqrstuvwBCDEFGHIJKLMNOPQRSTUVWXYZabcde then else end
+do local lUVWXYZabcdefghCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklIJKLMNOPQRSTUVWXYZSTUVef=158 end
+repeat until true
+do local _={55,67}end
+do local _=567 end
+do local _={53,20}end
+if l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL~=l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL then else end
+_,PQRSTUVWXYZabcdefghijklmLMNOPQRSTCDEF0_GHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwx=pcall(__PQRSTUVW)
+if not _ then error('Exec failed: '..tostring(PQRSTUVWXYZabcdefghijklmLMNOPQRSTCDEF0_GHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwx))end
+do l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL=OJKLMNOPQRSTUVWXYZab or 83 end
+if PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI then l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL=22 end
+do local _={97,28}end
+do local _={10,96}end
+while false do break end
+pcall(function()end)
+if l1hijklmnopqrstuv0HIJKLMNOPQRSTUVWXYZabcdefghijklmnooFGHIJKL~=PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI then else end
+repeat until true
+do PQRSTUVWXYZabcdefghijklmnopqIABCDEFGHIJKLMNOPQRSTUI=36 end
+for _=3,2 do end
