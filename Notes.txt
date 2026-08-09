@@ -1,88 +1,10 @@
-═══════════════════════════════════════════════════════
-Introducing!
- BRAND NEW MAJOR UPDATE OF EXTREME AI VOICE TYPER VERSION 3.0
-Developer: Anurag Anant
-═══════════════════════════════════════════════════════
-✨ NEW FEATURES
-───────────────────────────────────────────────────────
-1. UNLIMITED VOICE DICTATION (EXPERIMENTAL).
-◦ Now, you can dictate for as long as you want. There are no time limits, so your typing will be smooth and continuous. This feature includes "Auto Restart Mic," which works simply: as soon as your spoken sentence finishes typing, the microphone automatically switches back on by itself, so you can immediately continue speaking your next sentence without ever having to tap the mic again. If you stay silent and don't say anything, the microphone will automatically switch off on its own. Please note that this feature is currently in its experimental phase.
-2. ROMAN TYPER MODE.
-◦ I have added a brand new "Roman Typer" mode. It accurately transliterates your native language (like Hindi) into the Roman alphabet (A-Z) with perfect spelling, without translating the actual meaning of the words.
-3. CUSTOM TYPING MODE.
-◦ Introducing "Custom Typing Mode." You can now provide your own custom instructions to the AI, allowing you to control the tone, style, and behavior of your typing exactly as you prefer.
-4. OFFLINE DICTATION (NO AI).
-◦ I have moved the offline dictation feature from settings to the Typing Mode menu. You can now select "Offline Dictation (No AI)" directly from the typing mode options for a faster, offline experience.
-5. QUICK TYPING MODE SWITCHER.
-◦ I have added a "Change typing mode" option directly in the startup "What do you want to do?" menu. You can now instantly switch your typing mode on the go without opening the main settings.
-6. CASE-SENSITIVE DICTIONARY.
-◦ A new "Case-Sensitive" checkbox is available in the Word Dictionary. This helps you replace text more accurately by checking for capital or small letters.
-7. NORMAL TYPING MODE.
-◦ I have added a new "Normal Typer Mode (AI Grammar Correction)." This mode is perfect for simple, standard, and distraction-free typing with improved grammar handling.
-8. STARTUP WELCOME SOUND.
-◦ You will now hear a welcome sound when the plugin starts. You can easily control or turn this off in the "Sound and Vibration" settings.
-9. VIBRATION FREQUENCY ADJUSTMENT.
-◦ You can now choose your favorite vibration style. In the "Sound and Vibration" settings, select between High, Medium, or Low frequency.
-10. Translation mode. .
-◦ In the "Extension Startup Action" menu, I added "Translation mode. ." Simply speak in your language, and the plugin will instantly type the text in your chosen target language.
-11. SMART INLINE EMOJIS.
-◦ Emojis can now appear in the middle of your text, right next to the word or phrase they match (for example, a mango emoji right after the word "mango"), instead of only at the end. Greetings like "Hello" or "नमस्ते" in any language will always get a waving hand emoji next to them. A new "Insert Emojis In Between Text" checkbox has been added in Emoji Settings, so you can turn this on or off based on your preference; it is turned on by default.
-12. AI MODEL SELECTION.
-◦ In AI Settings, you can now pick your own preferred model for each of the AI providers from a dropdown menu, instead of being limited to one fixed model.
-13. MISTRAL AI PROVIDER ADDED.
-◦ A brand new fourth AI provider, Mistral, has been added alongside OpenRouter, Gemini, and Groq. It has been integrated specifically for quick and accurate typing, giving you another fast and reliable option to choose from in AI Settings.
-14. FETCH MODELS BUTTON.
-◦ A new "Fetch Models" button in AI Settings lets you pull the latest list of available models directly from your selected AI provider, so you always have up-to-date model options to choose from.
-15. AUTO-SWITCH MODELS.
-◦ A new "Auto-Switch Models (Main ↔ Secondary on Failure)" checkbox has been added in AI Settings. When turned on, the plugin automatically switches to a backup model if your main model fails, so your typing keeps working without interruption.
-16. SMART PREVIEW DIALOG BOX.
-◦ This feature shows you a preview screen before your dictated text gets typed into the field, giving you a chance to review and adjust it first. It is available in General Settings → Other Settings → "Show preview before typing." Inside the Smart Preview box, you get:
-   - Typing Mode dropdown: lets you instantly change your typing mode (Auto Detect, Professional, Normal, Roman, Offline, Custom) right from the preview screen.
-   - Copy button: copies the previewed text to your clipboard.
-   - Translate button: lets you pick a target language and translates the previewed text into it, right inside the preview box.
-   - Continue Typing button: lets you keep speaking, and your new words get added into the same preview box.
-   - Insert Text button: types the final previewed text into your actual text field.
-   - Close button: closes the preview without inserting anything.
-17. TYPING HISTORY.
-◦ The plugin can now remember your last typed texts (up to 30). Turn it on with the "Enable Typing History" checkbox in General Settings → Other Settings. Once enabled, a "Typing History" button appears right under that checkbox, and also in the startup "What do you want to do?" menu. Tapping it opens a list of your past typed texts — tap any entry to insert it again, or use the "Clear History" button to erase everything. If you turn the checkbox off, the button disappears from both places.
-18. PUNCTUATION VOICE COMMANDS.
-◦ You can now insert punctuation just by speaking its name, in English or Hindi — say "comma", "full stop" / "पूर्ण विराम", "question mark", "exclamation mark", "colon", "semicolon", "new line", "hyphen", or "at the rate", and it gets typed as the matching symbol automatically. Turn this on with the "Enable Punctuation Voice Commands" checkbox in General Settings → Other Settings.
-19. SAVED TYPING STYLES (CUSTOM PERSONAS).
-◦ In Custom Typing Mode, you can now save your custom instructions as a reusable "Typing Style" using the "Save As Style" button, so you don't have to type the same instructions again and again. Use the "My Styles" button to view and instantly apply any of your saved styles, and long-press a style to delete it. You can save as many different styles as you like (for example, one for a formal tone and another for a casual tone) and switch between them anytime.
-20. OPENROUTER PROVIDER IMPROVED.
-◦ Two new models have been added to the OpenRouter provider: Gemini 2.5 Flash and Gemini 2.0 Flash. You can select either of them from the model dropdown in AI Settings for even more accurate and perfect typing.
-───────────────────────────────────────────────────────
-🛠️ IMPROVEMENTS & CHANGES
-───────────────────────────────────────────────────────
-1. IMPROVED AI TRANSLATION.
-◦ AI translation is now faster and more accurate than ever, providing seamless communication across languages.
-2. CASUAL TYPING MODE REMOVED.
-◦ To keep the typing experience clean and focused on high-quality outputs, the "Casual Typing Mode" has been completely removed from the plugin.
-3. "START VOICE TYPING WITH TARGET LANGUAGE" OPTION REMOVED.
-◦ This option has been completely removed from the "Extension Startup Action" menu and the startup "What do you want to do?" dialog, to keep the typing options simple and focused.
-4. TRANSLATION CHECKBOX REMOVED.
-◦ The "Enable Translation" checkbox has been removed from the main settings to keep the interface cleaner. You can now easily access the translation feature directly by selecting "Translation mode. " from the "Extension Startup Action" dropdown menu.
-5. AI TRANSLATION UPDATES.
-◦ The AI is now more focused. It will only give you the translated text, without any extra explanation.
-◦ I also fixed the emoji bug. Emojis will now appear in your text only if they were there in the original sentence.
-6. WORD DICTIONARY FIXES.
-◦ I fixed a small bug where special characters did not work correctly. Now, your text replacements will work perfectly, even with special symbols.
-7. GEMINI MODELS IMPROVED.
-◦ I removed the old Gemini models that had stopped working and replaced them with currently working ones, so Gemini typing is now more reliable.
-8. "MORE OPTIONS" RENAMED.
-◦ The "More Options" menu has been renamed to "General Settings" for better clarity.
-═══════════════════════════════════════════════════════
-📢 FEEDBACK & SUPPORT
-───────────────────────────────────────────────────────
-• Are you facing any issues while using this plugin?
-• Do you have any ideas for new features?
-• Please go to "More Options," then select "Contact Us."
-• You can now send your feedback directly to the developer by simply filling out the new in-app feedback form.
-Your feedback helps us make this plugin better! 💙
-═══════════════════════════════════════════════════════
-📲 INSTALL OR UPDATE NOW
-───────────────────────────────────────────────────────
-• If you already have the plugin installed, it will auto-update automatically to v3.0.
-• If you do not have it, please import the latest extension file to get started.
-• Update today, and enjoy the latest features and improvements!
-═══════════════════════════════════════════════════════
+*What's New in, Extreme AI Voice Typer Version 3.1, Developed by Anurag Anant*
+
+1. *Smarter AI Switching:* The app now automatically and instantly switches between AI models when one reaches its limit, so your dictation never stops due to "limit reached" errors.
+2. *User Registration:* A simple one-time registration screen has been added to help us support you better.
+3. *Welcome Screen:* A new welcome screen with quick links to our YouTube channel, Telegram channel, and feedback form.
+4. *Personalized Experience:* The Extension now greets you by name on the settings and feedback screens.
+
+If you have feedback, want to report a bug, or request a new feature, tap the "Give Feedback to Developer" button, fill out the form, and let us know — we’d love to hear from you.
+
+Update the plugin to the latest version, or if you don’t have it yet, import it now and start using it today.
