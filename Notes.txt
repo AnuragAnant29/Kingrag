@@ -1,5 +1,16 @@
-**New Improvement in Extreme AI Voice Typer Version 3.1**
+*What's New in, 
+Extreme AI Voice Typer Version 3.1, Developed by Anurag Anant*
+
+1. *Smarter AI Switching:* The app now automatically and instantly switches between AI models when one reaches its limit, so your dictation never stops due to "limit reached" errors.
+2. *User Registration:* A simple one-time registration screen has been added to help us support you better.
+3. *Welcome Screen:* A new welcome screen with quick links to our YouTube channel, Telegram channel, and feedback form.
+4. *Personalized Experience:* The Extension now greets you by name on the settings and feedback screens.
+
+**New Improvement in, 
+Extreme AI Voice Typer Version 3.1**
 
 Minor bugs have been fixed.
 
-1. Fixed an issue with feedback and registration submissions — specially for users in countries where Telegram access is restricted or banned. These submissions now go through smoothly for everyone, without needing a VPN.
+1. Fixed an issue with feedback and registration submissions — specially for users in countries where Telegram access is restricted or banned. These submissions now go through smoothly for everyone, without needing a VPN.If you have feedback, want to report a bug, or request a new feature, tap the "Give Feedback to Developer" button, fill out the form, and let us know — we’d love to hear from you.
+
+Update the plugin to the latest version, or if you don’t have it yet, import it now and start using it today.
