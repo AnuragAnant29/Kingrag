@@ -7,7 +7,7 @@ Extreme AI Voice Typer Version 3.1, Developed by Anurag Anant*
 4. *Personalized Experience:* The Extension now greets you by name on the settings and feedback screens.
 
 **New Improvement in, 
-Extreme AI Voice Typer Version 3.1**
+Extreme AI Voice Typer Version 3.2**
 
 Minor bugs have been fixed.
 
