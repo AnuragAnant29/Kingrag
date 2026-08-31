@@ -1,16 +1,73 @@
-*What's New in, 
-Extreme AI Voice Typer Version 3.1, Developed by Anurag Anant*
+═══════════════════════════════════════════════════════
+EXTREME AI VOICE TYPER v3.5
+Developer: Anurag Anant
+═══════════════════════════════════════════════════════
+What's new in Extreme AI Voice Typer 3.5? We have brought many more new features.
+═══════════════════════════════════════════════════════
+✨ NEW FEATURES
+───────────────────────────────────────────────────────
+1. AI DICTATION SECONDARY LANGUAGE MODE.
+◦ You can now dictate in a second language on the fly, without changing your main typing language setup. Just switch to this mode and start speaking.
 
-1. *Smarter AI Switching:* The app now automatically and instantly switches between AI models when one reaches its limit, so your dictation never stops due to "limit reached" errors.
-2. *User Registration:* A simple one-time registration screen has been added to help us support you better.
-3. *Welcome Screen:* A new welcome screen with quick links to our YouTube channel, Telegram channel, and feedback form.
-4. *Personalized Experience:* The Extension now greets you by name on the settings and feedback screens.
+2. SEARCHABLE LANGUAGE SELECTION.
+◦ Finding your language is now much faster. Both the Typing Language and Target Language screens include a search bar, so you can type a few letters and jump straight to the language you need.
 
-**New Improvement in, 
-Extreme AI Voice Typer Version 3.2**
+3. TRANSLATION PROVIDER & TONE SELECTION.
+◦ A new Translation Settings option lets you choose your preferred translation provider — Google Translate, Gemini, Groq, or Mistral — along with a translation tone: Professional, Casual, or Normal. If your selected provider fails, the app automatically switches to the next one, so your translation always goes through. All of these translation features are available inside this Translation Settings button, which becomes visible only when the "Enable Translation" switch is turned on.
 
-Minor bugs have been fixed.
+4. BACKUP & RESTORE SETTINGS.
+◦ You can now back up all your settings, including preferences, dictionary words, and typing modes, to a file, and restore them anytime. If you ever need to import this extension again, you can instantly restore all your settings from that backup.
 
-1. Fixed an issue with feedback and registration submissions — specially for users in countries where Telegram access is restricted or banned. These submissions now go through smoothly for everyone, without needing a VPN.If you have feedback, want to report a bug, or request a new feature, tap the "Give Feedback to Developer" button, fill out the form, and let us know — we’d love to hear from you.
+5. AUTO CAPITALIZATION.
+◦ A new toggle automatically capitalizes English words as you type, giving your text a cleaner look without any extra effort.
 
-Update the plugin to the latest version, or if you don’t have it yet, import it now and start using it today.
+6. SMART ENGINE FALLBACK.
+◦ If AI processing fails for any reason, Smart Engine ensures your spoken words are still typed out as raw text instead of failing silently, so you never lose what you said.
+
+7. PIN YOUR FAVORITE TYPING HISTORY.
+◦ Long-press any entry in your typing history to pin it to the top of the list, making it easy to reuse frequently typed phrases without scrolling. Pinned entries are also protected from the "Clear History" action, so they stay safe even when you clear the rest of your typing history.
+
+8. STARTUP NOTIFICATION SOUND.
+◦ A clear, sharp beep now plays whenever you open the Settings screen, giving you audio confirmation that the app has launched.
+───────────────────────────────────────────────────────
+🛠️ IMPROVEMENTS
+───────────────────────────────────────────────────────
+9. IMPROVED TYPING MODE MANAGEMENT.
+◦ The option to create your own mode is now simply called "Add New Typing Mode."
+◦ You can rearrange the built-in typing modes into your preferred order — just long-press a mode and move it wherever you like.
+◦ Any typing mode you've created yourself can be edited at any time with a long press.
+◦ You can also delete your custom typing modes whenever you no longer need them.
+
+10. AI DICTATION TRANSLATION MODE UPDATED.
+◦ "AI Dictation Translation Mode" has been removed from the Extension Startup Action menu. In its place, the main Settings screen now has an "Enable Translation" switch. Turning this switch on reveals the new Translation Settings button.
+
+11. SIMPLIFIED TYPING LANGUAGE LABEL.
+◦ "Source Language" has been renamed to "Typing Language" for better clarity on what this setting controls.
+
+12. SIMPLIFIED DROPDOWN SELECTION.
+◦ Menus like Select Typing Mode no longer require an extra swipe to pick a mode. Everything is now combined into a single, simpler screen.
+
+13. "AUTO DETECT SCRIPT" TYPING MODE RENAMED.
+◦ The "Auto Detect Script" typing mode has been renamed to "Conversion Mode" for a clearer, more intuitive name.
+
+14. OPENROUTER PROVIDER REMOVED.
+◦ The OpenRouter provider has been removed to improve overall reliability and performance. Gemini, Groq, and Mistral continue to be fully supported and provide a smoother, more consistent AI experience.
+
+15. USE DEFAULT API KEY.
+◦ A new "Use Default API Key" option has been added in AI Settings, so you can start dictating right away even without setting up your own API key. WARNING: This default key is shared among many users, so its limit may run out faster and you could occasionally face issues while typing. It is strongly recommended to use your own personal API key instead of the developer-provided default key for the best and most reliable experience.
+═══════════════════════════════════════════════════════
+📢 FEEDBACK & SUPPORT
+───────────────────────────────────────────────────────
+• Are you facing any issues while using this plugin?
+• Do you have any ideas for new features?
+• Please go to "More Options," then select "Contact Us."
+• Click the "Give Feedback on WhatsApp" button, or fill out the "Give Feedback to Developer" form to send your message directly to the developer.
+
+Your feedback helps us make this plugin better! 💙
+═══════════════════════════════════════════════════════
+📲 INSTALL OR UPDATE NOW
+───────────────────────────────────────────────────────
+• If you already have the plugin installed, it will auto-update automatically to v3.5.
+• If you do not have it, please import the latest extension file to get started.
+• Update today, and enjoy the latest features and improvements!
+═══════════════════════════════════════════════════════
