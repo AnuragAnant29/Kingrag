@@ -1,25 +1,22 @@
 ═══════════════════════════════════════════════════════
-EXTREME AI VOICE TYPER v3.7
+EXTREME AI VOICE TYPER v3.8
 Developer: Anurag Anant
 ═══════════════════════════════════════════════════════
-What's new in Extreme AI Voice Typer 3.7? This is a minor update focused on making the setup process simpler.
+What's new in Extreme AI Voice Typer version 3.8.
 ═══════════════════════════════════════════════════════
 ✨ NEW FEATURES
 ───────────────────────────────────────────────────────
-1. SIMPLIFIED API KEY SETUP.
-◦ The separate "Manage API Keys" dialog has been removed. Now, right below "Select AI Provider" in AI Settings, you'll find a single API key field that automatically shows the key for the provider you've selected. Choose Gemini, and it asks only for your Gemini key. Choose Groq, and it asks only for your Groq key — no more unnecessary empty fields for providers you're not using.
+1. SIMPLER UPDATE PROCESS.
+◦ When a new update is available, you'll now see a clear, short message showing the new version and your current version, with an easy "Update Now" or "Cancel" choice. After updating, simply restart the plugin manually to apply the changes, and you'll automatically see what's new.
 
-2. TEST API KEY BUTTON.
-◦ Right next to the new API key field, a "Test API Key" button lets you instantly check whether your key is working, without having to open any separate screen.
+2. IMPROVED AI MODELS.
+◦ Gemini and Groq models have been upgraded for better and smoother typing.
 
-3. FIRST-TIME SETUP MADE EASIER.
-◦ New users will now see the same simplified experience the very first time they use the app — pick your AI provider first, then enter just that one key, or turn on Use Default API Key to skip this step entirely.
-───────────────────────────────────────────────────────
-🛠️ IMPROVEMENTS
-───────────────────────────────────────────────────────
-• Mistral has been removed as an AI provider to keep the setup process short and focused. Gemini and Groq continue to be fully supported.
+3. AUTO-SWITCH MODELS SIMPLIFIED.
+◦ The "Auto-Switch Models" button has been removed. This feature now stays on by default, so you don't need to manage it yourself.
 
-• This update directly addresses feedback from several users who found the earlier setup confusing, since it previously asked for API keys of AI providers they never intended to use.
+4. SMART ENGINE MOVED TO AI SETTINGS.
+◦ The Smart Engine (AI Fallback to Raw Text) option is now available inside AI Settings. If the AI service ever fails or is unavailable, this feature makes sure your spoken words are still typed as plain text instead of being lost.
 ═══════════════════════════════════════════════════════
 📢 FEEDBACK & SUPPORT
 ───────────────────────────────────────────────────────
@@ -29,10 +26,4 @@ What's new in Extreme AI Voice Typer 3.7? This is a minor update focused on maki
 • You can share your feedback directly with the developer by filling out the feedback form or messaging on WhatsApp.
 
 Your feedback helps us make this plugin better! 💙
-═══════════════════════════════════════════════════════
-📲 INSTALL OR UPDATE NOW
-───────────────────────────────────────────────────────
-• If you already have the plugin installed, it will auto-update automatically to v3.7.
-• If you do not have it, please import the latest extension file to get started.
-• Update today, and enjoy the latest features and improvements!
 ═══════════════════════════════════════════════════════
