@@ -1,29 +1,35 @@
-═══════════════════════════════════════════════════════
-EXTREME AI VOICE TYPER v3.8
-Developer: Anurag Anant
-═══════════════════════════════════════════════════════
-What's new in Extreme AI Voice Typer version 3.8.
-═══════════════════════════════════════════════════════
-✨ NEW FEATURES
-───────────────────────────────────────────────────────
-1. SIMPLER UPDATE PROCESS.
-◦ When a new update is available, you'll now see a clear, short message showing the new version and your current version, with an easy "Update Now" or "Cancel" choice. After updating, simply restart the plugin manually to apply the changes, and you'll automatically see what's new.
+🎉 Extreme AI Voice Typer v4.0 is here! A big update focused on flexibility, reliability, and making your typing experience smoother than ever.
 
-2. IMPROVED AI MODELS.
-◦ Gemini and Groq models have been upgraded for better and smoother typing.
+✨ What's New:
 
-3. AUTO-SWITCH MODELS SIMPLIFIED.
-◦ The "Auto-Switch Models" button has been removed. This feature now stays on by default, so you don't need to manage it yourself.
+1. OpenRouter AI Provider Is Back!
+OpenRouter was removed earlier for a cleaner setup experience, but it's now back, with improvements! You can now use OpenRouter for typing too, giving you even more flexibility in choosing your AI provider.
 
-4. SMART ENGINE MOVED TO AI SETTINGS.
-◦ The Smart Engine (AI Fallback to Raw Text) option is now available inside AI Settings. If the AI service ever fails or is unavailable, this feature makes sure your spoken words are still typed as plain text instead of being lost.
-═══════════════════════════════════════════════════════
-📢 FEEDBACK & SUPPORT
-───────────────────────────────────────────────────────
-• Are you facing any issues while using this plugin?
-• Do you have any ideas for new features?
-• Please go to "General Settings," then select "Contact Us."
-• You can share your feedback directly with the developer by filling out the feedback form or messaging on WhatsApp.
+2. Mistral AI Provider Removed
+Based on user feedback, Mistral was causing typing issues for many users, so it has been removed and replaced with OpenRouter, which now offers reliable, high-quality typing.
 
-Your feedback helps us make this plugin better! 💙
-═══════════════════════════════════════════════════════
+3. Powerful New Voice Commands
+Just say "Type in English" and speak in any language — it'll be typed out in clean, professional English instantly. Want another language? Say "Type in [any language]" (like Urdu, Spanish, or French) and watch it type exactly what you need, without switching any settings.
+
+4. Fully External Language Files
+Hindi and Urdu interfaces now load from separate language files, making future translations faster, easier to update, and more reliable than ever.
+
+5. Smarter, More Reliable AI Model Handling
+Behind-the-scenes upgrades ensure your recommended AI model stays active as long as it's working — no more unnecessary switching. If a model genuinely stops working, the app automatically picks the next best option, so your typing never skips a beat.
+
+6. Clearer Update Experience
+Updates are now simpler and more transparent. You'll see exactly what version is available, and after updating, a quick manual restart brings you right into what's new.
+
+7. Smoother First-Time Setup
+New users now get a clean, step-by-step onboarding experience, with clear guidance at every stage.
+
+🛠️ Improvements:
+• AI Settings interface is now cleaner. Selecting your AI provider (Gemini, Groq, or OpenRouter) automatically shows only that provider's API key field, along with a "Test API Key" button, right where you need it.
+• Offline Mode still has your back. Even without internet or if the AI service is unavailable, your spoken words are still typed as plain text instead of being lost.
+• Better handling of missing or unavailable language files, with clear on-screen alerts.
+• Refined AI prompts for more natural, accurate voice command results.
+• General performance and stability improvements across the app.
+
+💬 Got feedback or a feature request? We'd love to hear from you! Reach out directly through WhatsApp or the feedback form in General Settings > Contact Us.
+
+Update now and experience the smartest, smoothest version of Extreme AI Voice Typer yet! 🚀
