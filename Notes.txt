@@ -1,35 +1,19 @@
-🎉 Extreme AI Voice Typer v4.0 is here! A big update focused on flexibility, reliability, and making your typing experience smoother than ever.
-
+🎉 Extreme AI Voice Typer v4.5 is here! A massive leap forward in making AI typing truly effortless, fast, and powerful for everyone.
 ✨ What's New:
-
-1. OpenRouter AI Provider Is Back!
-OpenRouter was removed earlier for a cleaner setup experience, but it's now back, with improvements! You can now use OpenRouter for typing too, giving you even more flexibility in choosing your AI provider.
-
-2. Mistral AI Provider Removed
-Based on user feedback, Mistral was causing typing issues for many users, so it has been removed and replaced with OpenRouter, which now offers reliable, high-quality typing.
-
-3. Powerful New Voice Commands
-Just say "Type in English" and speak in any language — it'll be typed out in clean, professional English instantly. Want another language? Say "Type in [any language]" (like Urdu, Spanish, or French) and watch it type exactly what you need, without switching any settings.
-
-4. Fully External Language Files
-Hindi and Urdu interfaces now load from separate language files, making future translations faster, easier to update, and more reliable than ever.
-
-5. Smarter, More Reliable AI Model Handling
-Behind-the-scenes upgrades ensure your recommended AI model stays active as long as it's working — no more unnecessary switching. If a model genuinely stops working, the app automatically picks the next best option, so your typing never skips a beat.
-
-6. Clearer Update Experience
-Updates are now simpler and more transparent. You'll see exactly what version is available, and after updating, a quick manual restart brings you right into what's new.
-
-7. Smoother First-Time Setup
-New users now get a clean, step-by-step onboarding experience, with clear guidance at every stage.
-
+1. Introducing 'Extreme AI' Provider! Zero Setup Required. We’ve added our very own "Extreme AI" provider. Users who don't want the hassle of creating and managing API keys can simply select "Extreme AI" and start typing instantly. No keys needed, no complicated setup! The new Extreme AI provider comes pre-loaded with the 20+ fastest and most accurate models available today, including DeepSeek, Google Gemini, Groq, Qwen, and Microsoft. When selected, the settings interface automatically adapts and hides unnecessary fields, keeping your screen clean and distraction-free. Note: As the Extreme AI provider is newly introduced, you might experience minor issues or hiccups. We will continuously improve it in future updates.
+2. Floating Dictation Button. Typing is now always at your fingertips! Enable the new floating "Start Dictating" button in settings to trigger AI Dictation instantly from anywhere on your screen. Double-tap to dictate, or long-press to quickly open Settings. You can quickly enable this floating button by navigating to General Settings, Other Settings.
+3. Extreme AI Quick Controls, Quick Settings. Access your most-used features instantly! The new Quick Settings menu lets you toggle Smart Emojis, Translation, Typing Modes, and Languages right at startup. You can even fully customize which options appear in this menu for a personalized experience. You can easily enable and control Quick Settings by navigating to General Settings, Other Settings.
+4. Advanced Voice Commands and "Clear Text" Feature. We’ve added a dedicated "Enable Punctuation Voice Commands" toggle in General Settings for better control over your dictation. Plus, introducing a powerful new command: simply say "Clear all" or "Clear text" to instantly erase everything in the typing box! The previous two voice commands have also been improved for better accuracy. You can now check all available commands by navigating to General Settings, Voice Commands.
+5. Smart Error Logging System. We've introduced a new error tracking feature. Important: The extension automatically creates a small .txt log file in your device's internal storage to track performance. Please do not delete this file. If you ever face an error, bug, or typing issue in the future, sending this log will help the developer instantly pinpoint the exact root cause and fix it for you quickly. You can easily send this log file directly from the main General Settings menu by clicking the "SEND ERROR LOG TO DEVELOPER" button.
+6. Unified Help and Support Menu. To make navigation cleaner and easier, the previous "About" and "Contact Us" buttons have been merged into a single "HELP AND SUPPORT" menu within General Settings. All helpful resources, including feedback and tutorials, are now neatly organized under this one section.
+7. Support the Developer. If you are happy with Extreme AI Voice Typer and want to support the developer in making future updates even better, you can now easily make a contribution! Simply navigate to General Settings, HELP AND SUPPORT and click on the "Donate to Developer" button to pay your desired amount.
 🛠️ Improvements:
-• AI Settings interface is now cleaner. Selecting your AI provider (Gemini, Groq, or OpenRouter) automatically shows only that provider's API key field, along with a "Test API Key" button, right where you need it.
-• Offline Mode still has your back. Even without internet or if the AI service is unavailable, your spoken words are still typed as plain text instead of being lost.
-• Better handling of missing or unavailable language files, with clear on-screen alerts.
-• Refined AI prompts for more natural, accurate voice command results.
-• General performance and stability improvements across the app.
-
-💬 Got feedback or a feature request? We'd love to hear from you! Reach out directly through WhatsApp or the feedback form in General Settings > Contact Us.
-
-Update now and experience the smartest, smoothest version of Extreme AI Voice Typer yet! 🚀
+1. Streamlined Interface: The "Use default API key" checkbox has been completely removed because we have now introduced the "Extreme AI" provider. If you do not want to create or manage your own API keys, you can simply use this new provider. Please keep in mind that since this provider is newly introduced, you might notice minor hiccups in typing performance initially, but it will keep getting better.
+2. 'Conversion Mode' has been significantly enhanced for better script mixing and overall accuracy.
+3. All newly added models are heavily optimized to strictly follow the rules of 'Conversion Mode' and 'Professional Writer Mode'.
+4. Smoother and faster provider switching between Extreme AI, Groq, Gemini, and OpenRouter.
+5. Added support for two new UI languages: Spanish and Farsi.
+6. Various minor bug fixes and under-the-hood improvements have been made based on user feedback to provide a flawless and better typing experience.
+💬 Got feedback or a feature request? We'd love to hear from you! Reach out directly through WhatsApp or the feedback form in General Settings, HELP AND SUPPORT.
+Update now and experience the smartest, most feature-packed version of Extreme AI Voice Typer yet!
+Developed by Anurag Anant.
