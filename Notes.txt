@@ -1,23 +1,45 @@
-🎉 Extreme AI Voice Typer v4.6 is here! This update brings highly requested features, smarter AI handling, and better stability to make your typing experience flawless.
+🎉 Extreme AI Voice Typer Version 5.0 Final is here! This massive update brings a complete revolution to your voice typing experience. We've completely redesigned our AI management and introduced Direct AI Voice Dictation to make this the most powerful and reliable version ever.
 
-✨ What's New:
-1. Universal Conversion Mode: We have made our conversion mode much smarter. It perfectly mixes scripts by writing English words in Roman A to Z alphabet and native words in your selected language script within the same sentence.
-2. Custom AI Provider: Introducing the brand new Custom Provider feature! You can now connect any compatible AI provider by simply entering its Base URL and API Key. You can easily find this by opening AI Settings and choosing Custom Provider from the Provider dropdown menu.
-3. Permanent Custom Models: You can now fetch or manually add your favorite custom models. Just open AI Settings, click on the Select Model dropdown, and choose + Add Custom Model at the bottom. These models will be permanently saved so you do not have to add them again.
-4. Advanced AI Translation Control: We have introduced a powerful new translation control feature in Other Settings. You can now force the app to strictly use your selected AI provider for higher quality translations, or turn it off to use Google Translate as the primary fast engine.
-5. Read Typed Text Aloud: We have added a new Read Typed Text Aloud feature in Other Settings. When you turn this on, the app will use text to speech to read aloud the exact text it just typed. If you turn it off, the typed text announcement will stop completely.
-6. Smart Token Tracker: We have added a new token view inside AI Settings so you can easily check exactly how many tokens you have used. The app also automatically adjusts the token limits for thinking models to ensure you always get complete typing without errors.
-7. Quick Settings Upgrades: Quick Settings is now more customizable! We fixed minor bugs like the language dropdown menu overlapping issue. You can now also add shortcuts for AI Settings and the new Read Typed Text Aloud feature directly in your Quick Settings panel.
-8. API Key Privacy: We have added a Show and Hide toggle button for your API keys in the AI Settings menu to keep your private keys completely secure from screen readers or screen recordings.
-9. Send Log to WhatsApp: You can now send error logs directly to the developer WhatsApp chat. This makes it much easier to discuss the problem and get instant help.
+🚀 The Biggest Game Changers:
 
-🛠️ Improvements:
-1. Much Faster Performance: We have removed the long API waiting times. The network timeout is now optimized to 30 to 40 seconds, saving you time if a server goes down.
-2. Crucial Bug Fixes: Fixed text encoding issues affecting waving emojis, native full stops, and the clear all voice commands for Hindi and Urdu languages.
+1. Direct AI Voice Dictation (Gemini Exclusive): Say goodbye to built-in speech recognition errors! This feature bypasses standard Android voice typing. It records your raw audio and sends it directly to Gemini, ensuring 100% accurate spelling for complex words, tough pronunciations, and mixed languages. You can easily control this feature based on your preference: go to AI Settings and turn ON the toggle switch to use Direct AI. If you prefer simple voice dictation using Groq or OpenRouter, simply turn the toggle OFF.
+💡 Pro Tip for Direct AI: To enjoy seamless dictation without quota errors, add multiple Gemini API keys in the settings! Also, you do not have to wait for the silence timeout to finish typing. Simply apply the gesture to instantly stop the recording and send it to the AI.
+🔁 Process Last Recording: Did a recording fail, or did the output not come out well? Open the "What do you want to do?" menu and tap "Process last recording". The extension sends your most recent recording to Gemini again and types the result in your text box, so you do not have to speak again. If you have two saved recordings, a "Process previous recording" button also appears for the older one. The last two recordings are kept only temporarily inside the app and are deleted automatically after 24 hours. These buttons appear only when Direct AI Voice Dictation is ON.
 
-💬 Got feedback or a feature request? We would love to hear from you! Reach out directly through WhatsApp or the feedback form in General Settings, HELP AND SUPPORT.
+2. Advanced API Key Manager: We have completely upgraded how you handle API keys. The old simple text box is gone! Now, you get dedicated "Add API Key" and "View API Keys" buttons. You can easily stack multiple keys for Gemini, Groq, or OpenRouter, and the app will automatically rotate them if one reaches its limit.
 
-💖 Love the extension? Please consider supporting the developer by making a donation from the HELP AND SUPPORT menu. Your support helps us make this extension even better and add more awesome features!
+3. Master AI Switch ("Use AI features"): No API key? No problem! You can now turn off AI completely from the Main Settings. The extension will instantly switch to a keyless "Offline Dictation" mode with standard Google Translation, so you never face errors when your API limits run out.
+💡 For New Users: Right after the initial registration dialog, a brand-new setup screen will now ask if you want to use the AI features. You can simply choose "Yes" or "No" to instantly configure the extension to your preference.
 
-Update now and experience the smartest version of Extreme AI Voice Typer yet!
+4. Smart Start: Run Your Startup Action Only When a Text Box Is Focused: A new switch lets the extension decide what to do based on where your focus is. When it is ON, your selected Extension Startup Action runs if a text box is focused. If your focus is outside a text box, the "What do you want to do?" menu opens, so you can choose something else, like processing the text in a text box. If there is no text box on the screen at all, Quick Settings opens (or the main settings, if Quick Settings is turned off). When it is OFF, your selected Extension Startup Action runs whenever a text box is available on the screen, wherever your focus is. You will find this switch on the main settings screen, right below Extension Startup Action, and also in Quick Settings.
+
+⚙️ In Direct AI Voice Typing Settings (Note: The following features will ONLY work when Direct AI Voice Dictation is turned ON):
+
+5. Smart Silence & Duration Limits: Set your mic to automatically stop after 5 to 30 seconds of silence, or let it record continuously for up to 10 minutes.
+
+6. Voice Level Sensitivity (1000 - 4000): Take control of your mic! Lower numbers (like 1000) will catch quiet whispers, while higher numbers (like 3000) will ignore background noise perfectly.
+
+7. AI Reasoning & Creativity (Temperature): Adjust the "Thinking Level" for better logic. Keep the "Temperature" at 0.0 or 0.2 to type exactly what you spoke, or increase it to let the AI creatively rewrite your sentences.
+
+8. Recording Start Delay: Is the screen reader's starting beep getting recorded with your voice? Increase this delay (e.g., 300ms to 500ms) to ensure the mic only starts listening after the beep finishes.
+
+9. Microphone Source: Experiencing low volume or distorted audio? Switch between "Standard microphone" and "Voice recognition microphone" to match your specific device hardware.
+
+10. Custom Placeholders: Added a feature to ignore dummy texts like "Type a message" or "Search" so the AI doesn't mix them into your final dictated text.
+
+✨ Smart Enhancements & Fixes:
+
+11. Enhanced Word Dictionary: We have significantly improved the Word Dictionary feature for a better and smoother experience.
+
+12. Advanced Floating Button Controls: You now have full control over when the floating mic button appears. New settings let you choose whether the button stays visible while your keyboard is open (it is hidden by default) and whether it hides automatically during an active phone call. These extra controls become visible only when the "Use Floating Button" feature is turned ON.
+
+13. New Sound Experience: Added 8 new typing sounds for a richer experience, and a beautiful "Processing" chime to let you know the AI is working.
+
+14. AI Helpers in Custom Typing Mode: Creating your own typing mode is now easier, with two new AI buttons. "Generate Unique Name with AI" gives your mode a name. If you have already typed a name, the AI creates a similar but unique name from it. If the name box is empty, it creates a random unique name. "Generate Prompt with AI" improves your prompt. If you have already typed a prompt, the AI makes it shorter, clearer and more accurate without changing its meaning and without adding any comments. If the prompt box is empty, it writes a short, accurate prompt from the name or description you entered. Both buttons use the AI provider you selected in AI Settings.
+
+💬 Got feedback or a feature request? We would love to hear from you! Reach out directly through WhatsApp or the feedback form in General Settings > HELP AND SUPPORT.
+
+💖 Love the extension? Please consider supporting the developer by making a donation from the HELP AND SUPPORT menu. Your support helps us add more awesome features!
+
+Update now and unleash the true power of Extreme AI!
 Developed by Anurag Anant.
